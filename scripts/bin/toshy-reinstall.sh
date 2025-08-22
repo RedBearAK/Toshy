@@ -21,8 +21,8 @@ else
 fi
 
 
-if [ -f "../bootstrap.sh" ]; then
-    exec ../bootstrap.sh
+if [ -f "$HOME/.config/toshy/scripts/bootstrap.sh" ]; then
+    exec "$HOME/.config/toshy/scripts/bootstrap.sh"
 else
     echo "Bootstrap script missing. Exiting."
     echo 
