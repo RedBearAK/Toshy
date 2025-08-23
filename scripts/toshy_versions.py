@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20250710'
+__version__ = '20250822'
 
 
 # Script to get and print out the versions of various Toshy components. 
