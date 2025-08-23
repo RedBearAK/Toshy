@@ -1,6 +1,9 @@
 #!/usr/bin/bash
 # -*- mode: sh -*-
 # vim: set ft=sh:
+SCRIPT_VERSION="20250822"
+echo "Toshy Session Monitor Service Version: $SCRIPT_VERSION"
+
 
 # Monitor whether the user's desktop session is "Active" according to loginctl.
 
