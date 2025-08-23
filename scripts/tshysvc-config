@@ -1,6 +1,9 @@
 #!/usr/bin/bash
 # -*- mode: sh -*-
 # vim: set ft=sh:
+SCRIPT_VERSION="20250822"
+echo "Toshy Config Service Version: $SCRIPT_VERSION"
+
 
 # Start the actual run of the keymapper with Toshy config, making 
 # sure to stop existing processes.
