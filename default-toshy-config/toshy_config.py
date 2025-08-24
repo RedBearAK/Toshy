@@ -4409,6 +4409,7 @@ keymap("VSCodes", {
     C("Alt-RC-R"):              C("Alt-R"),                     # Find: toggle "Use Regular Expression"
     C("Alt-RC-L"):              C("Alt-L"),                     # Find: toggle "Find in Selection"
     C("Alt-RC-P"):              C("Alt-P"),                     # Replace: toggle "Preserve Case"
+    C("RC-Enter"):              C("C-Alt-Enter"),               # Find: Replace All
 
     C("Alt-RC-Z"):              C("Alt-Z"),                     # View: toggle "Word Wrap"
 
