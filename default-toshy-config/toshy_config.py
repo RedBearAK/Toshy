@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20250823'
+__version__ = '20250906'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###  
@@ -601,6 +601,7 @@ browsers_firefox = [
     "firefox-esr",
     "Firefox Developer Edition",
     "firefoxdeveloperedition",
+    "firefox-nightly.*",
     "floorp",
     "LibreWolf",
     "Mullvad Browser",
@@ -609,9 +610,9 @@ browsers_firefox = [
     "Waterfox",
     "zen-browser",
     "zen",
-    "zen-bin",
     "zen-alpha",
     "zen-beta",
+    "zen-bin",
     "zen-twilight",
 ]
 browsers_firefox        = [x.casefold() for x in browsers_firefox]
