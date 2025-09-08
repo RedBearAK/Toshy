@@ -4106,15 +4106,34 @@ keymap("General File Managers - Finder Mods", {
 ####################################################################################
 
 keymap("Firefox Browsers Overrides", {
+
     C("C-comma"):              [C("C-t"), sleep(0.2),
                                 ST("about:preferences"),
-                                sleep(0.2), C("Enter")],            # Open preferences (Settings)
-    C("Shift-RC-N"):            C("Shift-C-P"),                     # Open private window with Cmd+Shift+N like other browsers
-    C("RC-Backspace"):         [C("Shift-Home"), C("Backspace")],   # Delete Entire Line Left of Cursor
-    C("RC-Delete"):            [C("Shift-End"), C("Delete")],       # Delete Entire Line Right of Cursor
+                                sleep(0.2), C("Enter")],        # Open preferences (Settings)
+
+    # Open private window with Cmd+Shift+N like other browsers
+    C("Shift-RC-N"):            C("Shift-C-P"),
+
+    # Wordwise shortcuts (overrides of general wordwise)
+    C("RC-Backspace"):         [C("Shift-Home"),
+                                C("Backspace")],                # Delete Line Left of Cursor
+    C("RC-Delete"):            [C("Shift-End"), C("Delete")],   # Delete Line Right of Cursor
+
+    # Specific numbered tab navigation - removed from general browsers keymap
+    C("RC-1"):                  C("Alt-1"),                     # Jump to Tab #1
+    C("RC-2"):                  C("Alt-2"),                     # Jump to Tab #2
+    C("RC-3"):                  C("Alt-3"),                     # Jump to Tab #3
+    C("RC-4"):                  C("Alt-4"),                     # Jump to Tab #4
+    C("RC-5"):                  C("Alt-5"),                     # Jump to Tab #5
+    C("RC-6"):                  C("Alt-6"),                     # Jump to Tab #6
+    C("RC-7"):                  C("Alt-7"),                     # Jump to Tab #7
+    C("RC-8"):                  C("Alt-8"),                     # Jump to Tab #8
+    C("RC-9"):                  C("Alt-9"),                     # Jump to last tab
+
     # Block shortcuts that might get confused with Shift+Cmd+[Left/Right]_Brace
-    C("Shift-RC-Minus"):        ignore_combo,                       # Ignore alternate zoom out shortcut
-    C("Shift-RC-Equal"):        ignore_combo,                       # Ignore alternate zoom in shortcut
+    C("Shift-RC-Minus"):        ignore_combo,                   # Ignore alternate zoom out shortcut
+    C("Shift-RC-Equal"):        ignore_combo,                   # Ignore alternate zoom in shortcut
+
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     matchProps(clas=browsers_firefoxStr)(ctx) )
@@ -4126,7 +4145,6 @@ keymap("Zotero", {
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     matchProps(clas="^.*Zotero.*$")(ctx) )
-
 
 keymap("Vivaldi browser - Settings dialog", {
     C("Esc"):                   C("Alt-F4"),                    # Close Settings dialog with Escape
@@ -4153,17 +4171,6 @@ keymap("Overrides for Vivaldi browser", {
 
     C("C-comma"):              [C("F10"),
                                 sleep(0.2), C("S")],            # Open preferences (Settings)
-
-    # Browser tab switching
-    C("RC-1"):                  C("C-1"),                       # Jump to Tab #1
-    C("RC-2"):                  C("C-2"),                       # Jump to Tab #2
-    C("RC-3"):                  C("C-3"),                       # Jump to Tab #3
-    C("RC-4"):                  C("C-4"),                       # Jump to Tab #4
-    C("RC-5"):                  C("C-5"),                       # Jump to Tab #5
-    C("RC-6"):                  C("C-6"),                       # Jump to Tab #6
-    C("RC-7"):                  C("C-7"),                       # Jump to Tab #7
-    C("RC-8"):                  C("C-8"),                       # Jump to Tab #8
-    C("RC-9"):                  C("C-9"),                       # Jump to last tab
 
 }, when = lambda ctx:
     cnfg.screen_has_focus and
@@ -4196,30 +4203,27 @@ keymap("Chrome Browsers Overrides", {
 
 # Keybindings for General Web Browsers
 keymap("General Web Browsers", {
+
     C("RC-Q"):                  C("C-Q"),                       # Close all browsers Instances
     C("Alt-RC-I"):              C("Shift-C-I"),                 # Dev tools
     C("Alt-RC-J"):              C("Shift-C-J"),                 # Dev tools
-    C("RC-1"):                  C("Alt-1"),                     # Jump to Tab #1
-    C("RC-2"):                  C("Alt-2"),                     # Jump to Tab #2
-    C("RC-3"):                  C("Alt-3"),                     # Jump to Tab #3
-    C("RC-4"):                  C("Alt-4"),                     # Jump to Tab #4
-    C("RC-5"):                  C("Alt-5"),                     # Jump to Tab #5
-    C("RC-6"):                  C("Alt-6"),                     # Jump to Tab #6
-    C("RC-7"):                  C("Alt-7"),                     # Jump to Tab #7
-    C("RC-8"):                  C("Alt-8"),                     # Jump to Tab #8
-    C("RC-9"):                  C("Alt-9"),                     # Jump to last tab
+
     # Enable Cmd+Shift+Braces for tab navigation (redundant with General GUI)
     # C("Shift-RC-Left_Brace"):   C("C-Page_Up"),                 # Go to prior tab
     # C("Shift-RC-Right_Brace"):  C("C-Page_Down"),               # Go to next tab
+
     # Enable Cmd+Option+Left/Right for tab navigation
     C("RC-Alt-Left"):           C("C-Page_Up"),                 # Go to prior tab
     C("RC-Alt-Right"):          C("C-Page_Down"),               # Go to next tab
+
     # Enable Ctrl+PgUp/PgDn for tab navigation
     C("Super-Page_Up"):         C("C-Page_Up"),                 # Go to prior tab
     C("Super-Page_Down"):       C("C-Page_Down"),               # Go to next tab
+
     # Use Cmd+Braces keys for tab navigation instead of page navigation 
     # C("C-Left_Brace"):        C("C-Page_Up"),
     # C("C-Right_Brace"):       C("C-Page_Down"),
+
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     matchProps(clas=browsers_allStr)(ctx) )
