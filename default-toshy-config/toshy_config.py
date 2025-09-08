@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20250906'
+__version__ = '20250907'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###  
@@ -418,7 +418,7 @@ def create_list_of_dicts(lst: List[str]):
 
 terminals = [
     "alacritty",
-    "com.mitchellh.ghostty",
+    # "com.mitchellh.ghostty",          # Replaced with double-wildcard ghostty pattern
     "com.raggesilver.BlackBox",
     "com.system76.CosmicTerm",
     "contour",
@@ -426,8 +426,9 @@ terminals = [
     "deepin-terminal",
     "dev.warp.Warp",
     "eterm",
-    "ghostty",
-    "ghostty-debug",
+    ".*ghostty.*",
+    # "ghostty",                        # Replaced with double-wildcard ghostty pattern
+    # "ghostty-debug",                  # Replaced with double-wildcard ghostty pattern
     "gnome-terminal",
     "gnome-terminal-server",
     "guake",
@@ -442,7 +443,7 @@ terminals = [
     "MateTerminal",
     "org.codeberg.dnkl.foot.desktop",
     "org.gnome.Console",
-    # "org.gnome.Ptyxis.*",             # Replaced by double-wildcard entry
+    # "org.gnome.Ptyxis.*",             # Replaced by double-wildcard Ptyxis pattern
     "org.gnome.Terminal",
     "org.kde.konsole",
     "org.kde.yakuake",
@@ -4757,14 +4758,17 @@ keymap("Deepin Terminal overrides", {
     matchProps(clas="^deepin-terminal$")(ctx) )
 
 keymap("Ghostty terminal overrides", {
-    C("RC-Equal"):              C("C-Equal"),                   # Increase font size [override general terminals remap]
+    C("RC-Equal"): C(
+        "C-Equal"
+    ),              # Increase font size [override general terminals remap]
     C("RC-D"):                  C("RC-Shift-O"),                # Open right split
     C("RC-Shift-D"):            C("RC-Shift-E"),                # Open down split
     C("RC-Alt-I"):              C("RC-Shift-I"),                # Open inspector
     C("RC-K"):                  C("C-L"),                       # clear log
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    matchProps(clas="^ghostty$|^ghostty-debug$|^com.mitchellh.ghostty$")(ctx) )
+    matchProps(clas="^.*ghostty.*$")(ctx)
+)
 
 keymap("Hyper terminal tab switching", {
     C("RC-Equal"):              C("C-Equal"),                   # Increase font size [override general terminals remap]
