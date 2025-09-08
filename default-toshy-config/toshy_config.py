@@ -4127,6 +4127,22 @@ keymap("Zotero", {
     cnfg.screen_has_focus and
     matchProps(clas="^.*Zotero.*$")(ctx) )
 
+keymap(
+    "Overrides for Chromium browser",
+    {
+        C("RC-1"): C("C-1"), # Jump to Tab #1
+        C("RC-2"): C("C-2"), # Jump to Tab #2
+        C("RC-3"): C("C-3"), # Jump to Tab #3
+        C("RC-4"): C("C-4"), # Jump to Tab #4
+        C("RC-5"): C("C-5"), # Jump to Tab #5
+        C("RC-6"): C("C-6"), # Jump to Tab #6
+        C("RC-7"): C("C-7"), # Jump to Tab #7
+        C("RC-8"): C("C-8"), # Jump to Tab #8
+        C("RC-9"): C("C-9"), # Jump to last tab
+    },
+    when=lambda ctx: cnfg.screen_has_focus and
+    matchProps(clas="^Chromium$|^chromium-browser$|^chromium$")(ctx)
+)
 
 keymap("Vivaldi browser - Settings dialog", {
     C("Esc"):                   C("Alt-F4"),                    # Close Settings dialog with Escape
