@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20250907'
+__version__ = '20250909'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###  
@@ -4742,6 +4742,13 @@ keymap("Alacritty terminal", {
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     matchProps(clas="^alacritty$")(ctx) )
+
+
+keymap("Contour terminal overrides", {
+    C("RC-minus"):              C("Shift-C-minus"),             # Decrease font size (override general terminals remap)
+}, when = lambda ctx:
+    cnfg.screen_has_focus and
+    matchProps(clas="^contour$")(ctx) )
 
 
 keymap("COSMIC Terminal overrides", {
