@@ -4405,10 +4405,13 @@ keymap("VSCodes", {
     # Override the global Cmd+Dot (Escape/cancel) shortcut for QuickFix in VSCode(s)
     C("RC-Dot"):                C("C-Dot"),                     # QuickFix, overriding global shortcut
 
-    # Override the global copy/paste shortcuts, to allow Cmd+C/Cmd+V copy/paste to work properly
-    # in embedded VSCode terminal without an internal VSCode keyboard shortcut remap.
+    # Override the global copy shortcut, to allow Cmd+C to work properly in the embedded 
+    # VSCode terminal, without an internal VSCode keyboard shortcut remap.
     C("RC-C"):                 C("C-Insert"),                   # Copy
-    C("RC-V"):                 C("Shift-Insert"),               # Paste
+
+    # This override unfortunately seems to paste from the "wrong" clipboard. Only pastes content
+    # that was copied from within the VSCode window, not content copied from other app windows:
+    # C("RC-V"):                 C("Shift-Insert"),               # Paste
 
     # In-app terminal operations (Cmd+J is "Toggle Panel Visibility" for problems/output/debug/terminal panel)
     C("Super-Grave"):           C("C-Grave"),                   # Terminal: Toggle Terminal
