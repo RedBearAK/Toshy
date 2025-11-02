@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20250716'                        # CLI option "--version" will print this out.
+__version__ = '20251101'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1207,13 +1207,17 @@ pkg_groups_map = {
 }
 
 extra_pkgs_map = {
-    # Add a tuple with distro name (ID), major version (or None) and packages to be added...
-    # ('distro_id', '22'): ["pkg1", "pkg2", ...],
-    # ('distro_id', None): ["pkg1", "pkg2", ...],
+    # Add a 2-tuple (2 quoted items in parentheses, separated by a comma) with 
+    # distro name (ID), major version (or None)as the dict key,  and
+    # then a list (in brackets) of  packages to be added as the dict value...
+    # ('distro_id', '22'):        ["pkg1", "pkg2", ...],
+    # ('distro_id', None):        ["pkg1", "pkg2", ...],
 }
 
 remove_pkgs_map = {
-    # Add a tuple with distro name (ID), major version (or None) and packages to be removed...
+    # Add a 2-tuple (2 quoted items in parentheses, separated by a comma) with 
+    # distro name (ID), major version (or None) as the dict key, and
+    # then a list (in brackets) of packages to be removed as the dict value...
     # ('distro_id', '22'): ["pkg1", "pkg2", ...],
     # ('distro_id', None): ["pkg1", "pkg2", ...],
     ('centos', '7'):            ['dbus-daemon', 'gnome-shell-extension-appindicator'],
@@ -1230,8 +1234,9 @@ pip_pkgs   = [
     "lockfile",                 # Makes it easier to keep multiple apps/icons from appearing
     "psutil",                   # For checking running processes (window manager, KVM apps, ect.)
 
-    # NOTE: Pygobject is pinned to 3.44.1 (or earlier) to get through install on RHEL 8.x and clones
-    "pygobject<=3.44.1",        # Python bindings for GObject/GTK (for tray icon and notifications)
+    # NOTE: Pygobject is pinned to 3.44.1 (or earlier) in Python quirks handlers, to get through 
+    # the install on RHEL 8.x and clones, and earlier CentOS [Stream] distros.
+    "pygobject",                # Python bindings for GObject/GTK (for tray icon and notifications)
 
     # NOTE: This was too much of a sledgehammer, changing both "program" and "command" strings
     # "setproctitle",             # Allows changing how the process looks in "top" apps
@@ -2834,6 +2839,7 @@ class PythonVenvQuirksHandler():
         print('Handling Python virtual environment quirks in CentOS 7...')
         # Avoid using systemd packages/services for CentOS 7
         cnfg.systemctl_present = False
+        global pip_pkgs
 
         # Path where Python 3.8 should have been installed by this point
         rh_python38 = '/opt/rh/rh-python38/root/usr/bin/python3.8'
@@ -2846,9 +2852,10 @@ class PythonVenvQuirksHandler():
 
         # Pin 'evdev' pip package to version 1.6.1 for CentOS 7 to
         # deal with ImportError and undefined symbol UI_GET_SYSNAME
-        global pip_pkgs
         pip_pkgs = [pkg if pkg != "evdev" else "evdev==1.6.1" for pkg in pip_pkgs]
 
+        # Pin 'pygobject' to <=3.44.1 for CentOS 7 compatibility
+        pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
 
     def handle_venv_quirks_CentOS_Stream_8(self):
         print('Handling Python virtual environment quirks in CentOS Stream 8...')
@@ -2869,6 +2876,10 @@ class PythonVenvQuirksHandler():
             else:
                 error(  f'ERROR: Did not find any appropriate Python interpreter version.')
                 safe_shutdown(1)
+
+        # Pin 'pygobject' to <=3.44.1 for CentOS Stream 8 compatibility
+        global pip_pkgs
+        pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
 
     def handle_venv_quirks_Leap(self):
         print('Handling Python virtual environment quirks in Leap...')
@@ -2901,6 +2912,12 @@ class PythonVenvQuirksHandler():
                 cnfg.py_interp_path     = shutil.which(f'python{version}')
                 cnfg.py_interp_ver_str  = version
                 break
+
+        # Pin 'pygobject' to <=3.44.1 for RHEL 8.x compatibility
+        # Only needed for RHEL 8, not 9+
+        if cnfg.distro_mjr_ver == '8':
+            global pip_pkgs
+            pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
 
     def handle_venv_quirks_Tumbleweed(self):
         print('Handling Python virtual environment quirks in Tumbleweed...')
