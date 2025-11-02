@@ -18,8 +18,9 @@ wheel
 setuptools
 pillow
 
-# Pinning pygobject to 3.44.1 (or earlier) to ensure compatibility with RHEL 8.x and its clones.
-pygobject<=3.44.1
+# Setup script pins pygobject to 3.44.1 (or earlier) to ensure 
+# compatibility with RHEL 8.x and its clones, and CentOS Stream 8, CentOS 7, etc.
+pygobject
 
 # Standard packages required for the application.
 lockfile
