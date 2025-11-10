@@ -1558,7 +1558,7 @@ class DistroQuirksHandler:
 
     @staticmethod
     def handle_quirks_Debian():
-        print('Doing prep/checks for Debian...')
+        print('Doing prep/checks for Debian-based distros...')
 
         # Make sure we only handle these quirks in the correct distros
         if cnfg.DISTRO_ID not in distro_groups_map['debian-based']:
