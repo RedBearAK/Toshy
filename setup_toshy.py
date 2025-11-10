@@ -1375,6 +1375,35 @@ class DistroQuirksHandler:
     """
 
     @staticmethod
+    def deb_pkg_exists_in_repos(pkg_name: str) -> bool:
+        """
+        Check if a package exists in Debian/Ubuntu repositories.
+        
+        Args:
+            pkg_name: Package name to check (e.g., 'libgirepository-2.0-dev')
+        
+        Returns:
+            True if package exists in repos, False otherwise
+        """
+        deb_distros = (
+            distro_groups_map.get('debian-based', []) +
+            distro_groups_map.get('ubuntu-based', [])
+        )
+        
+        if cnfg.DISTRO_ID not in deb_distros:
+            return True  # Not a Debian/Ubuntu system, assume package handling is fine
+        
+        try:
+            result = subprocess.run(
+                ['apt-cache', 'show', pkg_name],
+                stdout=DEVNULL, stderr=DEVNULL,
+                timeout=5
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    @staticmethod
     def update_centos_repos_to_vault():
         """
         CentOS 7 was end of life on June 30, 2024
@@ -1530,6 +1559,17 @@ class DistroQuirksHandler:
     @staticmethod
     def handle_quirks_Debian():
         print('Doing prep/checks for Debian...')
+
+        # Make sure we only handle these quirks in the correct distros
+        if cnfg.DISTRO_ID not in distro_groups_map['debian-based']:
+            error('Debian quirks handler called, but this is not Debian-based?')
+            safe_shutdown(1)
+
+        # Install the 2.0 dev package for girepository if available (Deb 13+ distros should have it)
+        if DistroQuirksHandler.deb_pkg_exists_in_repos('libgirepository-2.0-dev'):
+            cnfg.pkgs_for_distro += ['libgirepository-2.0-dev']
+
+        # This quirk is just for stock Debian, so it only checks for 'debian' as distro ID
         if cnfg.DISTRO_ID == 'debian' and cnfg.DESKTOP_ENV == 'kde':
             # Need to add 'kwin-addons' package for "Large Icons" task switcher UI in KDE
             cnfg.pkgs_for_distro += ['kwin-addons']
@@ -1714,6 +1754,19 @@ class DistroQuirksHandler:
         # package in RHEL 10 distro types (e.g. AlmaLinux 10):
         pkgs_to_remove = ["xset"]
         cnfg.pkgs_for_distro = [pkg for pkg in cnfg.pkgs_for_distro if pkg not in pkgs_to_remove]
+
+    @staticmethod
+    def handle_quirks_Ubuntu():
+        print('Doing prep/checks for Ubuntu-based distros...')
+
+        # Make sure we only handle these quirks in the correct distros
+        if cnfg.DISTRO_ID not in distro_groups_map['ubuntu-based']:
+            error('Ubuntu distro quirks handler called, but this is not Ubuntu-based?')
+            safe_shutdown(1)
+
+        # Install the 2.0 dev package for girepository if available (Deb 13+ distros should have it)
+        if DistroQuirksHandler.deb_pkg_exists_in_repos('libgirepository-2.0-dev'):
+            cnfg.pkgs_for_distro += ['libgirepository-2.0-dev']
 
 
 class NativePackageInstaller:
@@ -1958,7 +2011,10 @@ class PackageInstallDispatcher:
         native_pkg_installer.check_for_pkg_mgr_cmd(pkg_mgr_cmd)
         call_attn_to_pwd_prompt_if_needed()
 
-        if cnfg.DISTRO_ID == 'debian':
+        if cnfg.DISTRO_ID in distro_groups_map['ubuntu-based']:
+            DistroQuirksHandler.handle_quirks_Ubuntu()
+
+        elif cnfg.DISTRO_ID in distro_groups_map['debian-based']:
             DistroQuirksHandler.handle_quirks_Debian()
 
         cmd_lst = [cnfg.priv_elev_cmd, pkg_mgr_cmd, 'install', '-y']
