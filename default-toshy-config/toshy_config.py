@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20251028'
+__version__ = '20251109'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###  
@@ -599,6 +599,7 @@ browsers_chromeStr      = "|".join('^'+x+'$' for x in browsers_chrome)
 browsers_firefox = [
     "firedragon",               # Garuda Firefox fork
     "Firefox",
+    "firefox_.*",   # Catch "firefox_firefox" (WTF?), seen on Ubuntu Cinnamon 25.10 in X11 session
     "firefox-esr",
     "Firefox Developer Edition",
     "firefoxdeveloperedition",
