@@ -1138,6 +1138,9 @@ pkg_groups_map = {
 
     'ubuntu-based':        ["curl",
                             "git", "gir1.2-ayatanaappindicator3-0.1",
+                            # New Ayatana appindicator glib package will be needed at some point:
+                            # Ref: https://github.com/AyatanaIndicators/libayatana-appindicator-glib
+                            # "gir1.2-ayatanaappindicatorglib-2.0",
                             "input-utils",
                             "libcairo2-dev", "libdbus-1-dev", "libgirepository1.0-dev",
                                 "libjpeg-dev", "libnotify-bin", "libsystemd-dev",
@@ -1146,10 +1149,15 @@ pkg_groups_map = {
                                 "python3-venv",
                             "zenity"],
 
+    # Need this KWin package for "Large Icons" task switcher UI on stock Debian.
+    # Handled with a distro quirks handler for Debian-KDE systems.
+    # "kwin-addons",
     'debian-based':        ["curl",
                             "git", "gir1.2-ayatanaappindicator3-0.1",
+                            # New Ayatana appindicator glib package will be needed at some point:
+                            # Ref: https://github.com/AyatanaIndicators/libayatana-appindicator-glib
+                            # "gir1.2-ayatanaappindicatorglib-2.0",
                             "input-utils",
-                            # "kwin-addons", # Need this package for "Large Icons" task switcher UI
                             "libcairo2-dev", "libdbus-1-dev", "libgirepository1.0-dev",
                                 "libjpeg-dev", "libnotify-bin", "libsystemd-dev",
                                 "libwayland-dev", "libxkbcommon-dev",
