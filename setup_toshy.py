@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20251109'                        # CLI option "--version" will print this out.
+__version__ = '20251110'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1375,6 +1375,37 @@ class DistroQuirksHandler:
     """
 
     @staticmethod
+    def add_available_deb_pkgs(pkg_list: list, description: str = "optional packages"):
+        """
+        Check which packages from a list exist in repos and add them to the install list.
+        Provides informative output about what was found/not found.
+        
+        Args:
+            pkg_list: List of package names to check
+            description: Description for logging (e.g., "GTK4 GUI support packages")
+        """
+        if not pkg_list:
+            return
+        
+        print(f"Checking availability of {description}...")
+        
+        available = []
+        unavailable = []
+        
+        for pkg in pkg_list:
+            if DistroQuirksHandler.deb_pkg_exists_in_repos(pkg):
+                available.append(pkg)
+            else:
+                unavailable.append(pkg)
+        
+        if available:
+            print(f"  Found and adding: {', '.join(available)}")
+            cnfg.pkgs_for_distro += available
+        
+        if unavailable:
+            print(f"  Not available (skipping): {', '.join(unavailable)}")
+
+    @staticmethod
     def deb_pkg_exists_in_repos(pkg_name: str) -> bool:
         """
         Check if a package exists in Debian/Ubuntu repositories.
@@ -1565,9 +1596,13 @@ class DistroQuirksHandler:
             error('Debian quirks handler called, but this is not Debian-based?')
             safe_shutdown(1)
 
-        # Install the 2.0 dev package for girepository if available (Deb 13+ distros should have it)
-        if DistroQuirksHandler.deb_pkg_exists_in_repos('libgirepository-2.0-dev'):
-            cnfg.pkgs_for_distro += ['libgirepository-2.0-dev']
+        # Check for and add optional packages for GTK4 GUI support
+        gtk4_packages = [
+            'gir1.2-adw-1',             # For Adwaita/GTK4 GUI (Debian 12+, Ubuntu 22.04+)
+            'gir1.2-gtk-4.0',           # For GTK4 GUI support (Debian 11+, Ubuntu 21.10+)
+            'libgirepository-2.0-dev',  # For PyGObject with girepository-2.0 (Debian 13+, Ubuntu 24.04+)
+        ]
+        DistroQuirksHandler.add_available_deb_pkgs(gtk4_packages, "GTK4 GUI support packages")
 
         # This quirk is just for stock Debian, so it only checks for 'debian' as distro ID
         if cnfg.DISTRO_ID == 'debian' and cnfg.DESKTOP_ENV == 'kde':
@@ -1764,9 +1799,13 @@ class DistroQuirksHandler:
             error('Ubuntu distro quirks handler called, but this is not Ubuntu-based?')
             safe_shutdown(1)
 
-        # Install the 2.0 dev package for girepository if available (Deb 13+ distros should have it)
-        if DistroQuirksHandler.deb_pkg_exists_in_repos('libgirepository-2.0-dev'):
-            cnfg.pkgs_for_distro += ['libgirepository-2.0-dev']
+        # Check for and add optional packages for GTK4 GUI support
+        gtk4_packages = [
+            'gir1.2-adw-1',             # For Adwaita/GTK4 GUI (Debian 12+, Ubuntu 22.04+)
+            'gir1.2-gtk-4.0',           # For GTK4 GUI support (Debian 11+, Ubuntu 21.10+)
+            'libgirepository-2.0-dev',  # For PyGObject with girepository-2.0 (Debian 13+, Ubuntu 24.04+)
+        ]
+        DistroQuirksHandler.add_available_deb_pkgs(gtk4_packages, "GTK4 GUI support packages")
 
 
 class NativePackageInstaller:
