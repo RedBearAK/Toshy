@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20251109'
+__version__ = '20251124'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###  
@@ -1162,15 +1162,19 @@ def matchProps(*,
 
 # Boolean variable to toggle Enter key state between F2 and Enter
 # True = Enter key sends F2, False = Enter key sends Enter
-_enter_is_F2 = True     # DON'T CHANGE THIS! Must be set to True here. 
+_enter_is_F2 = True                 # DON'T CHANGE THIS! Must be set to True here. 
+_enter_F2_last_app_class = None     # Track which app set the state to be False
 
 
 def iEF2(combo_if_true, latch_or_combo_if_false, 
                 keep_value_if_true=False, keep_value_if_false=False):
     """
     Formerly 'is_Enter_F2'
-    Send a different combo for the Enter key based on the state of the _enter_is_F2 variable,
+    Send a different combo for the Enter key based on the state of the `_enter_is_F2` variable,
     or latch the variable to True or False to control the Enter key output on the next use.
+
+    Store the app class of the file manager that sets the state variable to be False, and
+    reset the state variable to True if the current app class does not match.
 
     Args:
         combo_if_true:              The combo to send if _enter_is_F2 is True.
@@ -1184,15 +1188,23 @@ def iEF2(combo_if_true, latch_or_combo_if_false,
     Returns:
         A function that, when called, returns the appropriate combo based on the current
         state of _enter_is_F2 and the provided parameters, and updates _enter_is_F2
-        based on the provided parameters.
+        based on the provided parameters. The current app class is obtained by checking
+        the context object.
 
-    This enables a simulation of the Finder "Enter to rename" capability, allowing
+    This enables a simulation of the macOS Finder's "Enter to rename" capability, allowing
     for complex control over the Enter key's behavior in various scenarios.
     """
-    def _is_Enter_F2():
-        global _enter_is_F2
+    def _is_Enter_F2(ctx: KeyContext):
+        global _enter_is_F2, _enter_F2_last_app_class
+
+        # If last app class that set state to False is not None, and does not match current
+        # app, reset the state var to True for initial behavior in new file manager windows.
+        if _enter_F2_last_app_class and _enter_F2_last_app_class != ctx.wm_class:
+            _enter_is_F2 = True
+            _enter_F2_last_app_class = None
+
         combo_list = [combo_if_true]
-        if latch_or_combo_if_false in (True, False):    # Latch variable to given bool value
+        if latch_or_combo_if_false in (True, False):    # Latch variable to the provided bool value
             _enter_is_F2 = latch_or_combo_if_false
         elif _enter_is_F2:                              # If Enter is F2 now, set to be Enter next
             if keep_value_if_true is False:
@@ -1201,8 +1213,20 @@ def iEF2(combo_if_true, latch_or_combo_if_false,
             combo_list = [latch_or_combo_if_false]
             if keep_value_if_false is False:
                 _enter_is_F2 = True
-        debug(f"_is_Enter_F2:  {combo_list      = }")
-        debug(f"_is_Enter_F2:  {_enter_is_F2    = }")
+
+        # At this point we know whether the state var was set to True or False
+        if not _enter_is_F2:
+            # Record which app set state var to False
+            _enter_F2_last_app_class = ctx.wm_class
+
+        # If state var is currently True, clear last app. 
+        elif _enter_is_F2:
+            _enter_F2_last_app_class = None
+
+        debug(f"_is_Enter_F2:               {combo_list      = }")
+        debug(f"_is_Enter_F2:               {_enter_is_F2    = }")
+        debug(f"_enter_F2_last_app_class:   {_enter_F2_last_app_class = }")
+
         return combo_list
     return _is_Enter_F2
 
@@ -1776,7 +1800,7 @@ def isMultiTap( tap_1_action: Optional[Callable] = None,
 # DO NOT REMOVE THIS MODMAP AND KEYMAP!
 # Special modmap to trigger the evaluation of the keyboard type when 
 # any modifier key is pressed
-modmap("Keyboard Type Trigger Modmap", {
+modmap("Trigger Modmap: Keyboard Type", {
     # This modmap must have all modifier keys inside it, so they will 
     # all trigger the re-evaluation of the keyboard type.
     # The accompanying keymap can be empty and still accomplish
@@ -1790,12 +1814,52 @@ modmap("Keyboard Type Trigger Modmap", {
     Key.RIGHT_CTRL:             Key.RIGHT_CTRL,
     Key.LEFT_SHIFT:             Key.LEFT_SHIFT,
     Key.RIGHT_SHIFT:            Key.RIGHT_SHIFT,
-}, when = lambda ctx: getKBtype()(ctx) )    # THIS CONDITIONAL MUST EVALUATE TO FALSE ALWAYS!
+}, when = lambda ctx: getKBtype()(ctx) )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
 # Special keymap to trigger the evaluation of the keyboard type when 
 # any non-modifier key is pressed
-keymap("Keyboard Type Trigger Keymap", {
+keymap("Trigger Keymap: Keyboard Type", {
     # Nothing needed here.
 }, when = lambda ctx: getKBtype()(ctx) )
+
+
+def get_iEF2_context():
+    """Reset Enter-to-rename state variable to True, if the current
+        application does not match on the file manager app class string"""
+    def _get_iEF2_context(ctx: KeyContext):
+        global _enter_is_F2, _enter_F2_last_app_class
+        if not _enter_is_F2 and not matchProps(clas=filemanagerStr)(ctx):
+            debug("Resetting Enter-to-rename state variable to True.")
+            _enter_is_F2 = True
+            _enter_F2_last_app_class = None
+
+        return False
+
+    return _get_iEF2_context
+
+
+# DO NOT REMOVE THIS MODMAP AND KEYMAP!
+# Special modmap to trigger the evaluation of the window context when 
+# any modifier key is pressed
+modmap("Trigger Modmap: Enter-to-Rename Context", {
+    # This modmap must have all modifier keys inside it, so they will 
+    # all trigger the re-evaluation of the window context.
+    # The accompanying keymap can be empty and still accomplish
+    # the same purpose of triggering a re-evaluation of the
+    # window context when any non-modifier key is pressed.
+    Key.LEFT_META:              Key.LEFT_META,
+    Key.RIGHT_META:             Key.RIGHT_META,
+    Key.LEFT_ALT:               Key.LEFT_ALT,
+    Key.RIGHT_ALT:              Key.RIGHT_ALT,
+    Key.LEFT_CTRL:              Key.LEFT_CTRL,
+    Key.RIGHT_CTRL:             Key.RIGHT_CTRL,
+    Key.LEFT_SHIFT:             Key.LEFT_SHIFT,
+    Key.RIGHT_SHIFT:            Key.RIGHT_SHIFT,
+}, when = lambda ctx: get_iEF2_context()(ctx) )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
+# Special keymap to trigger the evaluation of the window context when 
+# any non-modifier key is pressed
+keymap("Trigger Keymap: Enter-to-Rename Context", {
+    # Nothing needed here.
+}, when = lambda ctx: get_iEF2_context()(ctx) )
 
 
 modmap("Cond modmap - Media Arrows Fix",{
