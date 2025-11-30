@@ -3052,18 +3052,6 @@ class PythonVenvQuirksHandler():
         pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
         print('  PyGObject pinned to <=3.44.1 for compatibility with distro')
 
-    def handle_venv_quirks_Debian_Ubuntu(self):
-        """Handle Python venv quirks for Debian and Ubuntu-based distros."""
-        print('Handling Python virtual environment quirks for Debian/Ubuntu...')
-
-        # Pin PyGObject to <=3.50.0 for distros without girepository-2.0
-        # PyGObject >= 3.51.0 requires girepository-2.0 (GLib >= 2.80)
-        # Only available in Ubuntu 24.04+, Debian 13+, Mint 22+, etc.
-        if not cnfg.has_girepository_2_0:
-            global pip_pkgs
-            print('  Pinning PyGObject<=3.50.0 (girepository-2.0 not available)')
-            pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.50.0" for pkg in pip_pkgs]
-
     def handle_venv_quirks_Leap(self):
         print('Handling Python virtual environment quirks in Leap...')
         # Change the Python interpreter path to use current release version from pkg list
