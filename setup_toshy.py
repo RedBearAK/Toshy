@@ -211,11 +211,9 @@ class InstallerSettings:
         self.init_system            = None
 
         self.pkgs_for_distro        = None
-        self.has_girepository_2_0   = None
 
         self.priv_elev_cmd          = None
-        # self.initial_pw_alert_shown = None
-        self.qdbus                  = self.find_qdbus_command()
+        self.qdbus_cmd              = self.find_qdbus_command()
 
         # current stable Python release version (TODO: update when needed):
         # 3.11 Release Date: Oct. 24, 2022
@@ -2982,6 +2980,10 @@ class PythonVenvQuirksHandler():
         Returns True if pinning needed, False if system supports PyGObject 3.51+.
         """
 
+        print('Checking if PyGObject should be pinned to <=3.50.0 ...')
+
+        # First check to see if distro-specific handler already pinned PyGObject,
+        # probably to an earlier version than 3.50.0.
         pinned_pkgs = [pkg for pkg in pip_pkgs if pkg.startswith('pygobject<=')]
         if pinned_pkgs:
             print(f'  PyGObject already pinned: {pinned_pkgs}')
@@ -3022,6 +3024,7 @@ class PythonVenvQuirksHandler():
 
         # Pin 'pygobject' to <=3.44.1 for CentOS 7 compatibility
         pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
+        print('  PyGObject pinned to <=3.44.1 for compatibility with distro')
 
     def handle_venv_quirks_CentOS_Stream_8(self):
         print('Handling Python virtual environment quirks in CentOS Stream 8...')
@@ -3046,6 +3049,7 @@ class PythonVenvQuirksHandler():
         # Pin 'pygobject' to <=3.44.1 for CentOS Stream 8 compatibility
         global pip_pkgs
         pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
+        print('  PyGObject pinned to <=3.44.1 for compatibility with distro')
 
     def handle_venv_quirks_Debian_Ubuntu(self):
         """Handle Python venv quirks for Debian and Ubuntu-based distros."""
@@ -3096,6 +3100,7 @@ class PythonVenvQuirksHandler():
         if cnfg.distro_mjr_ver == '8':
             global pip_pkgs
             pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
+            print('  PyGObject pinned to <=3.44.1 for compatibility with distro')
 
     def handle_venv_quirks_Tumbleweed(self):
         print('Handling Python virtual environment quirks in Tumbleweed...')
@@ -3393,7 +3398,7 @@ def install_desktop_apps():
 def do_kwin_reconfigure():
     """Utility function to run the KWin reconfigure command"""
 
-    commands = ['gdbus', 'dbus-send', cnfg.qdbus]
+    commands = ['gdbus', 'dbus-send', cnfg.qdbus_cmd]
 
     for cmd in commands:
         if shutil.which(cmd):
@@ -3426,13 +3431,13 @@ def do_kwin_reconfigure():
             error(f'Problem using "dbus-send" to do KWin reconfigure.\n\t{proc_err}')
 
     # qdbus org.kde.KWin /KWin reconfigure
-    if shutil.which(cnfg.qdbus):
+    if shutil.which(cnfg.qdbus_cmd):
         try:
-            cmd_lst = [cnfg.qdbus, 'org.kde.KWin', '/KWin', 'reconfigure']
+            cmd_lst = [cnfg.qdbus_cmd, 'org.kde.KWin', '/KWin', 'reconfigure']
             subprocess.run(cmd_lst, check=True, stderr=DEVNULL, stdout=DEVNULL)
             return
         except subprocess.CalledProcessError as proc_err:
-            error(f'Problem using "{cnfg.qdbus}" to do KWin reconfigure.\n\t{proc_err}')
+            error(f'Problem using "{cnfg.qdbus_cmd}" to do KWin reconfigure.\n\t{proc_err}')
 
     error(f'Failed to do KWin reconfigure. No available D-Bus utility worked.')
 
