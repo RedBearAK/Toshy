@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20251110'                        # CLI option "--version" will print this out.
+__version__ = '20251129'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -211,6 +211,7 @@ class InstallerSettings:
         self.init_system            = None
 
         self.pkgs_for_distro        = None
+        self.has_girepository_2_0   = None
 
         self.priv_elev_cmd          = None
         # self.initial_pw_alert_shown = None
@@ -1242,8 +1243,12 @@ pip_pkgs   = [
     "lockfile",                 # Makes it easier to keep multiple apps/icons from appearing
     "psutil",                   # For checking running processes (window manager, KVM apps, ect.)
 
-    # NOTE: Pygobject is pinned to 3.44.1 (or earlier) in Python quirks handlers, to get through 
-    # the install on RHEL 8.x and clones, and earlier CentOS [Stream] distros.
+    # NOTE: 
+    # Pygobject was pinned to 3.44.1 (or earlier) in Python quirks handlers, to get through
+    # the install on RHEL 8.x and clones, and earlier CentOS [Stream] distros. This started
+    # causing installation problems in late 2025 distro releases (Debian/Ubuntu mainly).
+    # Now it needs to be pinned for some distro versions to <=3.50.0, to allow it to still
+    # work with systems that do not have girepository 2.0 packages yet.
     "pygobject",                # Python bindings for GObject/GTK (for tray icon and notifications)
 
     # NOTE: This was too much of a sledgehammer, changing both "program" and "command" strings
@@ -1612,9 +1617,16 @@ class DistroQuirksHandler:
         ]
         DistroQuirksHandler.add_available_deb_pkgs(gtk4_packages, "GTK4 GUI support packages")
 
-        # This quirk is just for stock Debian, so it only checks for 'debian' as distro ID
+        # Store girepository-2.0 availability for PyGObject version pinning in venv quirks.
+        # PyGObject >= 3.51.0 requires girepository-2.0, which is only in Ubuntu 24.04+/Debian 13+.
+        # Just check for the necessary package name in the package list here, since we
+        # conditionally added it to the list if available, in the last step.
+        cnfg.has_girepository_2_0 = 'libgirepository-2.0-dev' in cnfg.pkgs_for_distro
+
+        # This quirk is just for stock Debian with KDE, so it only checks for 'debian' as
+        # distro ID, instead of DISTRO_ID in "debian-based".
         if cnfg.DISTRO_ID == 'debian' and cnfg.DESKTOP_ENV == 'kde':
-            # Need to add 'kwin-addons' package for "Large Icons" task switcher UI in KDE
+            # Need to add 'kwin-addons' package to get "Large Icons" task switcher UI in KDE
             cnfg.pkgs_for_distro += ['kwin-addons']
 
     @staticmethod
@@ -1814,6 +1826,12 @@ class DistroQuirksHandler:
             'libgirepository-2.0-dev',  # For PyGObject with girepository-2.0 (Debian 13+, Ubuntu 24.04+)
         ]
         DistroQuirksHandler.add_available_deb_pkgs(gtk4_packages, "GTK4 GUI support packages")
+
+        # Store girepository-2.0 availability for PyGObject version pinning in venv quirks.
+        # PyGObject >= 3.51.0 requires girepository-2.0, which is only in Ubuntu 24.04+/Debian 13+.
+        # Just check for the necessary package name in the package list here, since we
+        # conditionally added it to the list if available, in the last step.
+        cnfg.has_girepository_2_0 = 'libgirepository-2.0-dev' in cnfg.pkgs_for_distro
 
 
 class NativePackageInstaller:
@@ -2984,6 +3002,18 @@ class PythonVenvQuirksHandler():
         global pip_pkgs
         pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
 
+    def handle_venv_quirks_Debian_Ubuntu(self):
+        """Handle Python venv quirks for Debian and Ubuntu-based distros."""
+        print('Handling Python virtual environment quirks for Debian/Ubuntu...')
+
+        # Pin PyGObject to <=3.50.0 for distros without girepository-2.0
+        # PyGObject >= 3.51.0 requires girepository-2.0 (GLib >= 2.80)
+        # Only available in Ubuntu 24.04+, Debian 13+, Mint 22+, etc.
+        if not cnfg.has_girepository_2_0:
+            global pip_pkgs
+            print('  Pinning PyGObject<=3.50.0 (girepository-2.0 not available)')
+            pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.50.0" for pkg in pip_pkgs]
+
     def handle_venv_quirks_Leap(self):
         print('Handling Python virtual environment quirks in Leap...')
         # Change the Python interpreter path to use current release version from pkg list
@@ -3104,9 +3134,11 @@ def setup_python_vir_env():
         is_CentOS_7             = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver == '7'
         is_CentOS_8             = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver == '8'
         is_CentOS_7_or_8        = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver in ['7', '8']
+        is_Debian_based         = cnfg.DISTRO_ID in distro_groups_map['debian-based']
         is_Leap_based           = cnfg.DISTRO_ID in distro_groups_map['leap-based']
         is_RHEL_based           = cnfg.DISTRO_ID in distro_groups_map['rhel-based']
         is_Tumbleweed_based     = cnfg.DISTRO_ID in distro_groups_map['tumbleweed-based']
+        is_Ubuntu_based         = cnfg.DISTRO_ID in distro_groups_map['ubuntu-based']
 
         # Order of elifs is very delicate unless conditions are 100% mutually exclusive, 
         # but the venv quirks handlers are set up to be independent (unlike distro quirks).
@@ -3117,6 +3149,9 @@ def setup_python_vir_env():
 
         elif is_CentOS_8:
             venv_quirks_handler.handle_venv_quirks_CentOS_Stream_8()
+
+        elif is_Debian_based or is_Ubuntu_based:
+            venv_quirks_handler.handle_venv_quirks_Debian_Ubuntu()
 
         elif is_Leap_based:
             venv_quirks_handler.handle_venv_quirks_Leap()
