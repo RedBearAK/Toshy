@@ -2981,15 +2981,21 @@ class PythonVenvQuirksHandler():
         PyGObject >= 3.51.0 requires GLib >= 2.80 (girepository-2.0).
         Returns True if pinning needed, False if system supports PyGObject 3.51+.
         """
+
+        pinned_pkgs = [pkg for pkg in pip_pkgs if pkg.startswith('pygobject<=')]
+        if pinned_pkgs:
+            print(f'  PyGObject already pinned: {pinned_pkgs}')
+            return False
+
         glib_version = self.get_glib_version()
 
         if glib_version is None:
-            print('  Could not determine GLib version, pinning PyGObject<=3.50.0')
+            print('  Could not determine GLib version, should pin PyGObject<=3.50.0')
             return True
 
         major, minor = glib_version
         if (major, minor) < (2, 80):
-            print(f'  GLib {major}.{minor} < 2.80, pinning PyGObject<=3.50.0')
+            print(f'  GLib {major}.{minor} < 2.80, should pin PyGObject<=3.50.0')
             return True
 
         print(f'  GLib {major}.{minor} >= 2.80, no PyGObject pinning needed')
