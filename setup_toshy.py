@@ -3173,11 +3173,9 @@ def setup_python_vir_env():
         is_CentOS_7             = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver == '7'
         is_CentOS_8             = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver == '8'
         is_CentOS_7_or_8        = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver in ['7', '8']
-        is_Debian_based         = cnfg.DISTRO_ID in distro_groups_map['debian-based']
         is_Leap_based           = cnfg.DISTRO_ID in distro_groups_map['leap-based']
         is_RHEL_based           = cnfg.DISTRO_ID in distro_groups_map['rhel-based']
         is_Tumbleweed_based     = cnfg.DISTRO_ID in distro_groups_map['tumbleweed-based']
-        is_Ubuntu_based         = cnfg.DISTRO_ID in distro_groups_map['ubuntu-based']
 
         # Order of elifs is very delicate unless conditions are 100% mutually exclusive, 
         # but the venv quirks handlers are set up to be independent (unlike distro quirks).
@@ -3188,9 +3186,6 @@ def setup_python_vir_env():
 
         elif is_CentOS_8:
             venv_quirks_handler.handle_venv_quirks_CentOS_Stream_8()
-
-        elif is_Debian_based or is_Ubuntu_based:
-            venv_quirks_handler.handle_venv_quirks_Debian_Ubuntu()
 
         elif is_Leap_based:
             venv_quirks_handler.handle_venv_quirks_Leap()
