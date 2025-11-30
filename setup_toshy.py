@@ -3169,13 +3169,6 @@ def setup_python_vir_env():
     # venv quirks/prep that is sometimes necessary.
     if not os.path.exists(cnfg.venv_path):
 
-        # Pin PyGObject if GLib is too old (< 2.80) for PyGObject >= 3.51.0
-        # Some distros also might have venv quirks handlers that pin PyGObject if
-        # they don't have appropriate girepository 2.0 support packages available.
-        if venv_quirks_handler.should_pin_pygobject():
-            global pip_pkgs
-            pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.50.0" for pkg in pip_pkgs]
-
         # Define clear condition variables with short names
         is_CentOS_7             = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver == '7'
         is_CentOS_8             = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver == '8'
@@ -3207,6 +3200,15 @@ def setup_python_vir_env():
 
         elif is_Tumbleweed_based:
             venv_quirks_handler.handle_venv_quirks_Tumbleweed()
+
+        # Pin PyGObject if GLib is too old (< 2.80) for PyGObject >= 3.51.0
+        # Some distros also might have venv quirks handlers that pin PyGObject if
+        # they don't have appropriate girepository 2.0 support packages available.
+        # RHEL 8 and related are already pinning to 3.44 so we must do this check
+        # after the distro-specific handlers run above.
+        if venv_quirks_handler.should_pin_pygobject():
+            global pip_pkgs
+            pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.50.0" for pkg in pip_pkgs]
 
         try:
             print(f"Using Python version: '{cnfg.py_interp_ver_str}'")
