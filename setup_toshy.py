@@ -1137,15 +1137,18 @@ pkg_groups_map = {
                             "xset", 
                             "zenity"],
 
+    # Separately handled with distro quirks handlers for Debian and Ubuntu systems, due
+    # to needing to assess availability on the system:
+    # 'gir1.2-adw-1', 'gir1.2-gtk-4.0',
+    # 'libgirepository1.0-dev', 'libgirepository-2.0-dev',
     'ubuntu-based':        ["curl",
                             "git", "gir1.2-ayatanaappindicator3-0.1",
                             # New Ayatana appindicator glib package will be needed at some point:
                             # Ref: https://github.com/AyatanaIndicators/libayatana-appindicator-glib
                             # "gir1.2-ayatanaappindicatorglib-2.0",
                             "input-utils",
-                            "libcairo2-dev", "libdbus-1-dev", "libgirepository1.0-dev",
-                                "libjpeg-dev", "libnotify-bin", "libsystemd-dev",
-                                "libwayland-dev", "libxkbcommon-dev",
+                            "libcairo2-dev", "libdbus-1-dev", "libjpeg-dev", "libnotify-bin", 
+                                "libsystemd-dev", "libwayland-dev", "libxkbcommon-dev",
                             "python3-dbus", "python3-dev", "python3-pip", "python3-tk",
                                 "python3-venv",
                             "zenity"],
@@ -1153,15 +1156,18 @@ pkg_groups_map = {
     # Need this KWin package for "Large Icons" task switcher UI on stock Debian.
     # Handled with a distro quirks handler for Debian-KDE systems.
     # "kwin-addons",
+    # Separately handled with distro quirks handlers for Debian and Ubuntu systems, due
+    # to needing to assess availability on the system:
+    # 'gir1.2-adw-1', 'gir1.2-gtk-4.0',
+    # 'libgirepository1.0-dev', 'libgirepository-2.0-dev',
     'debian-based':        ["curl",
                             "git", "gir1.2-ayatanaappindicator3-0.1",
                             # New Ayatana appindicator glib package will be needed at some point:
                             # Ref: https://github.com/AyatanaIndicators/libayatana-appindicator-glib
                             # "gir1.2-ayatanaappindicatorglib-2.0",
                             "input-utils",
-                            "libcairo2-dev", "libdbus-1-dev", "libgirepository1.0-dev",
-                                "libjpeg-dev", "libnotify-bin", "libsystemd-dev",
-                                "libwayland-dev", "libxkbcommon-dev",
+                            "libcairo2-dev", "libdbus-1-dev", "libjpeg-dev", "libnotify-bin", 
+                                "libsystemd-dev", "libwayland-dev", "libxkbcommon-dev",
                             "python3-dbus", "python3-dev", "python3-pip", "python3-tk",
                                 "python3-venv",
                             "zenity"],
@@ -1613,15 +1619,10 @@ class DistroQuirksHandler:
         gtk4_packages = [
             'gir1.2-adw-1',             # For Adwaita/GTK4 GUI (Debian 12+, Ubuntu 22.04+)
             'gir1.2-gtk-4.0',           # For GTK4 GUI support (Debian 11+, Ubuntu 21.10+)
+            'libgirepository1.0-dev',   # For PyGObject with girepository-1.0 (Debian <13, Ubuntu <24.04)
             'libgirepository-2.0-dev',  # For PyGObject with girepository-2.0 (Debian 13+, Ubuntu 24.04+)
         ]
         DistroQuirksHandler.add_available_deb_pkgs(gtk4_packages, "GTK4 GUI support packages")
-
-        # Store girepository-2.0 availability for PyGObject version pinning in venv quirks.
-        # PyGObject >= 3.51.0 requires girepository-2.0, which is only in Ubuntu 24.04+/Debian 13+.
-        # Just check for the necessary package name in the package list here, since we
-        # conditionally added it to the list if available, in the last step.
-        cnfg.has_girepository_2_0 = 'libgirepository-2.0-dev' in cnfg.pkgs_for_distro
 
         # This quirk is just for stock Debian with KDE, so it only checks for 'debian' as
         # distro ID, instead of DISTRO_ID in "debian-based".
@@ -1823,15 +1824,10 @@ class DistroQuirksHandler:
         gtk4_packages = [
             'gir1.2-adw-1',             # For Adwaita/GTK4 GUI (Debian 12+, Ubuntu 22.04+)
             'gir1.2-gtk-4.0',           # For GTK4 GUI support (Debian 11+, Ubuntu 21.10+)
+            'libgirepository1.0-dev',   # For PyGObject with girepository-1.0 (Debian <13, Ubuntu <24.04)
             'libgirepository-2.0-dev',  # For PyGObject with girepository-2.0 (Debian 13+, Ubuntu 24.04+)
         ]
         DistroQuirksHandler.add_available_deb_pkgs(gtk4_packages, "GTK4 GUI support packages")
-
-        # Store girepository-2.0 availability for PyGObject version pinning in venv quirks.
-        # PyGObject >= 3.51.0 requires girepository-2.0, which is only in Ubuntu 24.04+/Debian 13+.
-        # Just check for the necessary package name in the package list here, since we
-        # conditionally added it to the list if available, in the last step.
-        cnfg.has_girepository_2_0 = 'libgirepository-2.0-dev' in cnfg.pkgs_for_distro
 
 
 class NativePackageInstaller:
@@ -2956,6 +2952,49 @@ class PythonVenvQuirksHandler():
         
         print(f"C_INCLUDE_PATH updated: {os.environ['C_INCLUDE_PATH']}")
 
+    def get_glib_version(self):
+        """
+        Get installed GLib version via pkg-config.
+        Returns tuple (major, minor) or None if check fails.
+        """
+        for cmd in ['pkg-config', 'pkgconf']:
+            if not shutil.which(cmd):
+                continue
+            try:
+                result = subprocess.run(
+                    [cmd, '--modversion', 'glib-2.0'],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    universal_newlines=True, timeout=5
+                )
+                if result.returncode == 0:
+                    version_str = result.stdout.strip()
+                    parts = version_str.split('.')
+                    if len(parts) >= 2:
+                        return (int(parts[0]), int(parts[1]))
+            except (subprocess.TimeoutExpired, ValueError, OSError):
+                continue
+        return None
+
+    def should_pin_pygobject(self):
+        """
+        Determine if PyGObject should be pinned to <=3.50.0.
+        PyGObject >= 3.51.0 requires GLib >= 2.80 (girepository-2.0).
+        Returns True if pinning needed, False if system supports PyGObject 3.51+.
+        """
+        glib_version = self.get_glib_version()
+
+        if glib_version is None:
+            print('  Could not determine GLib version, pinning PyGObject<=3.50.0')
+            return True
+
+        major, minor = glib_version
+        if (major, minor) < (2, 80):
+            print(f'  GLib {major}.{minor} < 2.80, pinning PyGObject<=3.50.0')
+            return True
+
+        print(f'  GLib {major}.{minor} >= 2.80, no PyGObject pinning needed')
+        return False
+
     def handle_venv_quirks_CentOS_7(self):
         print('Handling Python virtual environment quirks in CentOS 7...')
         # Avoid using systemd packages/services for CentOS 7
@@ -3129,6 +3168,13 @@ def setup_python_vir_env():
     # Create the virtual environment if it doesn't exist, while handling any
     # venv quirks/prep that is sometimes necessary.
     if not os.path.exists(cnfg.venv_path):
+
+        # Pin PyGObject if GLib is too old (< 2.80) for PyGObject >= 3.51.0
+        # Some distros also might have venv quirks handlers that pin PyGObject if
+        # they don't have appropriate girepository 2.0 support packages available.
+        if venv_quirks_handler.should_pin_pygobject():
+            global pip_pkgs
+            pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.50.0" for pkg in pip_pkgs]
 
         # Define clear condition variables with short names
         is_CentOS_7             = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver == '7'
