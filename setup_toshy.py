@@ -1043,6 +1043,7 @@ pkg_groups_map = {
                                 "libxkbcommon-devel",
                             "python3-dbus", "python3-devel", "python3-pip", "python3-tkinter",
                             "systemd-devel",
+                            "wayland-devel",
                             # The 'xdg-open' and 'xdg-mime' utils were missing on CentOS Stream 10,
                             # necessitating adding 'xdg-utils' as dependency. Very unusual.
                             "xdg-utils", "xset",
