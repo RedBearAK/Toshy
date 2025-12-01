@@ -2146,8 +2146,7 @@ class PackageInstallDispatcher:
             try:
                 # Using universal_newlines for Python 3.6 compatibility
                 result = subprocess.run(['apk', 'list', '--installed', '--manifest'], 
-                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                        universal_newlines=True, check=True)
+                                        stdout=PIPE, stderr=PIPE, universal_newlines=True, check=True)
                 installed_packages = set()
                 for line in result.stdout.splitlines():
                     if line.strip():
@@ -2962,8 +2961,7 @@ class PythonVenvQuirksHandler():
             try:
                 result = subprocess.run(
                     [cmd, '--modversion', 'glib-2.0'],
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    universal_newlines=True, timeout=5
+                    stdout=PIPE, stderr=PIPE, universal_newlines=True, timeout=5
                 )
                 if result.returncode == 0:
                     version_str = result.stdout.strip()
