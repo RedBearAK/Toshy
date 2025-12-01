@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20251129'                        # CLI option "--version" will print this out.
+__version__ = '20251130'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
