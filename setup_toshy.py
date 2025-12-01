@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20251110'                        # CLI option "--version" will print this out.
+__version__ = '20251130'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -213,8 +213,7 @@ class InstallerSettings:
         self.pkgs_for_distro        = None
 
         self.priv_elev_cmd          = None
-        # self.initial_pw_alert_shown = None
-        self.qdbus                  = self.find_qdbus_command()
+        self.qdbus_cmd              = self.find_qdbus_command()
 
         # current stable Python release version (TODO: update when needed):
         # 3.11 Release Date: Oct. 24, 2022
@@ -1044,6 +1043,7 @@ pkg_groups_map = {
                                 "libxkbcommon-devel",
                             "python3-dbus", "python3-devel", "python3-pip", "python3-tkinter",
                             "systemd-devel",
+                            "wayland-devel",
                             # The 'xdg-open' and 'xdg-mime' utils were missing on CentOS Stream 10,
                             # necessitating adding 'xdg-utils' as dependency. Very unusual.
                             "xdg-utils", "xset",
@@ -1136,15 +1136,18 @@ pkg_groups_map = {
                             "xset", 
                             "zenity"],
 
+    # Separately handled with distro quirks handlers for Debian and Ubuntu systems, due
+    # to needing to assess availability on the system:
+    # 'gir1.2-adw-1', 'gir1.2-gtk-4.0',
+    # 'libgirepository1.0-dev', 'libgirepository-2.0-dev',
     'ubuntu-based':        ["curl",
                             "git", "gir1.2-ayatanaappindicator3-0.1",
                             # New Ayatana appindicator glib package will be needed at some point:
                             # Ref: https://github.com/AyatanaIndicators/libayatana-appindicator-glib
                             # "gir1.2-ayatanaappindicatorglib-2.0",
                             "input-utils",
-                            "libcairo2-dev", "libdbus-1-dev", "libgirepository1.0-dev",
-                                "libjpeg-dev", "libnotify-bin", "libsystemd-dev",
-                                "libwayland-dev", "libxkbcommon-dev",
+                            "libcairo2-dev", "libdbus-1-dev", "libjpeg-dev", "libnotify-bin", 
+                                "libsystemd-dev", "libwayland-dev", "libxkbcommon-dev",
                             "python3-dbus", "python3-dev", "python3-pip", "python3-tk",
                                 "python3-venv",
                             "zenity"],
@@ -1152,15 +1155,18 @@ pkg_groups_map = {
     # Need this KWin package for "Large Icons" task switcher UI on stock Debian.
     # Handled with a distro quirks handler for Debian-KDE systems.
     # "kwin-addons",
+    # Separately handled with distro quirks handlers for Debian and Ubuntu systems, due
+    # to needing to assess availability on the system:
+    # 'gir1.2-adw-1', 'gir1.2-gtk-4.0',
+    # 'libgirepository1.0-dev', 'libgirepository-2.0-dev',
     'debian-based':        ["curl",
                             "git", "gir1.2-ayatanaappindicator3-0.1",
                             # New Ayatana appindicator glib package will be needed at some point:
                             # Ref: https://github.com/AyatanaIndicators/libayatana-appindicator-glib
                             # "gir1.2-ayatanaappindicatorglib-2.0",
                             "input-utils",
-                            "libcairo2-dev", "libdbus-1-dev", "libgirepository1.0-dev",
-                                "libjpeg-dev", "libnotify-bin", "libsystemd-dev",
-                                "libwayland-dev", "libxkbcommon-dev",
+                            "libcairo2-dev", "libdbus-1-dev", "libjpeg-dev", "libnotify-bin", 
+                                "libsystemd-dev", "libwayland-dev", "libxkbcommon-dev",
                             "python3-dbus", "python3-dev", "python3-pip", "python3-tk",
                                 "python3-venv",
                             "zenity"],
@@ -1242,8 +1248,12 @@ pip_pkgs   = [
     "lockfile",                 # Makes it easier to keep multiple apps/icons from appearing
     "psutil",                   # For checking running processes (window manager, KVM apps, ect.)
 
-    # NOTE: Pygobject is pinned to 3.44.1 (or earlier) in Python quirks handlers, to get through 
-    # the install on RHEL 8.x and clones, and earlier CentOS [Stream] distros.
+    # NOTE: 
+    # Pygobject was pinned to 3.44.1 (or earlier) in Python quirks handlers, to get through
+    # the install on RHEL 8.x and clones, and earlier CentOS [Stream] distros. This started
+    # causing installation problems in late 2025 distro releases (Debian/Ubuntu mainly).
+    # Now it needs to be pinned for some distro versions to <=3.50.0, to allow it to still
+    # work with systems that do not have girepository 2.0 packages yet.
     "pygobject",                # Python bindings for GObject/GTK (for tray icon and notifications)
 
     # NOTE: This was too much of a sledgehammer, changing both "program" and "command" strings
@@ -1608,13 +1618,15 @@ class DistroQuirksHandler:
         gtk4_packages = [
             'gir1.2-adw-1',             # For Adwaita/GTK4 GUI (Debian 12+, Ubuntu 22.04+)
             'gir1.2-gtk-4.0',           # For GTK4 GUI support (Debian 11+, Ubuntu 21.10+)
+            'libgirepository1.0-dev',   # For PyGObject with girepository-1.0 (Debian <13, Ubuntu <24.04)
             'libgirepository-2.0-dev',  # For PyGObject with girepository-2.0 (Debian 13+, Ubuntu 24.04+)
         ]
         DistroQuirksHandler.add_available_deb_pkgs(gtk4_packages, "GTK4 GUI support packages")
 
-        # This quirk is just for stock Debian, so it only checks for 'debian' as distro ID
+        # This quirk is just for stock Debian with KDE, so it only checks for 'debian' as
+        # distro ID, instead of DISTRO_ID in "debian-based".
         if cnfg.DISTRO_ID == 'debian' and cnfg.DESKTOP_ENV == 'kde':
-            # Need to add 'kwin-addons' package for "Large Icons" task switcher UI in KDE
+            # Need to add 'kwin-addons' package to get "Large Icons" task switcher UI in KDE
             cnfg.pkgs_for_distro += ['kwin-addons']
 
     @staticmethod
@@ -1811,6 +1823,7 @@ class DistroQuirksHandler:
         gtk4_packages = [
             'gir1.2-adw-1',             # For Adwaita/GTK4 GUI (Debian 12+, Ubuntu 22.04+)
             'gir1.2-gtk-4.0',           # For GTK4 GUI support (Debian 11+, Ubuntu 21.10+)
+            'libgirepository1.0-dev',   # For PyGObject with girepository-1.0 (Debian <13, Ubuntu <24.04)
             'libgirepository-2.0-dev',  # For PyGObject with girepository-2.0 (Debian 13+, Ubuntu 24.04+)
         ]
         DistroQuirksHandler.add_available_deb_pkgs(gtk4_packages, "GTK4 GUI support packages")
@@ -2938,6 +2951,59 @@ class PythonVenvQuirksHandler():
         
         print(f"C_INCLUDE_PATH updated: {os.environ['C_INCLUDE_PATH']}")
 
+    def get_glib_version(self):
+        """
+        Get installed GLib version via pkg-config.
+        Returns tuple (major, minor) or None if check fails.
+        """
+        for cmd in ['pkg-config', 'pkgconf']:
+            if not shutil.which(cmd):
+                continue
+            try:
+                result = subprocess.run(
+                    [cmd, '--modversion', 'glib-2.0'],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    universal_newlines=True, timeout=5
+                )
+                if result.returncode == 0:
+                    version_str = result.stdout.strip()
+                    parts = version_str.split('.')
+                    if len(parts) >= 2:
+                        return (int(parts[0]), int(parts[1]))
+            except (subprocess.TimeoutExpired, ValueError, OSError):
+                continue
+        return None
+
+    def should_pin_pygobject(self):
+        """
+        Determine if PyGObject should be pinned to <=3.50.0.
+        PyGObject >= 3.51.0 requires GLib >= 2.80 (girepository-2.0).
+        Returns True if pinning needed, False if system supports PyGObject 3.51+.
+        """
+
+        print('Checking if PyGObject should be pinned to <=3.50.0 ...')
+
+        # First check to see if distro-specific handler already pinned PyGObject,
+        # probably to an earlier version than 3.50.0.
+        pinned_pkgs = [pkg for pkg in pip_pkgs if pkg.startswith('pygobject<=')]
+        if pinned_pkgs:
+            print(f'  PyGObject already pinned: {pinned_pkgs}')
+            return False
+
+        glib_version = self.get_glib_version()
+
+        if glib_version is None:
+            print('  Could not determine GLib version, should pin PyGObject<=3.50.0')
+            return True
+
+        major, minor = glib_version
+        if (major, minor) < (2, 80):
+            print(f'  GLib {major}.{minor} < 2.80, should pin PyGObject<=3.50.0')
+            return True
+
+        print(f'  GLib {major}.{minor} >= 2.80, no PyGObject pinning needed')
+        return False
+
     def handle_venv_quirks_CentOS_7(self):
         print('Handling Python virtual environment quirks in CentOS 7...')
         # Avoid using systemd packages/services for CentOS 7
@@ -2959,6 +3025,7 @@ class PythonVenvQuirksHandler():
 
         # Pin 'pygobject' to <=3.44.1 for CentOS 7 compatibility
         pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
+        print('  PyGObject pinned to <=3.44.1 for compatibility with distro')
 
     def handle_venv_quirks_CentOS_Stream_8(self):
         print('Handling Python virtual environment quirks in CentOS Stream 8...')
@@ -2983,6 +3050,7 @@ class PythonVenvQuirksHandler():
         # Pin 'pygobject' to <=3.44.1 for CentOS Stream 8 compatibility
         global pip_pkgs
         pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
+        print('  PyGObject pinned to <=3.44.1 for compatibility with distro')
 
     def handle_venv_quirks_Leap(self):
         print('Handling Python virtual environment quirks in Leap...')
@@ -3021,6 +3089,7 @@ class PythonVenvQuirksHandler():
         if cnfg.distro_mjr_ver == '8':
             global pip_pkgs
             pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.44.1" for pkg in pip_pkgs]
+            print('  PyGObject pinned to <=3.44.1 for compatibility with distro')
 
     def handle_venv_quirks_Tumbleweed(self):
         print('Handling Python virtual environment quirks in Tumbleweed...')
@@ -3126,6 +3195,15 @@ def setup_python_vir_env():
 
         elif is_Tumbleweed_based:
             venv_quirks_handler.handle_venv_quirks_Tumbleweed()
+
+        # Pin PyGObject if GLib is too old (< 2.80) for PyGObject >= 3.51.0
+        # Some distros also might have venv quirks handlers that pin PyGObject if
+        # they don't have appropriate girepository 2.0 support packages available.
+        # RHEL 8 and related are already pinning to 3.44 so we must do this check
+        # after the distro-specific handlers run above.
+        if venv_quirks_handler.should_pin_pygobject():
+            global pip_pkgs
+            pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.50.0" for pkg in pip_pkgs]
 
         try:
             print(f"Using Python version: '{cnfg.py_interp_ver_str}'")
@@ -3304,7 +3382,7 @@ def install_desktop_apps():
 def do_kwin_reconfigure():
     """Utility function to run the KWin reconfigure command"""
 
-    commands = ['gdbus', 'dbus-send', cnfg.qdbus]
+    commands = ['gdbus', 'dbus-send', cnfg.qdbus_cmd]
 
     for cmd in commands:
         if shutil.which(cmd):
@@ -3337,13 +3415,13 @@ def do_kwin_reconfigure():
             error(f'Problem using "dbus-send" to do KWin reconfigure.\n\t{proc_err}')
 
     # qdbus org.kde.KWin /KWin reconfigure
-    if shutil.which(cnfg.qdbus):
+    if shutil.which(cnfg.qdbus_cmd):
         try:
-            cmd_lst = [cnfg.qdbus, 'org.kde.KWin', '/KWin', 'reconfigure']
+            cmd_lst = [cnfg.qdbus_cmd, 'org.kde.KWin', '/KWin', 'reconfigure']
             subprocess.run(cmd_lst, check=True, stderr=DEVNULL, stdout=DEVNULL)
             return
         except subprocess.CalledProcessError as proc_err:
-            error(f'Problem using "{cnfg.qdbus}" to do KWin reconfigure.\n\t{proc_err}')
+            error(f'Problem using "{cnfg.qdbus_cmd}" to do KWin reconfigure.\n\t{proc_err}')
 
     error(f'Failed to do KWin reconfigure. No available D-Bus utility worked.')
 
