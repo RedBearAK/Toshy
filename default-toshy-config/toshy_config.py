@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20251209'
+__version__ = '20251213'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###  
@@ -63,14 +63,17 @@ devices_api(
 )
 
 ###########################################################
-# If you need to use something like the wordwise 'emacs' 
-# style shortcuts, and want them to be repeatable, use
-# the API call below to stop the keymapper from ignoring
-# "repeat" key events. This will use a bit more CPU while
-# holding any key down, especially while holding a key combo
-# that is getting remapped onto something else in the config.
+# Use this ONLY if you want near zero CPU usage for held,
+# repeating keys. This will bypass the new repeating keys
+# cache mechanism that reduces CPU usage for repeats to
+# very low levels (but not zero), in xwaykeyz>=1.11.0.
+# 
+# This override will BREAK shortcuts like Emacs-style
+# cursor movement, which will not be able to repeat.
+# 
+# A warning will appear in verbose debug logging.
 ###########################################################
-# ignore_repeating_keys(False)
+# ignore_repeating_keys(True)
 
 
 ###  SLICE_MARK_END: keymapper_api  ###  EDITS OUTSIDE THESE MARKS WILL BE LOST ON UPGRADE
