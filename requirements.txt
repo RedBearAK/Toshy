@@ -20,6 +20,8 @@ pillow
 
 # Setup script pins pygobject to 3.44.1 (or earlier) to ensure 
 # compatibility with RHEL 8.x and its clones, and CentOS Stream 8, CentOS 7, etc.
+# Newer pinning requirement: pygobject >=3.51.0 needs GLib >=2.80
+# Setup script tests for GLib version and available girepository 2.0 packages.
 pygobject
 
 # Standard packages required for the application.

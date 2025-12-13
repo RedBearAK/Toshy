@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20251130'                        # CLI option "--version" will print this out.
+__version__ = '20251213'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -310,7 +310,7 @@ class InstallerSettings:
         # Order of preference for elevation commands
         known_privilege_elevation_cmds = ["sudo", "doas", "run0", "sudo-rs"]
         print()
-        print(f"Checking for the following commands: {known_privilege_elevation_cmds}")
+        print(f"Checking for the following commands:\n  {known_privilege_elevation_cmds}")
 
         for cmd in known_privilege_elevation_cmds:
             if shutil.which(cmd):
@@ -3167,6 +3167,8 @@ def setup_python_vir_env():
     # venv quirks/prep that is sometimes necessary.
     if not os.path.exists(cnfg.venv_path):
 
+        print(f"Using Python version: '{cnfg.py_interp_ver_str}'")
+
         # Define clear condition variables with short names
         is_CentOS_7             = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver == '7'
         is_CentOS_8             = cnfg.DISTRO_ID == 'centos' and cnfg.distro_mjr_ver == '8'
@@ -3197,15 +3199,14 @@ def setup_python_vir_env():
         # Pin PyGObject if GLib is too old (< 2.80) for PyGObject >= 3.51.0
         # Some distros also might have venv quirks handlers that pin PyGObject if
         # they don't have appropriate girepository 2.0 support packages available.
-        # RHEL 8 and related are already pinning to 3.44 so we must do this check
-        # after the distro-specific handlers run above.
+        # RHEL 8 and related are already pinning to <=3.44.1, so we must do this
+        # check after the distro-specific handlers run above, pinning only if
+        # necessary, and only if not already pinned.
         if venv_quirks_handler.should_pin_pygobject():
             global pip_pkgs
             pip_pkgs = [pkg if pkg != "pygobject" else "pygobject<=3.50.0" for pkg in pip_pkgs]
 
         try:
-            print(f"Using Python version: '{cnfg.py_interp_ver_str}'")
-
             # This FAILED to solve issue of venv breaking when system Python version changes.
             # # Use a bootstrap venv with virtualenv to create final venv
             # create_virtualenv_with_bootstrap()
@@ -3228,7 +3229,7 @@ def setup_python_vir_env():
 
 def install_pip_packages():
     """Install `pip` packages in the prepped Python virtual environment"""
-    print(f'\n\n§  Installing/upgrading Python packages...\n{cnfg.separator}')
+    print(f'\n\n§  Installing/upgrading Python venv packages...\n{cnfg.separator}')
 
     global pip_pkgs
 
@@ -3541,12 +3542,12 @@ def setup_kwin_dbus_script():
         kwin_script_name
     ]
     try:
-        print(f"Trying to unload existing KWin script...")
+        print(f"Trying to unload existing Toshy KWin script...")
         subprocess.run(cmd_lst, check=True, stderr=DEVNULL, stdout=DEVNULL)
-        print(f"Unloaded existing KWin script.")
+        print(f"Unloaded existing Toshy KWin script.")
     except subprocess.CalledProcessError as proc_err:
-        error(f"Problem while trying to unload existing KWin script:\n\t{proc_err}")
-        error("You may need to remove existing KWin script and restart Toshy.")
+        error(f"Problem while trying to unload existing Toshy KWin script:\n\t{proc_err}")
+        error("You may need to remove existing Toshy KWin script and restart Toshy.")
 
     # Try to remove existing KWin script, only if it exists
     if os.path.exists(curr_script_path):
@@ -3567,7 +3568,7 @@ def setup_kwin_dbus_script():
                 shutil.rmtree(curr_script_path)
                 print(f'Removed existing Toshy KWin script folder (if any).')
             except (FileNotFoundError, PermissionError) as file_err:
-                error(f'Problem removing existing KWin script folder:\n\t{file_err}')
+                error(f'Problem removing existing Toshy KWin script folder:\n\t{file_err}')
                 # safe_shutdown(1)
         else:
             print("Successfully removed existing Toshy KWin script.")
@@ -3605,9 +3606,9 @@ def setup_kwin_dbus_script():
                                             stdout=out, stderr=err)
 
     if result.returncode != 0:
-        error(f"Error enabling the KWin script. The error was:\n\t{result.stderr}")
+        error(f"Error enabling the Toshy KWin script. The error was:\n\t{result.stderr}")
     else:
-        print("Successfully enabled the KWin script.")
+        print("Successfully enabled the Toshy KWin script.")
 
     # Try to get KWin to notice and activate the script on its own, now that it's in RC file
     do_kwin_reconfigure()
