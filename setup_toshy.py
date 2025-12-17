@@ -1818,11 +1818,12 @@ class DistroQuirksHandler:
         print('Doing prep/checks for Solus-based distros...')
 
         result_new_pkg_name = subprocess.run(
-            ['eopkg', 'search', 'python3-dbus-devel'],
+            ['eopkg', 'search', '--no-color', 'python3-dbus-devel'],
             stdout=PIPE, stderr=PIPE, universal_newlines=True
         )
+
         result_old_pkg_name = subprocess.run(
-            ['eopkg', 'search', 'python-dbus-devel'],
+            ['eopkg', 'search', '--no-color', 'python-dbus-devel'],
             stdout=PIPE, stderr=PIPE, universal_newlines=True
         )
 
