@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20251213'                        # CLI option "--version" will print this out.
+__version__ = '20251217'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1185,7 +1185,10 @@ pkg_groups_map = {
                             "libayatana-appindicator", "libcairo-devel", "libnotify",
                                 "libxkbcommon-devel",
                             "pip", "python3-dbus", "python3-devel", "python3-tkinter",
-                                "python-dbus-devel", "python-gobject-devel",
+                            # Solus 4.8 suddenly switched to "Polaris" repo, changed
+                            # package name from 'python-dbus-devel' to 'python3-dbus-devel'.
+                            # Solus distro quirks handler will check for available packages.
+                                "python3-dbus-devel", "python-gobject-devel",
                             "systemd-devel",
                             "zenity"],
 
@@ -1811,6 +1814,38 @@ class DistroQuirksHandler:
         cnfg.pkgs_for_distro = [pkg for pkg in cnfg.pkgs_for_distro if pkg not in pkgs_to_remove]
 
     @staticmethod
+    def handle_quirks_Solus():
+        print('Doing prep/checks for Solus-based distros...')
+
+        result_new_pkg_name = subprocess.run(
+            ['eopkg', 'search', 'python3-dbus-devel'],
+            stdout=PIPE, stderr=PIPE, universal_newlines=True
+        )
+        result_old_pkg_name = subprocess.run(
+            ['eopkg', 'search', 'python-dbus-devel'],
+            stdout=PIPE, stderr=PIPE, universal_newlines=True
+        )
+
+        if result_new_pkg_name.stdout.startswith('python3-dbus-devel'):
+            # New pkg name is available, no quirk to handle, so leave.
+            return
+
+        elif result_old_pkg_name.stdout.startswith('python-dbus-devel'):
+            # We got here because the new pkg name is not available,
+            # and the older one is available, so substitute.
+            cnfg.pkgs_for_distro = [
+                'python-dbus-devel' if pkg == 'python3-dbus-devel' else pkg
+                for pkg in cnfg.pkgs_for_distro
+            ]
+            return
+
+        else:
+            # We didn't find either pkg name and return, so we don't know what to do...
+            error("Neither python3-dbus-devel nor python-dbus-devel found in Solus repos")
+            print('Cannot continue due to missing package. Exiting...')
+            safe_shutdown(1)
+
+    @staticmethod
     def handle_quirks_Ubuntu():
         print('Doing prep/checks for Ubuntu-based distros...')
 
@@ -2111,6 +2146,13 @@ class PackageInstallDispatcher:
     @staticmethod
     def install_on_eopkg_distro():
         """utility function that gets dispatched for distros that use Eopkg package manager"""
+
+        # Package name shifted on Solus 4.8, to 'python3-dbus-devel',
+        # in migration from "Shannon" to "Polaris" repos.
+        # Quirks handler checks for both new and old package names.
+        if cnfg.DISTRO_ID in distro_groups_map['solus-based']:
+            DistroQuirksHandler.handle_quirks_Solus()
+
         native_pkg_installer.check_for_pkg_mgr_cmd('eopkg')
         call_attn_to_pwd_prompt_if_needed()
 
