@@ -2161,9 +2161,9 @@ class PackageInstallDispatcher:
 
         dev_cmd_lst = [cnfg.priv_elev_cmd, 'eopkg', 'install', '-y', '-c']
         dev_pkg_lst = ['system.devel']
-        print('Installing system development prerequisites first...')
+        print('Installing Solus system development prerequisites first...')
         native_pkg_installer.install_pkg_list(dev_cmd_lst, dev_pkg_lst)
-        print('Now installing primary native package list...')
+        print('Now installing primary native package list for Solus...')
         cmd_lst = [cnfg.priv_elev_cmd, 'eopkg', 'install', '-y']
         native_pkg_installer.install_pkg_list(cmd_lst, cnfg.pkgs_for_distro)
 
