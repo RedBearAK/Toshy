@@ -1829,11 +1829,13 @@ class DistroQuirksHandler:
 
         if result_new_pkg_name.stdout.startswith('python3-dbus-devel'):
             # New pkg name is available, no quirk to handle, so leave.
+            print("Using new package name 'python3-dbus-devel'...")
             return
 
         elif result_old_pkg_name.stdout.startswith('python-dbus-devel'):
             # We got here because the new pkg name is not available,
             # and the older one is available, so substitute.
+            print("Using old package name 'python-dbus-devel'...")
             cnfg.pkgs_for_distro = [
                 'python-dbus-devel' if pkg == 'python3-dbus-devel' else pkg
                 for pkg in cnfg.pkgs_for_distro
@@ -2159,7 +2161,9 @@ class PackageInstallDispatcher:
 
         dev_cmd_lst = [cnfg.priv_elev_cmd, 'eopkg', 'install', '-y', '-c']
         dev_pkg_lst = ['system.devel']
+        print('Installing system development prerequisites first...')
         native_pkg_installer.install_pkg_list(dev_cmd_lst, dev_pkg_lst)
+        print('Now installing primary native package list...')
         cmd_lst = [cnfg.priv_elev_cmd, 'eopkg', 'install', '-y']
         native_pkg_installer.install_pkg_list(cmd_lst, cnfg.pkgs_for_distro)
 
