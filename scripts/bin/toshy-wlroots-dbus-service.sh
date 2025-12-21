@@ -38,4 +38,5 @@ fi
 source "${VENV_PATH}/bin/activate"
 
 # start the script that will create the D-Bus object/interface
-exec "${VENV_PATH}/bin/python" "${TOSHY_WLROOTS}/${FILE_NAME}.py"
+# use "-u" option on Python to enable unbuffered output mode
+exec "${VENV_PATH}/bin/python" -u "${TOSHY_WLROOTS}/${FILE_NAME}.py"
