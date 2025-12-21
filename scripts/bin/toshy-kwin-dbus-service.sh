@@ -41,4 +41,5 @@ source "${VENV_PATH}/bin/activate"
 nohup "${VENV_PATH}/bin/python" "${TOSHY_KWIN}/toshy_kwin_script_setup.py" &
 
 # start the script that will create the D-Bus object/interface
-exec "${VENV_PATH}/bin/python" "${TOSHY_KWIN}/${FILE_NAME}.py"
+# use "-u" option on Python to enable unbuffered output mode
+exec "${VENV_PATH}/bin/python" -u "${TOSHY_KWIN}/${FILE_NAME}.py"

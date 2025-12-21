@@ -15,7 +15,7 @@ __version__ = '20250710'
 # but PR #64 was merged. 
 
 
-print("(--) Starting Toshy D-Bus service to monitor 'zcosmic_toplevel_info_v1'...")
+print("(--) Starting Toshy D-Bus service to monitor 'zcosmic_toplevel_info_v1'...", flush=True)
 
 import os
 import sys

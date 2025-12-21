@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 __version__ = '20250710'
 
-print("(--) Starting Toshy D-Bus service to receive updates from KWin script...")
+print("(--) Starting Toshy D-Bus service to receive updates from KWin script...", flush=True)
 
 import os
 import sys
