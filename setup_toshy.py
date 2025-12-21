@@ -266,6 +266,7 @@ class InstallerSettings:
 
         self.tweak_applied          = None
         self.remind_extensions      = None
+        self.enabled_gnome_exts     = None
         self.should_reboot          = None
 
         self.run_tmp_dir            = run_tmp_dir
@@ -667,16 +668,65 @@ def ask_for_attn_on_info():
         safe_shutdown(1)
 
 
+def get_enabled_gnome_extensions():
+    """
+    Get list of all enabled GNOME extensions (user and system).
+    Caches result in cnfg.enabled_gnome_exts for reuse.
+    """
+    # Return cached result if already fetched
+    if cnfg.enabled_gnome_exts is not None:
+        return cnfg.enabled_gnome_exts
+    
+    gnome_ext_cmd_exists = shutil.which('gnome-extensions') is not None
+    gsettings_cmd_exists = shutil.which('gsettings') is not None
+    
+    # Prefer gnome-extensions CLI - it sees both user and system extensions
+    if gnome_ext_cmd_exists:
+        try:
+            cmd_lst = ['gnome-extensions', 'list', '--enabled']
+            output = subprocess.check_output(cmd_lst, stderr=DEVNULL)
+            cnfg.enabled_gnome_exts = output.decode().strip().splitlines()
+            debug("Used 'gnome-extensions' to get enabled extensions list")
+            return cnfg.enabled_gnome_exts
+        except subprocess.CalledProcessError as proc_err:
+            error(f"'gnome-extensions list --enabled' failed:\n\t{proc_err}")
+    else:
+        debug("Command 'gnome-extensions' not found", ctx="CG")
+    
+    # Fallback: gsettings (only sees user-enabled extensions, not system defaults)
+    if gsettings_cmd_exists:
+        try:
+            cmd_lst = ['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions']
+            output = subprocess.check_output(cmd_lst, stderr=DEVNULL)
+            raw_output = output.decode().strip()
+            if raw_output.startswith('[') and raw_output.endswith(']'):
+                raw_exts = raw_output[1:-1].split(',')
+                cnfg.enabled_gnome_exts = [
+                    ext.strip().strip("'") for ext in raw_exts if ext.strip()
+                ]
+            else:
+                cnfg.enabled_gnome_exts = []
+            debug("Used 'gsettings' to get enabled extensions list (user-enabled only)")
+            return cnfg.enabled_gnome_exts
+        except subprocess.CalledProcessError as proc_err:
+            error(f"'gsettings get enabled-extensions' failed:\n\t{proc_err}")
+    else:
+        debug("Command 'gsettings' not found", ctx="CG")
+    
+    error("Unable to get enabled GNOME extensions: no suitable command available")
+    cnfg.enabled_gnome_exts = []
+    return cnfg.enabled_gnome_exts
+
+
 def check_gnome_wayland_exts():
     """
-    Utility function to check for installed/enabled shell extensions compatible with the 
-    keymapper, for supporting app-specific remapping in Wayland+GNOME sessions.
+    Check for installed/enabled shell extensions compatible with the keymapper,
+    for supporting app-specific remapping in Wayland+GNOME sessions.
     """
-
-    if not cnfg.DESKTOP_ENV == 'gnome':
+    if cnfg.DESKTOP_ENV != 'gnome':
         return
 
-    extensions_to_check = [
+    wayland_ctx_extensions = [
         'focused-window-dbus@flexagoon.com',
         'window-calls-extended@hseliger.eu',
         'xremap@k0kubun.com',
@@ -687,48 +737,21 @@ def check_gnome_wayland_exts():
     sys_ext_dir = '/usr/share/gnome-shell/extensions'
 
     installed_exts = []
-
-    for ext_uuid in extensions_to_check:
-        if (os.path.exists(os.path.join(user_ext_dir, ext_uuid)) or 
-            os.path.exists(os.path.join(sys_ext_dir, ext_uuid))):
+    for ext_uuid in wayland_ctx_extensions:
+        user_path = os.path.join(user_ext_dir, ext_uuid)
+        sys_path = os.path.join(sys_ext_dir, ext_uuid)
+        if os.path.exists(user_path) or os.path.exists(sys_path):
             installed_exts.append(ext_uuid)
 
-    # Check enabled state via gsettings
-    try:
+    # Check for enabled extensions
+    all_enabled_exts = get_enabled_gnome_extensions()
+    enabled_exts = [ext for ext in installed_exts if ext in all_enabled_exts]
 
-        cmd_lst = ['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions']
-
-        if py_interp_ver_tup >= (3, 7):
-            result = subprocess.run(cmd_lst, capture_output=True, text=True)
-        elif py_interp_ver_tup == (3, 6):
-            result = subprocess.run(cmd_lst, stdout=PIPE, stderr=PIPE, universal_newlines=True)
-        # Versions older than 3.6 already blocked in code, right after safe_shutdown defined.
-
-        # Get raw string output and clean it
-        gsettings_output = result.stdout.strip()
-
-        # Parse the string safely - it's a list literal with single quotes
-        if gsettings_output.startswith('[') and gsettings_output.endswith(']'):
-            # Remove brackets and split on commas
-            raw_exts = gsettings_output[1:-1].split(',')
-            # Clean up each extension string
-            all_enabled_exts = [ext.strip().strip("'") for ext in raw_exts if ext.strip()]
-        else:
-            all_enabled_exts = []
-
-        # Filter to just our required extensions that are both installed and enabled
-        enabled_exts = [ext for ext in installed_exts if ext in all_enabled_exts]
-
-    except (subprocess.SubprocessError, ValueError):
-        enabled_exts = []  # Can't determine enabled state
-
-    if len(enabled_exts) >= 1:
-        # If at least one GNOME extension is enabled, everything is good
+    if enabled_exts:
         print()
         print("A compatible GNOME shell extension is enabled for GNOME Wayland support. Good.")
         print(f"Enabled extension(s) found:\n  {enabled_exts}")
-    elif not enabled_exts and len(installed_exts) >= 1:
-        # If no GNOME extensions enabled, but at least one installed, remind user to enable
+    elif installed_exts:
         print()
         print(cnfg.separator)
         print()
@@ -738,8 +761,7 @@ def check_gnome_wayland_exts():
         print("Without this, app-specific keymapping will NOT work in a GNOME Wayland session.")
         print("  (See 'Requirements' section in the Toshy README.)")
         ask_for_attn_on_info()
-    elif not installed_exts:
-        # If no GNOME extension installed, remind user to install and enable one
+    else:
         print()
         print(cnfg.separator)
         print()
@@ -752,16 +774,16 @@ def check_gnome_wayland_exts():
 
 def check_gnome_indicator_ext():
     """
-    Utility function to check for an installed and enabled GNOME shell extension for
-    supporting the display of app indicators in the top bar. Such as the extension
-    'AppIndicator and KStatusNotifierItem Support' maintained by Ubuntu.
+    Check for an installed and enabled GNOME shell extension for supporting
+    the display of app indicators in the top bar.
     """
-    if not cnfg.DESKTOP_ENV == 'gnome':
+    if cnfg.DESKTOP_ENV != 'gnome':
         return
 
-    extensions_to_check = [
+    indicator_extensions = [
         'appindicatorsupport@rgcjonas.gmail.com',
-        'TopIcons@phocean.net', 
+        'ubuntu-appindicators@ubuntu.com',
+        'TopIcons@phocean.net',
         'top-icons-redux@pop-planet.info',
         'trayIconsReloaded@selfmade.pl',
     ]
@@ -771,47 +793,21 @@ def check_gnome_indicator_ext():
     sys_ext_dir = '/usr/share/gnome-shell/extensions'
 
     installed_exts = []
-
-    for ext_uuid in extensions_to_check:
-        if (os.path.exists(os.path.join(user_ext_dir, ext_uuid)) or 
-            os.path.exists(os.path.join(sys_ext_dir, ext_uuid))):
+    for ext_uuid in indicator_extensions:
+        user_path = os.path.join(user_ext_dir, ext_uuid)
+        sys_path = os.path.join(sys_ext_dir, ext_uuid)
+        if os.path.exists(user_path) or os.path.exists(sys_path):
             installed_exts.append(ext_uuid)
 
-    # Check enabled state via gsettings
-    try:
-        cmd_lst = ['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions']
+    # Check for enabled extensions
+    all_enabled_exts = get_enabled_gnome_extensions()
+    enabled_exts = [ext for ext in installed_exts if ext in all_enabled_exts]
 
-        if py_interp_ver_tup >= (3, 7):
-            result = subprocess.run(cmd_lst, capture_output=True, text=True)
-        elif py_interp_ver_tup == (3, 6):
-            result = subprocess.run(cmd_lst, stdout=PIPE, stderr=PIPE, universal_newlines=True)
-        # Versions older than 3.6 already blocked in code, right after safe_shutdown defined.
-
-        # Get raw string output and clean it
-        gsettings_output = result.stdout.strip()
-
-        # Parse the string safely - it's a list literal with single quotes
-        if gsettings_output.startswith('[') and gsettings_output.endswith(']'):
-            # Remove brackets and split on commas
-            raw_exts = gsettings_output[1:-1].split(',')
-            # Clean up each extension string
-            all_enabled_exts = [ext.strip().strip("'") for ext in raw_exts if ext.strip()]
-        else:
-            all_enabled_exts = []
-
-        # Filter to just our required extensions that are both installed and enabled
-        enabled_exts = [ext for ext in installed_exts if ext in all_enabled_exts]
-
-    except (subprocess.SubprocessError, ValueError):
-        enabled_exts = []  # Can't determine enabled state
-
-    if len(enabled_exts) >= 1:
-        # If at least one GNOME extension is enabled, everything is good 
+    if enabled_exts:
         print()
         print("A compatible GNOME shell extension is enabled for system tray icons. Good.")
         print(f"Enabled extension(s) found:\n  {enabled_exts}")
-    elif not enabled_exts and len(installed_exts) >= 1:
-        # If no GNOME extensions enabled, but at least one installed, remind user to enable
+    elif installed_exts:
         print()
         print(cnfg.separator)
         print()
@@ -820,8 +816,7 @@ def check_gnome_indicator_ext():
         print("Without an extension enabled, the Toshy icon will NOT appear in the top bar.")
         print("  (See 'Requirements' section in the Toshy README.)")
         ask_for_attn_on_info()
-    elif not installed_exts:
-        # If no GNOME extension installed, remind user to install and enable one 
+    else:
         print()
         print(cnfg.separator)
         print()
@@ -4396,28 +4391,7 @@ def run_install_sequence(cnfg: InstallerSettings):
         autostart_tray_icon()
         apply_desktop_tweaks()
 
-        if cnfg.DESKTOP_ENV == 'gnome':
-            print()
-            def is_extension_enabled(extension_uuid):
-                try:
-                    output = subprocess.check_output(
-                                ['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions'])
-                    extensions = output.decode().strip().replace("'", "").split(",")
-                except subprocess.CalledProcessError as proc_err:
-                    error(f"Unable to check enabled extensions:\n\t{proc_err}")
-                    return False
-                return extension_uuid in extensions
-
-            if is_extension_enabled("appindicatorsupport@rgcjonas.gmail.com"):
-                print("AppIndicator extension is enabled. Tray icon should work.")
-            elif is_extension_enabled("ubuntu-appindicators@ubuntu.com"):
-                print("AppIndicator extension is enabled. Tray icon should work.")
-            else:
-                print()
-                debug(f"RECOMMENDATION: Install 'AppIndicator' GNOME extension\n"
-                    "Easiest method: 'flatpak install extensionmanager', "  # No line break here!
-                    "search for 'appindicator'\n",
-                    ctx="!!")
+        # Removed the GNOME extensions checks, which happen earlier/elsewhere now.
 
         if os.path.exists(cnfg.reboot_tmp_file):
             cnfg.should_reboot = True
