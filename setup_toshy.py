@@ -4398,15 +4398,54 @@ def run_install_sequence(cnfg: InstallerSettings):
 
         if cnfg.DESKTOP_ENV == 'gnome':
             print()
+
+            # def is_extension_enabled(extension_uuid):
+            #     try:
+            #         output = subprocess.check_output(
+            #                     ['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions'])
+            #         extensions = output.decode().strip().replace("'", "").split(",")
+            #     except subprocess.CalledProcessError as proc_err:
+            #         error(f"Unable to check enabled extensions:\n\t{proc_err}")
+            #         return False
+            #     return extension_uuid in extensions
+
             def is_extension_enabled(extension_uuid):
-                try:
-                    output = subprocess.check_output(
-                                ['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions'])
-                    extensions = output.decode().strip().replace("'", "").split(",")
-                except subprocess.CalledProcessError as proc_err:
-                    error(f"Unable to check enabled extensions:\n\t{proc_err}")
-                    return False
-                return extension_uuid in extensions
+                """Check if a GNOME extension is enabled (user or system)"""
+                
+                gnome_ext_cmd_exists = shutil.which('gnome-extensions') is not None
+                gsettings_cmd_exists = shutil.which('gsettings') is not None
+                
+                # Prefer gnome-extensions CLI - it sees both user and system extensions
+                if gnome_ext_cmd_exists:
+                    try:
+                        output = subprocess.check_output(
+                            ['gnome-extensions', 'list', '--enabled'], stderr=DEVNULL)
+                        enabled_extensions = output.decode().strip().splitlines()
+                        result = extension_uuid in enabled_extensions
+                        debug(f"Used 'gnome-extensions' to check for '{extension_uuid}': {result}")
+                        return result
+                    except subprocess.CalledProcessError as proc_err:
+                        error(f"'gnome-extensions list --enabled' failed:\n\t{proc_err}")
+                else:
+                    debug("Command 'gnome-extensions' not found", ctx="CG")
+                
+                # Fallback: gsettings (only sees user-enabled extensions, not system defaults)
+                if gsettings_cmd_exists:
+                    try:
+                        output = subprocess.check_output(
+                            ['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions'],
+                            stderr=DEVNULL)
+                        extensions = output.decode().strip().replace("'", "").split(",")
+                        result = extension_uuid in extensions
+                        debug(f"Used 'gsettings' to check for '{extension_uuid}': {result}")
+                        return result
+                    except subprocess.CalledProcessError as proc_err:
+                        error(f"'gsettings get enabled-extensions' failed:\n\t{proc_err}")
+                else:
+                    debug("Command 'gsettings' not found", ctx="CG")
+                
+                error("Unable to check enabled GNOME extensions: no suitable command available")
+                return False
 
             if is_extension_enabled("appindicatorsupport@rgcjonas.gmail.com"):
                 print("AppIndicator extension is enabled. Tray icon should work.")
