@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20250710'
+__version__ = '20251220'
 
 print("(--) Starting Toshy D-Bus service to receive updates from KWin script...", flush=True)
 
@@ -19,7 +19,6 @@ import xwaykeyz.lib.logger
 from gi.repository import GLib
 from dbus.exceptions import DBusException
 from subprocess import DEVNULL
-from typing import Dict, List, Union
 from xwaykeyz.lib.logger import debug, error
 
 xwaykeyz.lib.logger.VERBOSE = True
@@ -50,7 +49,7 @@ if os.name == 'posix' and os.geteuid() == 0:
 
 def signal_handler(sig, frame):
     """handle signals like Ctrl+C"""
-    if sig in (signal.SIGINT, signal.SIGQUIT):
+    if sig in (signal.SIGINT, signal.SIGQUIT, signal.SIGTERM):
         # Perform any cleanup code here before exiting
         # traceback.print_stack(frame)
         debug(f'\nSIGINT or SIGQUIT received. Exiting.\n')
@@ -59,6 +58,7 @@ def signal_handler(sig, frame):
 if platform.system() != 'Windows':
     signal.signal(signal.SIGINT,    signal_handler)
     signal.signal(signal.SIGQUIT,   signal_handler)
+    signal.signal(signal.SIGTERM,   signal_handler)
 else:
     error(f'This is only meant to run on Linux. Exiting...')
     sys.exit(1)
