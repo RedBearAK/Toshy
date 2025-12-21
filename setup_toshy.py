@@ -3669,52 +3669,21 @@ def ensure_XDG_autostart_dir_exists():
             safe_shutdown(1)
 
 
-def setup_kwin_dbus_service():
-    """Install the D-Bus service initialization script to receive window focus
-    change notifications from the KWin script in 'kwin_wayland' environments"""
-    print(f'\n\n§  Setting up the Toshy KWin D-Bus service...\n{cnfg.separator}')
+def cleanup_legacy_kwin_dbus_autostart():
+    """Clean up an older method of launching the KWin D-Bus window context service"""
 
-    # need to autostart "$HOME/.local/bin/toshy-kwin-dbus-service"
-    # autostart_dir_path      = os.path.join(home_dir, '.config', 'autostart')
-    toshy_dt_files_path     = os.path.join(cnfg.toshy_dir_path, 'desktop')
-    dbus_svc_desktop_file   = os.path.join(toshy_dt_files_path, 'Toshy_KWin_DBus_Service.desktop')
-    start_dbus_svc_cmd      = os.path.join(home_dir, '.local', 'bin', 'toshy-kwin-dbus-service')
-    replace_home_in_file(dbus_svc_desktop_file)
-
-    # # Where to put the new D-Bus service file:
-    # # ~/.local/share/dbus-1/services/org.toshy.Toshy.service
-    # dbus_svcs_path              = os.path.join(home_dir, '.local', 'share', 'dbus-1', 'services')
-    # toshy_kwin_dbus_svc_path    = os.path.join(cnfg.toshy_dir_path, 'kwin-dbus-service')
-    # kwin_dbus_svc_file          = os.path.join(toshy_kwin_dbus_svc_path, 'org.toshy.Toshy.service')
-
-    # if not os.path.isdir(dbus_svcs_path):
-    #     try:
-    #         os.makedirs(dbus_svcs_path, exist_ok=True)
-    #     except (PermissionError, NotADirectoryError) as file_err:
-    #         error(f"Problem trying to make sure '{dbus_svcs_path}' exists:\n\t{file_err}")
-    #         safe_shutdown(1)
-
-    # STOP INSTALLING THIS, IT'S NOT HELPFUL
-    # if os.path.isdir(dbus_svcs_path):
-    #     shutil.copy(kwin_dbus_svc_file, dbus_svcs_path)
-    #     print(f"Installed '{kwin_dbus_svc_file}' file at path:\n\t'{dbus_svcs_path}'.")
-    # else:
-    #     error(f"Path '{dbus_svcs_path}' is not a directory. Cannot continue.")
-    #     safe_shutdown(1)
-
-    ensure_XDG_autostart_dir_exists()
+    # Nothing to clean up if autostart folder doesn't exist
+    if not os.path.exists(autostart_dir_path):
+        return
 
     # try to delete old desktop entry file that would have been installed by older setup script
     autostart_dbus_dt_file = os.path.join(autostart_dir_path, 'Toshy_KWin_DBus_Service.desktop')
     if os.path.isfile(autostart_dbus_dt_file):
         try:
             os.unlink(autostart_dbus_dt_file)
-            print(f'Removed older KWIN D-Bus desktop entry autostart.')
-        except subprocess.CalledProcessError as proc_err:
-            debug(f'Problem removing old D-Bus service desktop entry autostart:\n\t{proc_err}')
-
-    print(f'Toshy KWin D-Bus service should automatically start when needed.')
-    show_task_completed_msg()
+            print(f'Removed older KWin D-Bus desktop entry autostart.')
+        except (PermissionError, OSError) as e:
+            debug(f'Problem removing old D-Bus service desktop entry autostart:\n\t{e}')
 
 
 def setup_systemd_services():
@@ -4382,7 +4351,8 @@ def run_install_sequence(cnfg: InstallerSettings):
         if cnfg.DESKTOP_ENV in ['kde', 'plasma']:
             setup_kwin_dbus_script()
 
-        setup_kwin_dbus_service()
+        # Some users might still have an older KWin D-Bus service desktop autostart file
+        cleanup_legacy_kwin_dbus_autostart()
 
         setup_systemd_services()
 
