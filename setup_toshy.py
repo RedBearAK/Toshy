@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20251220'                        # CLI option "--version" will print this out.
+__version__ = '20251225'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -976,7 +976,8 @@ distro_groups_map = {
     'ubuntu-based':             ["elementary", "mint", "neon", "pop", "tuxedo", "ubuntu", "zorin"],
     'debian-based':             ["debian", "deepin", "kali", "lmde", "peppermint", "q4os"],
 
-    'arch-based':               ["arch", "arcolinux", "cachyos", "endeavouros", "garuda", "manjaro"],
+    'arch-based':               ["arch", "archarm", "arcolinux", "cachyos", "endeavouros",
+                                    "garuda", "manjaro"],
 
     'solus-based':              ["solus"],
 
