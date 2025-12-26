@@ -974,6 +974,9 @@ distro_groups_map = {
     'mageia-based':             ["mageia"],
 
     'ubuntu-based':             ["elementary", "mint", "neon", "pop", "tuxedo", "ubuntu", "zorin"],
+
+    # The 'linuxmint' distro ID will not be shown by `toshy-env`, environment module 
+    # normalizes to 'mint' for matching in the config file.
     'debian-based':             ["debian", "deepin", "kali", "linuxmint", "lmde",
                                     "peppermint", "q4os"],
 
