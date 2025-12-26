@@ -974,7 +974,8 @@ distro_groups_map = {
     'mageia-based':             ["mageia"],
 
     'ubuntu-based':             ["elementary", "mint", "neon", "pop", "tuxedo", "ubuntu", "zorin"],
-    'debian-based':             ["debian", "deepin", "kali", "lmde", "peppermint", "q4os"],
+    'debian-based':             ["debian", "deepin", "kali", "linuxmint", "lmde",
+                                    "peppermint", "q4os"],
 
     'arch-based':               ["arch", "archarm", "arcolinux", "cachyos", "endeavouros",
                                     "garuda", "manjaro"],
