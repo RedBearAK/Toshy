@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20250710'
+__version__ = '20251228'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -27,7 +27,7 @@ import inspect
 import subprocess
 
 from subprocess import DEVNULL
-from typing import Any, Callable, List, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Union, List, Dict, Tuple
 
 from xwaykeyz.config_api import *
 from xwaykeyz.lib.key_context import KeyContext
@@ -49,8 +49,8 @@ timeouts(
 
 # Delays often needed for Wayland and/or virtual machines or slow systems
 throttle_delays(
-    key_pre_delay_ms    = 12,      # default: 0 ms, range: 0-150 ms, suggested: 1-50 ms
-    key_post_delay_ms   = 18,      # default: 0 ms, range: 0-150 ms, suggested: 1-100 ms
+    key_pre_delay_ms    = 4,      # default: 0 ms, range: 0-150 ms, suggested: 1-50 ms
+    key_post_delay_ms   = 6,      # default: 0 ms, range: 0-150 ms, suggested: 1-100 ms
 )
 
 devices_api(
@@ -63,14 +63,17 @@ devices_api(
 )
 
 ###########################################################
-# If you need to use something like the wordwise 'emacs'
-# style shortcuts, and want them to be repeatable, use
-# the API call below to stop the keymapper from ignoring
-# "repeat" key events. This will use a bit more CPU while
-# holding any key down, especially while holding a key combo
-# that is getting remapped onto something else in the config.
+# Use this ONLY if you want near zero CPU usage for held,
+# repeating keys. This will bypass the new repeating keys
+# cache mechanism that reduces CPU usage for repeats to
+# very low levels (but not zero), in xwaykeyz>=1.11.0.
+#
+# This override will BREAK shortcuts like Emacs-style
+# cursor movement, which will not be able to repeat.
+#
+# A warning will appear in verbose debug logging.
 ###########################################################
-# ignore_repeating_keys(False)
+# ignore_repeating_keys(True)
 
 
 ###  SLICE_MARK_END: keymapper_api  ###  EDITS OUTSIDE THESE MARKS WILL BE LOST ON UPGRADE
@@ -368,11 +371,13 @@ keyboards_Windows = [
 ]
 keyboards_Apple = [
     # Add specific Apple/Mac keyboard device names to this list
-    'Mitsumi Electric Apple Extended USB Keyboard',
+    'HP TouchPad Wireless Keyboard',    # Missing some keys, but Apple type probably best default
     'Magic Keyboard with Numeric Keypad',
     'Magic Keyboard',
+    'Mitsumi Electric Apple Extended USB Keyboard',
     'MX Keys Mac Keyboard',
-    'HP TouchPad Wireless Keyboard',    # Missing some keys, but Apple type probably best default
+    'Griffin Technology, Inc. iMate, USB To ADB Adaptor',
+    '.*USB to ADB Adapt.*'  # ADB device is pretty much guaranteed to be an Apple (or NeXT) keyboard
 ]
 
 kbtype_lists = {
@@ -595,6 +600,7 @@ def isDoubleTap(dt_combo):
 total_matchProps_iterations = 0
 MAX_MATCHPROPS_ITERATIONS = 1000
 MAX_MATCHPROPS_ITERATIONS_REACHED = False
+MATCHPROPS_FULL_DEBUG = False  # Set True to disable short-circuits and enable full debug logging
 
 
 # Correct syntax to reject all positional parameters: put `*,` at beginning
@@ -766,42 +772,79 @@ def matchProps(*,
     def _matchProps(ctx: KeyContext):
         if not cnfg.screen_has_focus:
             return False
-        cond_list       = []
-        nt_err          = 'ERR: matchProps: NoneType in ctx.'
-        if _clas is not None:
-            clas_match = re.search(clas_rgx, ctx.wm_class or nt_err + 'wm_class')
-            cond_list.append(not clas_match if not_clas is not None else clas_match)
-        if _name is not None:
-            name_match = re.search(name_rgx, ctx.wm_name or nt_err + 'wm_name')
-            cond_list.append(not name_match if not_name is not None else name_match)
-        if _devn is not None:
-            devn_match = re.search(devn_rgx, ctx.device_name or nt_err + 'device_name')
-            cond_list.append(not devn_match if not_devn is not None else devn_match)
-        # these two MUST check explicitly for "is not None" because external input is True/False,
-        # and we want to be able to match the LED_on state of either "True" or "False"
-        if numlk is not None: cond_list.append( numlk is ctx.numlock_on  )
-        if capslk is not None: cond_list.append( capslk is ctx.capslock_on )
-        if logging_enabled: # and all(cnd_lst): # << add this to show only "True" condition lists
+
+        nt_err = 'ERR: matchProps: NoneType in ctx.'
+
+        # Full debug mode: use original cond_list approach for complete visibility
+        if MATCHPROPS_FULL_DEBUG:
+            cond_list = []
+            if numlk is not None:
+                cond_list.append(numlk is ctx.numlock_on)
+            if capslk is not None:
+                cond_list.append(capslk is ctx.capslock_on)
+            if _devn is not None:
+                devn_match = re.search(devn_rgx, ctx.device_name or nt_err + 'device_name')
+                cond_list.append(not devn_match if not_devn is not None else devn_match)
+            if _clas is not None:
+                clas_match = re.search(clas_rgx, ctx.wm_class or nt_err + 'wm_class')
+                cond_list.append(not clas_match if not_clas is not None else clas_match)
+            if _name is not None:
+                name_match = re.search(name_rgx, ctx.wm_name or nt_err + 'wm_name')
+                cond_list.append(not name_match if not_name is not None else name_match)
             print(f'####  CND_LST ({all(cond_list)})  ####  {dbg=}')
             for elem in cond_list:
                 print('##', re.sub(r'^.*span=.*\), ', '', str(elem)).replace('>',''))
             print('-------------------------------------------------------------------')
-        return all(cond_list)
+            return all(cond_list)
+
+        # Optimized path: short-circuit on first failure
+        # Order: cheapest checks first, then most selective (devn), then clas, then name
+
+        # Bool checks - nearly free (identity comparison)
+        if numlk is not None and numlk is not ctx.numlock_on:
+            return False
+        if capslk is not None and capslk is not ctx.capslock_on:
+            return False
+
+        # Device check - most selective, eliminates most keystrokes from other devices
+        if _devn is not None:
+            devn_match = re.search(devn_rgx, ctx.device_name or nt_err + 'device_name')
+            # XOR: fail if (negative match requested) == (match found)
+            if (not_devn is not None) == bool(devn_match):
+                return False
+
+        # Class check - moderately selective, often complex regex patterns
+        if _clas is not None:
+            clas_match = re.search(clas_rgx, ctx.wm_class or nt_err + 'wm_class')
+            if (not_clas is not None) == bool(clas_match):
+                return False
+
+        # Name check - least commonly used
+        if _name is not None:
+            name_match = re.search(name_rgx, ctx.wm_name or nt_err + 'wm_name')
+            if (not_name is not None) == bool(name_match):
+                return False
+
+        return True
 
     return _matchProps      # outer function returning inner function
 
 
 # Boolean variable to toggle Enter key state between F2 and Enter
 # True = Enter key sends F2, False = Enter key sends Enter
-_enter_is_F2 = True     # DON'T CHANGE THIS! Must be set to True here.
+_enter_is_F2 = True                 # DON'T CHANGE THIS! Must be set to True here.
+_enter_F2_last_app_class = None     # Track which app set the state to be False
 
 
 def iEF2(combo_if_true, latch_or_combo_if_false,
                 keep_value_if_true=False, keep_value_if_false=False):
     """
     Formerly 'is_Enter_F2'
-    Send a different combo for the Enter key based on the state of the _enter_is_F2 variable,
+    Send a different combo for the Enter key based on the state of the `_enter_is_F2` variable,
     or latch the variable to True or False to control the Enter key output on the next use.
+
+    Store the app class of the file manager that sets the state variable to be False, and
+    reset the state variable to True if the current app class does not match.
 
     Args:
         combo_if_true:              The combo to send if _enter_is_F2 is True.
@@ -815,15 +858,23 @@ def iEF2(combo_if_true, latch_or_combo_if_false,
     Returns:
         A function that, when called, returns the appropriate combo based on the current
         state of _enter_is_F2 and the provided parameters, and updates _enter_is_F2
-        based on the provided parameters.
+        based on the provided parameters. The current app class is obtained by checking
+        the context object.
 
-    This enables a simulation of the Finder "Enter to rename" capability, allowing
+    This enables a simulation of the macOS Finder's "Enter to rename" capability, allowing
     for complex control over the Enter key's behavior in various scenarios.
     """
-    def _is_Enter_F2():
-        global _enter_is_F2
+    def _is_Enter_F2(ctx: KeyContext):
+        global _enter_is_F2, _enter_F2_last_app_class
+
+        # If last app class that set state to False is not None, and does not match current
+        # app, reset the state var to True for initial behavior in new file manager windows.
+        if _enter_F2_last_app_class and _enter_F2_last_app_class != ctx.wm_class:
+            _enter_is_F2 = True
+            _enter_F2_last_app_class = None
+
         combo_list = [combo_if_true]
-        if latch_or_combo_if_false in (True, False):    # Latch variable to given bool value
+        if latch_or_combo_if_false in (True, False):    # Latch variable to the provided bool value
             _enter_is_F2 = latch_or_combo_if_false
         elif _enter_is_F2:                              # If Enter is F2 now, set to be Enter next
             if keep_value_if_true is False:
@@ -832,8 +883,20 @@ def iEF2(combo_if_true, latch_or_combo_if_false,
             combo_list = [latch_or_combo_if_false]
             if keep_value_if_false is False:
                 _enter_is_F2 = True
-        debug(f"_is_Enter_F2:  {combo_list      = }")
-        debug(f"_is_Enter_F2:  {_enter_is_F2    = }")
+
+        # At this point we know whether the state var was set to True or False
+        if not _enter_is_F2:
+            # Record which app set state var to False
+            _enter_F2_last_app_class = ctx.wm_class
+
+        # If state var is currently True, clear last app.
+        elif _enter_is_F2:
+            _enter_F2_last_app_class = None
+
+        debug(f"_is_Enter_F2:               {combo_list      = }")
+        debug(f"_is_Enter_F2:               {_enter_is_F2    = }")
+        debug(f"_enter_F2_last_app_class:   {_enter_F2_last_app_class = }")
+
         return combo_list
     return _is_Enter_F2
 
