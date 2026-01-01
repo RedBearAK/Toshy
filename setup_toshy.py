@@ -574,6 +574,64 @@ def enable_prompt_for_reboot():
         os.mknod(cnfg.reboot_tmp_file)
 
 
+def verify_device_permissions():
+    """
+    Check if current user can access the devices the keymapper needs.
+    Returns (success: bool, error_message: str | None)
+    """
+    uinput_path = '/dev/uinput'
+    input_dir = '/dev/input'
+
+    # Check /dev/uinput write access
+    if not os.path.exists(uinput_path):
+        return False, f"'{uinput_path}' does not exist"
+
+    if not os.access(uinput_path, os.W_OK):
+        return False, f"No write permission on '{uinput_path}'"
+
+    # Check /dev/input/event* read/write access
+    if not os.path.isdir(input_dir):
+        return False, f"'{input_dir}' directory does not exist"
+
+    for filename in os.listdir(input_dir):
+        if not filename.startswith('event'):
+            continue
+        event_path = os.path.join(input_dir, filename)
+        if os.access(event_path, os.R_OK | os.W_OK):
+            return True, None
+
+    return False, f"No accessible event devices in '{input_dir}'"
+
+
+def verify_config_service_running():
+    """Check if toshy-config.service is active."""
+    try:
+        result = subprocess.run(
+            ['systemctl', '--user', 'is-active', 'toshy-config.service'],
+            capture_output=True, text=True, timeout=5
+        )
+        return result.stdout.strip() == 'active'
+    except (subprocess.SubprocessError, OSError):
+        return False
+
+
+def can_skip_reboot():
+    """
+    Determine if reboot can be skipped despite should_reboot being set.
+    If permissions are working and service is running, uaccess did its job.
+    """
+    perms_ok, perms_msg = verify_device_permissions()
+    if not perms_ok:
+        debug(f"Permission check failed: {perms_msg}")
+        return False
+
+    if not verify_config_service_running():
+        debug("toshy-config.service is not active")
+        return False
+
+    return True
+
+
 def show_task_completed_msg():
     """Utility function to show a standard message after each major section completes"""
     print(fancy_str('   >> Task completed successfully <<   ', 'green', bold=True))
@@ -4467,6 +4525,17 @@ def run_install_sequence(cnfg: InstallerSettings):
 
         if os.path.exists(cnfg.reboot_tmp_file):
             cnfg.should_reboot = True
+
+        # Check if we can skip the reboot notice on some systems where 'uaccess' works well
+        if cnfg.should_reboot:
+            if can_skip_reboot():
+                print("Device permissions verified in current session.")
+                if os.path.exists(cnfg.reboot_tmp_file):
+                    try:
+                        os.remove(cnfg.reboot_tmp_file)
+                    except OSError:
+                        pass
+                cnfg.should_reboot = False
 
         if cnfg.should_reboot:
             # create reboot reminder temp file, in case installer is run again before a reboot
