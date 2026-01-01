@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20250717'
+__version__ = '20260101'
 
 # Indicator tray icon menu app for Toshy, using pygobject/gi
 TOSHY_PART      = 'tray'   # CUSTOMIZE TO SPECIFIC TOSHY COMPONENT! (gui, tray, config)
@@ -91,6 +91,93 @@ from gi.repository import Gtk, GLib
 icon_file_active                = "toshy_app_icon_rainbow"
 icon_file_grayscale             = "toshy_app_icon_rainbow_inverse_grayscale"
 icon_file_inverse               = "toshy_app_icon_rainbow_inverse"
+
+
+DISTRO_ID       = None
+DISTRO_VER      = None
+VARIANT_ID      = None
+SESSION_TYPE    = None
+DESKTOP_ENV     = None
+DE_MAJ_VER      = None
+WINDOW_MGR      = None
+
+
+def check_environment():
+    """Retrieve the current environment from EnvironmentInfo class"""
+    global DISTRO_ID, DISTRO_VER, VARIANT_ID, SESSION_TYPE, DESKTOP_ENV, DE_MAJ_VER, WINDOW_MGR
+
+    env_ctxt_getter = EnvironmentInfo()
+    env_info_dct    = env_ctxt_getter.get_env_info()
+
+    DISTRO_ID       = str(env_info_dct.get('DISTRO_ID',      'keymissing')).casefold()
+    DISTRO_VER      = str(env_info_dct.get('DISTRO_VER',     'keymissing')).casefold()
+    VARIANT_ID      = str(env_info_dct.get('VARIANT_ID',     'keymissing')).casefold()
+    SESSION_TYPE    = str(env_info_dct.get('SESSION_TYPE',   'keymissing')).casefold()
+    DESKTOP_ENV     = str(env_info_dct.get('DESKTOP_ENV',    'keymissing')).casefold()
+    DE_MAJ_VER      = str(env_info_dct.get('DE_MAJ_VER',     'keymissing')).casefold()
+    WINDOW_MGR      = str(env_info_dct.get('WINDOW_MGR',     'keymissing')).casefold()
+
+
+# Populate environment globals at module load time
+check_environment()
+
+
+
+# =============================================================================
+# ENVIRONMENT-SPECIFIC ADJUSTMENTS
+# =============================================================================
+
+def show_cinnamon_wayland_warning():
+    """
+    Show async warning dialog about Cinnamon Wayland tray menu bugs.
+    
+    Uses zenity in a non-blocking subprocess so it doesn't delay app startup.
+    """
+    zenity_cmd = shutil.which('zenity')
+    if not zenity_cmd:
+        # Fall back to just logging if zenity isn't available
+        error("Cinnamon Wayland has known bugs affecting tray icon menus.")
+        return
+
+    warning_title = "Cinnamon Wayland: Known Tray Menu Bugs"
+
+    warning_text = (
+        "Cinnamon's Wayland session has bugs affecting tray icon menus:\n\n"
+        "• Menu appears in wrong location (top-left instead of near icon)\n"
+        "• Menu stops appearing after first use\n\n"
+        "This is a Cinnamon compositor bug, not a Toshy issue.\n\n"
+        "<b>Alternatives:</b>\n"
+        "• Use the Toshy Preferences app instead (has all the same options)\n"
+        "• Restart the tray icon via app menu: \"Toshy Tray Icon\"\n"
+        "• From terminal: <tt>nohup toshy-tray &amp;</tt> (allows closing terminal)"
+    )
+
+    cmd_lst = [
+        zenity_cmd,
+        '--warning',
+        '--title', warning_title,
+        '--text', warning_text,
+        '--width', '500',
+        '--no-wrap',
+    ]
+
+    # Run async (non-blocking) so the tray app continues loading
+    try:
+        subprocess.Popen(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
+    except OSError as e:
+        error(f"Failed to show Cinnamon Wayland warning dialog: {e}")
+
+
+# Cinnamon Wayland: Show warning about known tray menu bugs
+if DESKTOP_ENV == 'cinnamon' and SESSION_TYPE == 'wayland':
+    show_cinnamon_wayland_warning()
+
+
+# COSMIC: Desktop environment messes with tray icon, so use 'grayscale' icon for all states
+if DESKTOP_ENV == 'cosmic':
+    icon_file_active    = icon_file_grayscale
+    icon_file_inverse   = icon_file_grayscale
+
 
 loop = None
 
@@ -229,6 +316,48 @@ def set_item_active_thread_safe(menu_item, state=True):
     else:
         # Schedule for main thread
         GLib.idle_add(do_set_active)
+
+
+def show_cinnamon_wayland_warning():
+    """
+    Show async warning dialog about Cinnamon Wayland tray menu bugs.
+    
+    Uses zenity in a non-blocking subprocess so it doesn't delay app startup.
+    """
+    zenity_cmd = shutil.which('zenity')
+    if not zenity_cmd:
+        # Fall back to just logging if zenity isn't available
+        error("Cinnamon Wayland has known bugs affecting tray icon menus.")
+        return
+
+    warning_title = "Cinnamon Wayland: Known Tray Menu Bugs"
+
+    warning_text = (
+        "Cinnamon's Wayland session has bugs affecting tray icon menus:\n\n"
+        "• Menu appears in wrong location (top-left instead of near icon)\n"
+        "• Menu stops appearing after first use\n\n"
+        "This is a Cinnamon compositor bug, not a Toshy issue.\n\n"
+        "<b>Alternatives:</b>\n"
+        "• Use the Toshy Preferences app instead (has all the same options)\n"
+        "• Restart the tray icon via app menu: \"Toshy Tray Icon\"\n"
+        "• From terminal: <tt>nohup toshy-tray &amp;</tt> (allows closing terminal)"
+    )
+
+    cmd_lst = [
+        zenity_cmd,
+        '--warning',
+        '--title', warning_title,
+        '--text', warning_text,
+        '--width', '500',
+        '--no-wrap',
+    ]
+
+    # Run async (non-blocking) so the tray app continues loading
+    try:
+        subprocess.Popen(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
+    except OSError as e:
+        error(f"Failed to show Cinnamon Wayland warning dialog: {e}")
+
 
 
 # -------- MENU ITEMS --------------------------------------------------
@@ -579,27 +708,9 @@ def main():
     process_mgr.initialize()
 
     global loop
-    global DISTRO_ID
-    global DESKTOP_ENV
-    global DE_MAJ_VER
-
-    global icon_file_active
-    global icon_file_inverse
-    global icon_file_grayscale
-
-    env_ctxt_getter             = EnvironmentInfo()
-    env_info_dct                = env_ctxt_getter.get_env_info()
-    DISTRO_ID                   = str(env_info_dct.get('DISTRO_ID', None)).casefold()
-    DESKTOP_ENV                 = str(env_info_dct.get('DESKTOP_ENV', None)).casefold()
-    DE_MAJ_VER                  = str(env_info_dct.get('DE_MAJ_VER', None)).casefold()
-
-    # COSMIC desktop environment messes with tray icon, so use 'grayscale' icon
-    if DESKTOP_ENV == 'cosmic':
-        icon_file_active        = icon_file_grayscale
-        icon_file_inverse       = icon_file_grayscale
 
     # On distros known to not use 'systemd', use 'inverse' icon (except on COSMIC)
-    elif not DESKTOP_ENV == 'cosmic' and not runtime.is_systemd:
+    if DESKTOP_ENV != 'cosmic' and not runtime.is_systemd:
         tray_indicator.set_icon_full(icon_file_inverse, "Toshy Tray Icon Inactive")
 
     def on_settings_changed():
