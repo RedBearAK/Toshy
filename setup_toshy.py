@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20251225'                        # CLI option "--version" will print this out.
+__version__ = '20251231'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -3791,6 +3791,9 @@ def apply_tweaks_Cinnamon():
     except subprocess.CalledProcessError as proc_err:
         error(f'Problem while installing Cinnamon extension:\n\t{proc_err}')
 
+    # Let user know how to get Cmd+Space to open the Cinnamon Menu applet
+    _show_cinnamon_menu_hotkey_reminder()
+
 
 def apply_tweaks_GNOME():
     """Utility function to add desktop tweaks to GNOME"""
@@ -4081,6 +4084,100 @@ def install_coding_font():
 
         final_folder_path = os.path.join(extract_dir, final_folder_name)
         print(f"Installed font into location:\n  '{final_folder_path}'")
+
+
+def _show_cinnamon_menu_hotkey_reminder():
+    """
+    Show a reminder about configuring the Cinnamon menu hotkey for Cmd+Space.
+    
+    Checks if the menu applet is using default Super_L shortcut, and if so,
+    shows instructions for manually configuring it to work with Toshy.
+    """
+    import json
+
+    menu_uuid = 'menu@cinnamon.org'
+    configs_dir = os.path.join(home_dir, '.cinnamon', 'configs', menu_uuid)
+    needs_reminder = True  # Default to showing reminder if checks fail
+
+    # Get enabled applets to find the menu instance ID(s)
+    try:
+        result = subprocess.run(
+            ['gsettings', 'get', 'org.cinnamon', 'enabled-applets'],
+            capture_output=True, text=True, check=True
+        )
+        enabled_applets_str = result.stdout.strip()
+    except subprocess.CalledProcessError:
+        enabled_applets_str = ''
+
+    # Parse the applet list to find menu@cinnamon.org instance IDs
+    # Format: 'panel1:left:0:menu@cinnamon.org:23'
+    instance_ids = []
+
+    if enabled_applets_str.startswith('[') and enabled_applets_str.endswith(']'):
+        applet_entries = enabled_applets_str[1:-1].split(', ')
+        for entry in applet_entries:
+            entry = entry.strip().strip("'")
+            if menu_uuid in entry:
+                parts = entry.split(':')
+                if len(parts) >= 5:
+                    instance_ids.append(parts[-1])
+
+    # Check if any menu applet still has default shortcut (needs configuration)
+    for instance_id in instance_ids:
+        config_file = os.path.join(configs_dir, f'{instance_id}.json')
+
+        if not os.path.isfile(config_file):
+            continue
+
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        overlay_key_value = ''
+        if 'overlay-key' in config:
+            overlay_key_value = config['overlay-key'].get('value', '')
+
+        # Check if already configured for Toshy (has <Control>Escape)
+        if '<Control>Escape' in overlay_key_value:
+            needs_reminder = False
+            break
+
+    if not needs_reminder:
+        return
+
+    reminder_text = (
+        "Cinnamon Menu Hotkey Setup\n"
+        "\n"
+        "To make Cmd+Space open the Cinnamon app menu:\n"
+        "\n"
+        "1. Right-click the menu icon in the panel\n"
+        "2. Select 'Configure...'\n"
+        "3. Go to the 'Behavior' tab\n"
+        "4. Click on one of the 'Keyboard shortcut' fields\n"
+        "5. Press Cmd+Space (will display as 'Ctrl+Esc')\n"
+        "6. Close the configuration window\n"
+        "\n"
+        "You can replace either shortcut slot, or clear one first."
+    )
+
+    print()
+    print('=' * 60)
+    print(reminder_text)
+    print('=' * 60)
+    print()
+
+    # Show zenity dialog (non-blocking, don't wait for user)
+    if shutil.which('zenity'):
+        try:
+            subprocess.Popen(
+                ['zenity', '--info', '--title=Toshy Setup', '--text=' + reminder_text,
+                    '--width=450', '--height=300'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        except OSError:
+            pass  # zenity failed, terminal reminder is enough
 
 
 ###################################################################################################
