@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20251228'
+__version__ = '20260101'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -49,8 +49,8 @@ timeouts(
 
 # Delays often needed for Wayland and/or virtual machines or slow systems
 throttle_delays(
-    key_pre_delay_ms    = 4,      # default: 0 ms, range: 0-150 ms, suggested: 1-50 ms
-    key_post_delay_ms   = 6,      # default: 0 ms, range: 0-150 ms, suggested: 1-100 ms
+    key_pre_delay_ms    = 8,      # default: 0 ms, range: 0-150 ms, suggested: 1-50 ms
+    key_post_delay_ms   = 12,      # default: 0 ms, range: 0-150 ms, suggested: 1-100 ms
 )
 
 devices_api(
