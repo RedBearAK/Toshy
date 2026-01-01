@@ -4156,7 +4156,7 @@ def _show_cinnamon_menu_hotkey_reminder():
         "2. Select 'Configure...'\n"
         "3. Go to the 'Behavior' tab\n"
         "4. Click on one of the 'Keyboard shortcut' fields\n"
-        "5. Press Cmd+Space (will display as 'Ctrl+Esc')\n"
+        "5. Press Cmd+Space (will display as 'Ctrl+Escape')\n"
         "6. Close the configuration window\n"
         "\n"
         "You can replace either shortcut slot, or clear one first."
