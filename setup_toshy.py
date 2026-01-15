@@ -285,9 +285,14 @@ class InstallerSettings:
         # self.venv_cmd_lst           = [self.py_interp_path, '-m', 'venv', self.venv_path]
         # Needs to re-evaluate itself when accessed, in case Python interpreter path changed:
 
+        is_AerynOS_based     = cnfg.DISTRO_ID in distro_groups_map['aerynos-based']
+
         # Add '--copies' flag to avoid using symlinks to system Python interpreter, and
         # hopefully prevent Toshy from breaking when user does a dist-upgrade.
-        return [self.py_interp_path, '-m', 'venv', '--copies', self.venv_path]
+        if is_AerynOS_based:
+            return ['virtualenv', '--copies', self.venv_path]
+        else:
+            return [self.py_interp_path, '-m', 'venv', '--copies', self.venv_path]
 
     @property
     def keymapper_clone_cmd(self):
@@ -1049,6 +1054,8 @@ distro_groups_map = {
 
     'alt-based':                ["altlinux"],
 
+    'aerynos-based':            ["aerynos"],
+
     # Attempted to add and test KaOS Linux. Result:
     # KaOS is NOT compatible with this project. 
     # No packages provide "evtest", "libappindicator", "zenity". 
@@ -1278,6 +1285,13 @@ pkg_groups_map = {
                             "systemd-devel",
                             "xset",
                             "zenity"],
+
+    'aerynos-based':       ["clang", "curl", "git", "glib2-devel", "evtest",
+                            "libayatana-appindicator", "libxkbcommon-devel",
+                            "zenity", "cairo-gobject-devel", "python-devel", "python-pip", "python-evdev",
+                            "python-virtualenv", "python-setuptools", "python-dbus-devel",
+                            "python-pkgconfig", "python-pygobject-devel", "python-cairo-devel"
+                           ],
 
 }
 
@@ -2226,6 +2240,32 @@ class PackageInstallDispatcher:
         native_pkg_installer.install_pkg_list(cmd_lst, cnfg.pkgs_for_distro)
 
     ###########################################################################
+    ###  MOSS DISTROS  ########################################################
+    ###########################################################################
+    @staticmethod
+    def install_on_moss_distro():
+        """utility function that gets dispatched for distros that use Moss package manager"""
+
+        # AerynOS doesn't come with /etc/modules-load.d by default
+        # so add it if it doesn't exist
+        modules_dir                 = '/etc/modules-load.d'
+
+        if not os.path.exists(modules_dir):
+            print(f"Creating directory: '{modules_dir}'")
+            try:
+                call_attn_to_pwd_prompt_if_needed()
+                cmd_lst = [cnfg.priv_elev_cmd, 'mkdir', '-p', modules_dir]
+                subprocess.run(cmd_lst, check=True)
+            except subprocess.CalledProcessError as proc_err:
+                error(f"Problem while creating /etc/modules-load.d folder:\n\t{proc_err}")
+                safe_shutdown(1)
+        
+        native_pkg_installer.check_for_pkg_mgr_cmd('moss')
+        call_attn_to_pwd_prompt_if_needed()
+        cmd_lst = [cnfg.priv_elev_cmd, 'moss', 'install', '--yes-all']
+        native_pkg_installer.install_pkg_list(cmd_lst, cnfg.pkgs_for_distro)
+
+    ###########################################################################
     ###  XBPS DISTROS  ########################################################
     ###########################################################################
     @staticmethod
@@ -2287,6 +2327,7 @@ class PackageManagerGroups:
         self.apt_distros        = []    # 'apt':                    Debian/Ubuntu
         self.dnf_distros        = []    # 'dnf':                    Fedora/Mageia/OpenMandriva/RHEL
         self.eopkg_distros      = []    # 'eopkg':                  Solus
+        self.moss_distros       = []    # 'moss':                   AerynOS
         self.pacman_distros     = []    # 'pacman':                 Arch (BTW)
         self.rpmostree_distros  = []    # 'rpm-ostree':             Fedora atomic/immutables
         self.transupd_distros   = []    # 'transactional-update':   openSUSE Aeon/Kalpa/MicroOS
@@ -2319,6 +2360,9 @@ class PackageManagerGroups:
             # 'eopkg': Solus
             self.eopkg_distros          += distro_groups_map['solus-based']
 
+            # 'moss': AerynOS
+            self.moss_distros          += distro_groups_map['aerynos-based']
+
             # 'pacman': Arch, BTW
             self.pacman_distros         += distro_groups_map['arch-based']
 
@@ -2347,6 +2391,7 @@ class PackageManagerGroups:
             tuple(self.apt_distros):         PackageInstallDispatcher.install_on_apt_distro,
             tuple(self.dnf_distros):         PackageInstallDispatcher.install_on_dnf_distro,
             tuple(self.eopkg_distros):       PackageInstallDispatcher.install_on_eopkg_distro,
+            tuple(self.moss_distros):        PackageInstallDispatcher.install_on_moss_distro,
             tuple(self.pacman_distros):      PackageInstallDispatcher.install_on_pacman_distro,
             tuple(self.rpmostree_distros):   PackageInstallDispatcher.install_on_rpmostree_distro,
             tuple(self.transupd_distros):    PackageInstallDispatcher.install_on_transupd_distro,
