@@ -290,9 +290,9 @@ class InstallerSettings:
         # Add '--copies' flag to avoid using symlinks to system Python interpreter, and
         # hopefully prevent Toshy from breaking when user does a dist-upgrade.
         if is_AerynOS_based:
-            return ['virtualenv', '--copies', self.venv_path]
-        else:
-            return [self.py_interp_path, '-m', 'venv', '--copies', self.venv_path]
+            return [self.py_interp_path, '-m', 'virtualenv', '--copies', self.venv_path]
+
+        return [self.py_interp_path, '-m', 'venv', '--copies', self.venv_path]
 
     @property
     def keymapper_clone_cmd(self):
