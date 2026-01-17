@@ -2245,21 +2245,6 @@ class PackageInstallDispatcher:
     @staticmethod
     def install_on_moss_distro():
         """utility function that gets dispatched for distros that use Moss package manager"""
-
-        # AerynOS doesn't come with /etc/modules-load.d by default
-        # so add it if it doesn't exist
-        modules_dir                 = '/etc/modules-load.d'
-
-        if not os.path.exists(modules_dir):
-            print(f"Creating directory: '{modules_dir}'")
-            try:
-                call_attn_to_pwd_prompt_if_needed()
-                cmd_lst = [cnfg.priv_elev_cmd, 'mkdir', '-p', modules_dir]
-                subprocess.run(cmd_lst, check=True)
-            except subprocess.CalledProcessError as proc_err:
-                error(f"Problem while creating /etc/modules-load.d folder:\n\t{proc_err}")
-                safe_shutdown(1)
-        
         native_pkg_installer.check_for_pkg_mgr_cmd('moss')
         call_attn_to_pwd_prompt_if_needed()
         cmd_lst = [cnfg.priv_elev_cmd, 'moss', 'install', '--yes-all']
