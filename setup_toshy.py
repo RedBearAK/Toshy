@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20251231'                        # CLI option "--version" will print this out.
+__version__ = '20260116'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -2449,72 +2449,114 @@ def setup_uinput_module():
             error(f'ERROR: Install failed.')
             safe_shutdown(1)
 
-    # Step 2: Ensure persistence by writing to the appropriate file
+    # Step 2: Detect which init systems are available (not just currently running)
+    # This matters for dual-init distros like MX Linux where user can choose at boot
+    
+    systemd_available = (
+        cnfg.systemctl_present or
+        os.path.exists('/lib/systemd/systemd') or
+        os.path.exists('/usr/lib/systemd/systemd')
+    )
+    
+    # Known dual-init distros that support both systemd and SysVinit
+    dual_init_distros = ['mxlinux', 'antix']
+    is_dual_init = cnfg.DISTRO_ID in dual_init_distros
+    
+    # SysVinit is relevant if /etc/modules exists OR this is a known dual-init distro
+    sysvinit_relevant = os.path.isfile('/etc/modules') or is_dual_init
+
+    # Step 3: Check existing configurations and set up persistence
     print('Checking uinput module persistence configuration...')
-    persistence_configured = False
+    
+    modules_load_dir    = '/etc/modules-load.d'
+    uinput_conf_path    = os.path.join(modules_load_dir, 'uinput.conf')
+    etc_modules_path    = '/etc/modules'
+    
+    systemd_configured  = False
+    sysvinit_configured = False
 
     call_attn_to_pwd_prompt_if_needed()
 
-    # First check if it's already configured somewhere
-    if os.path.isdir("/etc/modules-load.d/"):
-        # Check for existing systemd-style configuration
-        if os.path.exists("/etc/modules-load.d/uinput.conf"):
-            try:
-                check_cmd = f"{cnfg.priv_elev_cmd} grep -q 'uinput' /etc/modules-load.d/uinput.conf"
-                subprocess.run(check_cmd, shell=True, check=True)
-                print('The uinput module is already configured to load at boot via:'
-                        '\n  /etc/modules-load.d/uinput.conf')
-                persistence_configured = True
-            except subprocess.CalledProcessError:
-                # File exists but doesn't contain uinput
-                pass
-
-    if not persistence_configured and os.path.isfile("/etc/modules"):
-        # Check for existing configuration in /etc/modules
+    # Helper to check if uinput is configured in a file
+    def file_contains_uinput(filepath, pattern='^uinput$'):
+        """Check if file contains uinput configuration"""
+        if not os.path.isfile(filepath):
+            return False
         try:
-            check_cmd = f"{cnfg.priv_elev_cmd} grep -q '^uinput$' /etc/modules"
+            check_cmd = f"{cnfg.priv_elev_cmd} grep -q '{pattern}' {filepath}"
             subprocess.run(check_cmd, shell=True, check=True)
-            print('The uinput module is already configured to load at boot via /etc/modules')
-            persistence_configured = True
+            return True
         except subprocess.CalledProcessError:
-            # Not found in /etc/modules
-            pass
+            return False
 
-    # If not already configured, set it up
-    if not persistence_configured:
-        print('Setting up persistence for the uinput module...')
+    # Helper to write uinput to a config file
+    def write_uinput_config(filepath, append=False):
+        """Write uinput to config file, optionally appending"""
+        tee_flag = '-a' if append else ''
+        command = f"echo 'uinput' | {cnfg.priv_elev_cmd} tee {tee_flag} {filepath} >/dev/null"
+        subprocess.run(command, shell=True, check=True)
 
-        if os.path.isdir("/etc/modules-load.d/"):
-            # First attempt: Use systemd-style modules-load.d configuration
+    # Check and configure systemd-style persistence
+    if systemd_available:
+        # Create the directory if it doesn't exist (handles AerynOS and similar)
+        if not os.path.isdir(modules_load_dir):
+            print(f"Creating directory: '{modules_load_dir}'")
             try:
-                command = (f"echo 'uinput' | {cnfg.priv_elev_cmd} "
-                            "tee /etc/modules-load.d/uinput.conf >/dev/null")
-                subprocess.run(command, shell=True, check=True)
-                print('Configured uinput module to load at boot via /etc/modules-load.d/uinput.conf')
-                persistence_configured = True
+                cmd_lst = [cnfg.priv_elev_cmd, 'mkdir', '-p', modules_load_dir]
+                subprocess.run(cmd_lst, check=True)
             except subprocess.CalledProcessError as proc_err:
-                error(f"Failed to create /etc/modules-load.d/uinput.conf:\n\t{proc_err}")
-                # Proceed to fallback method
+                error(f"Problem creating {modules_load_dir} directory:\n\t{proc_err}")
+                # Don't exit - try sysvinit fallback if available
 
-        if not persistence_configured and os.path.isfile("/etc/modules"):
-            # Fallback: Use traditional /etc/modules file
+        if os.path.isdir(modules_load_dir):
+            if file_contains_uinput(uinput_conf_path, 'uinput'):
+                print(f'Already configured for systemd/OpenRC: {uinput_conf_path}')
+                systemd_configured = True
+            else:
+                try:
+                    write_uinput_config(uinput_conf_path, append=False)
+                    print(f'Configured uinput for systemd/OpenRC: {uinput_conf_path}')
+                    systemd_configured = True
+                except subprocess.CalledProcessError as proc_err:
+                    error(f"Failed to create {uinput_conf_path}:\n\t{proc_err}")
+
+    # Check and configure SysVinit-style persistence
+    if sysvinit_relevant:
+        # For dual-init distros, create /etc/modules if it doesn't exist
+        if is_dual_init and not os.path.isfile(etc_modules_path):
+            print(f"Creating file for dual-init compatibility: '{etc_modules_path}'")
             try:
-                # Not found from earlier check, so append it
-                command = (f"echo 'uinput' | {cnfg.priv_elev_cmd} "
-                            "tee -a /etc/modules >/dev/null")
-                subprocess.run(command, shell=True, check=True)
-                print('Configured uinput module to load at boot via /etc/modules')
-                persistence_configured = True
+                cmd = f"{cnfg.priv_elev_cmd} touch {etc_modules_path}"
+                subprocess.run(cmd, shell=True, check=True)
             except subprocess.CalledProcessError as proc_err:
-                error(f"Failed to update /etc/modules:\n\t{proc_err}")
+                error(f"Problem creating {etc_modules_path}:\n\t{proc_err}")
 
-    if not persistence_configured:
+        if os.path.isfile(etc_modules_path):
+            if file_contains_uinput(etc_modules_path):
+                print(f'Already configured for SysVinit: {etc_modules_path}')
+                sysvinit_configured = True
+            else:
+                try:
+                    write_uinput_config(etc_modules_path, append=True)
+                    print(f'Configured uinput for SysVinit: {etc_modules_path}')
+                    sysvinit_configured = True
+                except subprocess.CalledProcessError as proc_err:
+                    error(f"Failed to update {etc_modules_path}:\n\t{proc_err}")
+
+    # Step 4: Report final status
+    if systemd_configured or sysvinit_configured:
+        print("Module is available now and configured to load automatically after reboots.")
+        if is_dual_init:
+            configured_locations = []
+            if systemd_configured:
+                configured_locations.append('systemd')
+            if sysvinit_configured:
+                configured_locations.append('SysVinit')
+            print(f"  Dual-init distro: configured for {' and '.join(configured_locations)}")
+    else:
         warn("WARNING: Could not configure the uinput module to load at boot!")
         warn("You may need to manually load the uinput module after each reboot.")
         warn("You can do this with: sudo modprobe uinput")
-    else:
-        # No need to reboot - the module is loaded now and will load on next boot too
-        print("Module is available now and configured to load automatically after reboots.")
 
     show_task_completed_msg()
 
