@@ -288,8 +288,12 @@ class InstallerSettings:
         is_AerynOS_based     = cnfg.DISTRO_ID in distro_groups_map['aerynos-based']
 
         # Add '--copies' flag to avoid using symlinks to system Python interpreter, and
-        # hopefully prevent Toshy from breaking when user does a dist-upgrade.
+        # hopefully prevent Toshy from breaking when user does a dist-upgrade. 
+        # (Didn't work for that purpose, but still a good idea for other reasons.)
+
         if is_AerynOS_based:
+            # Use 'virtualenv' on AerynOS (formerly Serpent OS) because 'ensurepip' missing,
+            # which is a dependency for the 'venv' module. 
             return [self.py_interp_path, '-m', 'virtualenv', '--copies', self.venv_path]
 
         return [self.py_interp_path, '-m', 'venv', '--copies', self.venv_path]
@@ -1286,12 +1290,14 @@ pkg_groups_map = {
                             "xset",
                             "zenity"],
 
-    'aerynos-based':       ["clang", "curl", "git", "glib2-devel", "evtest",
+    'aerynos-based':       ["cairo-gobject-devel", "clang", "curl",
+                            "git", "glib2-devel",
+                            "evtest",
                             "libayatana-appindicator", "libxkbcommon-devel",
-                            "zenity", "cairo-gobject-devel", "python-devel", "python-pip", "python-evdev",
-                            "python-virtualenv", "python-setuptools", "python-dbus-devel",
-                            "python-pkgconfig", "python-pygobject-devel", "python-cairo-devel"
-                           ],
+                            "python-cairo-devel", "python-dbus-devel", "python-devel",
+                                "python-evdev", "python-pip", "python-pkgconfig",
+                                "python-pygobject-devel", "python-setuptools", "python-virtualenv", 
+                            "zenity"],
 
 }
 
@@ -2312,7 +2318,7 @@ class PackageManagerGroups:
         self.apt_distros        = []    # 'apt':                    Debian/Ubuntu
         self.dnf_distros        = []    # 'dnf':                    Fedora/Mageia/OpenMandriva/RHEL
         self.eopkg_distros      = []    # 'eopkg':                  Solus
-        self.moss_distros       = []    # 'moss':                   AerynOS
+        self.moss_distros       = []    # 'moss':                   AerynOS (was Serpent OS)
         self.pacman_distros     = []    # 'pacman':                 Arch (BTW)
         self.rpmostree_distros  = []    # 'rpm-ostree':             Fedora atomic/immutables
         self.transupd_distros   = []    # 'transactional-update':   openSUSE Aeon/Kalpa/MicroOS
@@ -2345,8 +2351,8 @@ class PackageManagerGroups:
             # 'eopkg': Solus
             self.eopkg_distros          += distro_groups_map['solus-based']
 
-            # 'moss': AerynOS
-            self.moss_distros          += distro_groups_map['aerynos-based']
+            # 'moss': AerynOS (was Serpent OS)
+            self.moss_distros           += distro_groups_map['aerynos-based']
 
             # 'pacman': Arch, BTW
             self.pacman_distros         += distro_groups_map['arch-based']
