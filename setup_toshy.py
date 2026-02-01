@@ -1301,14 +1301,16 @@ pkg_groups_map = {
                                 "python-pygobject-devel", "python-setuptools", "python-virtualenv", 
                             "zenity"],
 
-    'gentoo-based':        [
+    # Leaving out Python tkinter because it's only needed for obsolete GUI app version.
+    'gentoo-based':        ["dev-libs/gobject-introspection", "dev-libs/libayatana-appindicator",
+                            # "dev-libs/wayland",   # Necessary or not?
                             "dev-libs/wayland-protocols",
-                            "x11-libs/libxkbcommon",
-                            "libnotify",
-                            "x11-apps/xset",
-                            "x11-libs/libnotify",
-
-                            ],
+                            "dev-vcs/git",
+                            "gnome-extra/zenity",
+                            "gui-libs/gtk", "gui-libs/libadwaita",
+                            "sys-apps/evtest",
+                            "x11-apps/xset", "x11-libs/gtk+", "x11-libs/libnotify",
+                                "x11-libs/libxkbcommon"],
 
 }
 
@@ -2232,7 +2234,7 @@ class PackageInstallDispatcher:
             cmd_lst = [cnfg.priv_elev_cmd, 'pacman', '-S', '--noconfirm']
             native_pkg_installer.install_pkg_list(cmd_lst, pkgs_to_install)
 
-    ###########################################################################
+###########################################################################
     ###  EMERGE DISTROS  ######################################################
     ###########################################################################
     @staticmethod
@@ -2241,6 +2243,29 @@ class PackageInstallDispatcher:
 
         native_pkg_installer.check_for_pkg_mgr_cmd('emerge')
         call_attn_to_pwd_prompt_if_needed()
+
+        # Ensure required USE flags are set before emerging
+        pkg_use_file = '/etc/portage/package.use/python-appindicator-introspection'
+
+        use_flags_needed = {
+            'dev-libs/libayatana-appindicator': 'introspection',
+        }
+
+        for pkg, flags in use_flags_needed.items():
+            use_line = f'{pkg} {flags}'
+            already_set = False
+            if os.path.isfile(pkg_use_file):
+                with open(pkg_use_file, 'r') as f:
+                    for line in f:
+                        if line.strip() == use_line:
+                            already_set = True
+                            break
+            if not already_set:
+                print(f"Setting USE flag for emerge: {use_line}")
+                subprocess.run(
+                    [cnfg.priv_elev_cmd, 'bash', '-c',
+                        f'echo "{use_line}" >> {pkg_use_file}'],
+                    check=True)
 
         equery_cmd              = shutil.which('equery')
         qlist_cmd               = shutil.which('qlist')
