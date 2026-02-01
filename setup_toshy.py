@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260116'                        # CLI option "--version" will print this out.
+__version__ = '20260201'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1060,6 +1060,8 @@ distro_groups_map = {
 
     'aerynos-based':            ["aerynos"],
 
+    'gentoo-based':             ["calculate", "gentoo", "redcore"],
+
     # Attempted to add and test KaOS Linux. Result:
     # KaOS is NOT compatible with this project. 
     # No packages provide "evtest", "libappindicator", "zenity". 
@@ -1298,6 +1300,15 @@ pkg_groups_map = {
                                 "python-evdev", "python-pip", "python-pkgconfig",
                                 "python-pygobject-devel", "python-setuptools", "python-virtualenv", 
                             "zenity"],
+
+    'gentoo-based':        [
+                            "dev-libs/wayland-protocols",
+                            "x11-libs/libxkbcommon",
+                            "libnotify",
+                            "x11-apps/xset",
+                            "x11-libs/libnotify",
+
+                            ],
 
 }
 
@@ -2222,6 +2233,46 @@ class PackageInstallDispatcher:
             native_pkg_installer.install_pkg_list(cmd_lst, pkgs_to_install)
 
     ###########################################################################
+    ###  EMERGE DISTROS  ######################################################
+    ###########################################################################
+    @staticmethod
+    def install_on_emerge_distro():
+        """utility function that gets dispatched for distros that use emerge package manager"""
+
+        native_pkg_installer.check_for_pkg_mgr_cmd('emerge')
+        call_attn_to_pwd_prompt_if_needed()
+
+        equery_cmd              = shutil.which('equery')
+        qlist_cmd               = shutil.which('qlist')
+
+        def is_pkg_installed_emerge(package):
+            """utility function to check if a package is already installed on Gentoo"""
+            if equery_cmd:
+                result = subprocess.run(
+                    ['equery', 'list', package], stdout=DEVNULL, stderr=DEVNULL)
+                return result.returncode == 0
+            if qlist_cmd:
+                result = subprocess.run(
+                    ['qlist', '-Iv', package], stdout=DEVNULL, stderr=DEVNULL)
+                return result.returncode == 0
+            return False
+
+        pkgs_to_install = []
+        if equery_cmd or qlist_cmd:
+            for pkg in cnfg.pkgs_for_distro:
+                if not is_pkg_installed_emerge(pkg):
+                    pkgs_to_install.append(pkg)
+                else:
+                    print_skipping_installed_pkg(pkg)
+        else:
+            print('Unable to check for installed packages. Commands "equery", "qlist" not found.')
+            pkgs_to_install = list(cnfg.pkgs_for_distro)
+
+        if pkgs_to_install:
+            cmd_lst = [cnfg.priv_elev_cmd, 'emerge', '--ask=n', '--quiet-build']
+            native_pkg_installer.install_pkg_list(cmd_lst, pkgs_to_install)
+
+    ###########################################################################
     ###  EOPKG DISTROS  #######################################################
     ###########################################################################
     @staticmethod
@@ -2317,6 +2368,7 @@ class PackageManagerGroups:
         self.apk_distros        = []    # 'apk':                    Alpine/Chimera
         self.apt_distros        = []    # 'apt':                    Debian/Ubuntu
         self.dnf_distros        = []    # 'dnf':                    Fedora/Mageia/OpenMandriva/RHEL
+        self.emerge_distros     = []    # 'emerge':                 Gentoo
         self.eopkg_distros      = []    # 'eopkg':                  Solus
         self.moss_distros       = []    # 'moss':                   AerynOS (was Serpent OS)
         self.pacman_distros     = []    # 'pacman':                 Arch (BTW)
@@ -2348,6 +2400,9 @@ class PackageManagerGroups:
             self.dnf_distros            += distro_groups_map['mandriva-based']
             self.dnf_distros            += distro_groups_map['rhel-based']
 
+            # 'emerge': Gentoo
+            self.emerge_distros         += distro_groups_map['gentoo-based']
+
             # 'eopkg': Solus
             self.eopkg_distros          += distro_groups_map['solus-based']
 
@@ -2378,16 +2433,17 @@ class PackageManagerGroups:
         """Create mapping of distro lists to their installer methods"""
         self.populate_lists()       # Make sure lists contain correct info before creating map
         self.dispatch_map = {
-            tuple(self.apk_distros):         PackageInstallDispatcher.install_on_apk_distro,
-            tuple(self.apt_distros):         PackageInstallDispatcher.install_on_apt_distro,
-            tuple(self.dnf_distros):         PackageInstallDispatcher.install_on_dnf_distro,
-            tuple(self.eopkg_distros):       PackageInstallDispatcher.install_on_eopkg_distro,
-            tuple(self.moss_distros):        PackageInstallDispatcher.install_on_moss_distro,
-            tuple(self.pacman_distros):      PackageInstallDispatcher.install_on_pacman_distro,
-            tuple(self.rpmostree_distros):   PackageInstallDispatcher.install_on_rpmostree_distro,
-            tuple(self.transupd_distros):    PackageInstallDispatcher.install_on_transupd_distro,
-            tuple(self.xbps_distros):        PackageInstallDispatcher.install_on_xbps_distro,
-            tuple(self.zypper_distros):      PackageInstallDispatcher.install_on_zypper_distro,
+            tuple(self.apk_distros):        PackageInstallDispatcher.install_on_apk_distro,
+            tuple(self.apt_distros):        PackageInstallDispatcher.install_on_apt_distro,
+            tuple(self.dnf_distros):        PackageInstallDispatcher.install_on_dnf_distro,
+            tuple(self.emerge_distros):     PackageInstallDispatcher.install_on_emerge_distro,
+            tuple(self.eopkg_distros):      PackageInstallDispatcher.install_on_eopkg_distro,
+            tuple(self.moss_distros):       PackageInstallDispatcher.install_on_moss_distro,
+            tuple(self.pacman_distros):     PackageInstallDispatcher.install_on_pacman_distro,
+            tuple(self.rpmostree_distros):  PackageInstallDispatcher.install_on_rpmostree_distro,
+            tuple(self.transupd_distros):   PackageInstallDispatcher.install_on_transupd_distro,
+            tuple(self.xbps_distros):       PackageInstallDispatcher.install_on_xbps_distro,
+            tuple(self.zypper_distros):     PackageInstallDispatcher.install_on_zypper_distro,
         }
 
 
