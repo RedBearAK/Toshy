@@ -1308,7 +1308,7 @@ pkg_groups_map = {
                             "dev-vcs/git",
                             "gnome-extra/zenity",
                             "gui-libs/gtk", "gui-libs/libadwaita",
-                            "sys-apps/evtest",
+                            "app-misc/evtest",
                             "x11-apps/xset", "x11-libs/gtk+", "x11-libs/libnotify",
                                 "x11-libs/libxkbcommon"],
 
