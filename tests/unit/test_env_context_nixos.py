@@ -219,3 +219,64 @@ class TestNixOSWindowManagerDetection:
         assert env.DESKTOP_ENV == 'gnome'
         assert env.WINDOW_MGR == 'WM_unidentified_by_logic', \
             "When pgrep fails, WINDOW_MGR should be 'WM_unidentified_by_logic' (documenting the bug)"
+
+    def test_should_detect_wrapped_nixos_processes(self):
+        """
+        On NixOS, binaries are wrapped, so gnome-shell becomes .gnome-shell-wrapped.
+        Process names are truncated to 15 chars, so it appears as .gnome-shell-wr
+
+        is_process_running() should detect these wrapped processes.
+        """
+        # ARRANGE
+        mock_os_release = [
+            'NAME="NixOS"',
+            'ID=nixos',
+            'VERSION_ID="26.05"'
+        ]
+
+        mock_env_vars = {
+            'XDG_SESSION_TYPE': 'wayland',
+            'XDG_CURRENT_DESKTOP': 'GNOME',
+        }
+
+        # Mock pgrep responses simulating NixOS wrapped binaries
+        def mock_check_output_nixos(cmd, *args, **kwargs):
+            cmd_str = ' '.join(cmd)
+
+            # pgrep -x -i gnome-shell → FAILS (no exact match)
+            if 'pgrep -x -i gnome-shell' in cmd_str:
+                raise subprocess.CalledProcessError(1, cmd)
+
+            # pgrep -x -i .gnome-shell-wr → SUCCESS (wrapped name)
+            elif 'pgrep -x -i .gnome-shell-wr' in cmd_str:
+                return b'2934\n'
+
+            # pgrep -x -i mutter → FAILS
+            elif 'pgrep -x -i mutter' in cmd_str:
+                raise subprocess.CalledProcessError(1, cmd)
+
+            # pgrep -x -i .mutter-x11-fra → SUCCESS (truncated wrapped name)
+            elif 'pgrep -x -i .mutter-x11-fra' in cmd_str:
+                return b'4144\n'
+
+            # Default: fail
+            raise subprocess.CalledProcessError(1, cmd)
+
+        # ACT
+        with mock.patch('os.path.isfile', return_value=False), \
+             mock.patch.dict(os.environ, mock_env_vars, clear=True), \
+             mock.patch('subprocess.check_output', side_effect=mock_check_output_nixos):
+            env = EnvironmentInfo()
+            env.release_files['/etc/os-release'] = mock_os_release
+            env._get_distro_id()
+            env._get_distro_version()
+
+            # Test is_process_running with fallback
+            gnome_shell_running = env.is_process_running('gnome-shell')
+            mutter_running = env.is_process_running('mutter')
+
+        # ASSERT - Should detect wrapped processes
+        assert gnome_shell_running, \
+            "is_process_running('gnome-shell') should detect .gnome-shell-wr on NixOS"
+        assert mutter_running, \
+            "is_process_running('mutter') should detect .mutter-x11-fra on NixOS"

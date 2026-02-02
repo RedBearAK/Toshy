@@ -104,6 +104,10 @@ class EnvironmentInfo:
         """
         Utility function to check if a process with a specific name is running.
         For names >15 chars, uses pgrep -f with careful pattern matching to avoid false positives.
+
+        On NixOS, binaries are wrapped (e.g., gnome-shell → .gnome-shell-wrapped),
+        and process names are truncated to 15 chars by the kernel.
+        This function handles both standard and NixOS wrapped process names.
         """
         use_pgrep_i = True
 
@@ -133,6 +137,21 @@ class EnvironmentInfo:
             result = subprocess.check_output(cmd)
             return bool(result.strip())
         except subprocess.CalledProcessError:
+            # On NixOS, binaries are wrapped (gnome-shell → .gnome-shell-wrapped)
+            # and process names are truncated to 15 chars (.gnome-shell-wr).
+            # Fallback: try substring match without -x flag
+            if self.DISTRO_ID == 'nixos' and len(process_name) <= 15:
+                fallback_cmd = ['pgrep']
+                if use_pgrep_i:
+                    fallback_cmd.append('-i')
+                fallback_cmd.append(process_name)
+
+                try:
+                    result = subprocess.check_output(fallback_cmd)
+                    return bool(result.strip())
+                except subprocess.CalledProcessError:
+                    pass  # Fall through to return False
+
             return False
 
 ####################################################################################################
