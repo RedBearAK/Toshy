@@ -170,6 +170,10 @@ class EnvironmentInfo:
         if _distro_id == "" and self.release_files['/etc/arch-release']:
             _distro_id = 'arch'
 
+        # NixOS detection: Check for /etc/NIXOS marker file
+        if _distro_id == "" and os.path.isfile('/etc/NIXOS'):
+            _distro_id = 'nixos'
+
         distro_names = {            # simplify distro names to an ID, if necessary
             'Debian.*':             'debian',
             # 'elementary':           'eos',
@@ -178,6 +182,7 @@ class EnvironmentInfo:
             'Manjaro':              'manjaro',
             'KDE.*Neon':            'neon',
             'Linux.*Mint':          'mint',
+            'NixOS':                'nixos',
             'openSUSE.*Tumbleweed': 'opensuse-tumbleweed',
             'Peppermint.*':         'peppermint',
             'Pop!_OS':              'pop',

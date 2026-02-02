@@ -287,7 +287,301 @@ cd ~/Downloads/Toshy[hit Tab to autocomplete the folder name, and Enter]
 
 You should now be in a folder called something like `toshy-main` or `toshy-dev_beta`, depending on which branch you downloaded the zip archive from, and you should be able to run the installation command from earlier (`./setup_toshy.py install`).  
 
-Check out the `--options` in the next section if the basic install doesn't work. If you are on KDE Plasma and want a more Mac-like task switching experience, take a look at the `--fancy-pants` option in particular.  
+Check out the `--options` in the next section if the basic install doesn't work. If you are on KDE Plasma and want a more Mac-like task switching experience, take a look at the `--fancy-pants` option in particular.
+
+### NixOS Installation
+
+> [!NOTE]
+> **NixOS requires a different installation approach** due to its declarative system configuration model.
+
+NixOS users cannot use traditional package managers or make direct system changes. Instead, Toshy will generate configuration snippets that you must add to `/etc/nixos/configuration.nix`.
+
+#### Quick Start for NixOS
+
+1. Download and extract Toshy as described above
+
+2. Run the NixOS helper script to generate configuration:
+   ```sh
+   ./scripts/toshy-nixos-helper.sh
+   ```
+
+3. Copy the generated configuration snippet to `/etc/nixos/configuration.nix`
+
+4. Replace `<username>` with your actual username in the configuration
+
+5. Rebuild your system:
+   ```sh
+   sudo nixos-rebuild switch
+   ```
+
+6. Log out and log back in (for group changes to take effect)
+
+7. Run the Toshy installer:
+   ```sh
+   ./setup_toshy.py install
+   ```
+
+The installer will detect NixOS automatically and skip system-level changes (packages, udev rules, user groups). It will only set up the user-space components (Python venv, config files, systemd user services).
+
+#### What Gets Configured Declaratively
+
+The configuration snippet includes:
+
+- **System Packages**: All required dependencies (Python, build tools, libraries)
+- **Udev Rules**: Input device access permissions
+- **User Groups**: Adding your user to `input` and `systemd-journal` groups
+- **Kernel Modules**: Loading the `uinput` module
+
+#### Example NixOS Configuration
+
+Add this to your `/etc/nixos/configuration.nix`:
+
+```nix
+{ config, pkgs, ... }:
+{
+  # Toshy dependencies
+  environment.systemPackages = with pkgs; [
+    git python3 python3Packages.pip python3Packages.dbus-python
+    libnotify zenity cairo gobject-introspection
+    libappindicator-gtk3 systemd libxkbcommon wayland
+    dbus gcc libjpeg evtest xorg.xset pkg-config
+  ];
+
+  # Udev rules for input device access
+  services.udev.extraRules = ''
+    SUBSYSTEM=="input", GROUP="input", MODE="0660", TAG+="uaccess"
+    KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", TAG+="uaccess"
+  '';
+
+  # Add your user to required groups (replace myuser)
+  users.users.myuser.extraGroups = [ "input" "systemd-journal" ];
+
+  # Load uinput kernel module
+  boot.kernelModules = [ "uinput" ];
+}
+```
+
+#### Troubleshooting NixOS Installation
+
+If the installer shows warnings about missing packages or groups:
+
+1. Verify your `/etc/nixos/configuration.nix` includes all the sections above
+2. Ensure you ran `sudo nixos-rebuild switch`
+3. Log out and back in if you just added group memberships
+4. Check you're in the input group: `groups | grep input`
+
+If you're still having issues, run the installer with verbose output to see exactly what's being skipped:
+
+```sh
+./setup_toshy.py install --verbose
+```
+
+#### NixOS Flake Installation (Recommended)
+
+> [!TIP]
+> **New!** Toshy now provides a Nix flake for fully declarative installation via home-manager.
+
+The flake-based installation is the recommended method for NixOS users as it:
+- Provides fully declarative configuration
+- Handles all dependencies automatically
+- Integrates seamlessly with NixOS and home-manager
+- Enables/disables services declaratively
+- Simplifies updates and rollbacks
+
+##### Prerequisites
+
+1. Enable flakes in your NixOS configuration:
+   ```nix
+   # /etc/nixos/configuration.nix
+   {
+     nix.settings.experimental-features = [ "nix-command" "flakes" ];
+   }
+   ```
+
+2. Rebuild your system: `sudo nixos-rebuild switch`
+
+##### Installation Methods
+
+###### Method 1: NixOS + Home-Manager (Recommended)
+
+Add Toshy to your `flake.nix`:
+
+```nix
+{
+  description = "My NixOS configuration";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+
+    # Add Toshy
+    toshy.url = "github:RedBearAK/toshy";
+  };
+
+  outputs = { nixpkgs, home-manager, toshy, ... }: {
+    nixosConfigurations.my-machine = nixpkgs.lib.nixosSystem {
+      modules = [
+        # Optional: System-wide configuration (udev rules, kernel modules)
+        toshy.nixosModules.default
+        {
+          services.toshy.enable = true;
+        }
+
+        # Home-manager with Toshy
+        home-manager.nixosModules.home-manager
+        {
+          home-manager.users.myuser = {
+            imports = [ toshy.homeManagerModules.default ];
+
+            services.toshy = {
+              enable = true;
+              autoStart = true;
+              enableGui = true;
+            };
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+Then rebuild: `sudo nixos-rebuild switch --flake .`
+
+###### Method 2: Standalone Home-Manager
+
+If you use home-manager without NixOS:
+
+```nix
+# ~/.config/home-manager/flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+    toshy.url = "github:RedBearAK/toshy";
+  };
+
+  outputs = { nixpkgs, home-manager, toshy, ... }: {
+    homeConfigurations.myuser = home-manager.lib.homeManagerConfiguration {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      modules = [
+        toshy.homeManagerModules.default
+        {
+          services.toshy = {
+            enable = true;
+            autoStart = true;
+            enableGui = true;
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+Apply: `home-manager switch --flake .`
+
+##### Configuration Options
+
+The home-manager module provides these options:
+
+```nix
+services.toshy = {
+  enable = true;  # Enable Toshy
+
+  # Optional: Use specific version
+  package = pkgs.toshy;
+
+  # Optional: Custom configuration file
+  config = ./my-toshy-config.py;
+
+  # Auto-start on login (default: true)
+  autoStart = true;
+
+  # Enable GUI components (default: true)
+  enableGui = true;
+  enableTray = true;
+
+  # Override desktop environment detection
+  desktopEnvironment = "kde";  # or "gnome", "sway", etc.
+
+  # Enable verbose logging
+  verboseLogging = false;
+};
+```
+
+##### Customizing Configuration
+
+1. Get the default config:
+   ```sh
+   nix build github:RedBearAK/toshy#toshy
+   cp result/share/toshy/default-toshy-config/toshy_config.py ~/.config/toshy/
+   ```
+
+2. Edit `~/.config/toshy/toshy_config.py` to customize key mappings
+
+3. Reference it in your home-manager config:
+   ```nix
+   services.toshy.config = ./toshy_config.py;
+   ```
+
+4. Rebuild: `home-manager switch` or `sudo nixos-rebuild switch`
+
+##### Managing Services
+
+With the flake installation, services are managed declaratively:
+
+```nix
+# Enable all services (default)
+services.toshy.enable = true;
+
+# Disable auto-start
+services.toshy.autoStart = false;
+
+# Disable GUI/tray
+services.toshy.enableGui = false;
+services.toshy.enableTray = false;
+```
+
+Manual service control (if autoStart = false):
+```sh
+systemctl --user start toshy-config.service
+systemctl --user stop toshy-config.service
+systemctl --user status toshy-config.service
+```
+
+##### Examples
+
+Complete example configurations are available in `nix/examples/`:
+- `home-manager-basic.nix` - Simple setup
+- `home-manager-advanced.nix` - All options
+- `flake-example.nix` - Complete flake template
+- `nixos-configuration.nix` - Traditional configuration.nix
+
+##### Updating
+
+Update Toshy flake input:
+```sh
+nix flake update toshy
+sudo nixos-rebuild switch  # or: home-manager switch
+```
+
+##### Troubleshooting Flake Installation
+
+**Service won't start:**
+- Check logs: `journalctl --user -u toshy-config.service`
+- Verify group membership: `groups | grep input`
+- System module enabled: `services.toshy.enable = true;` in NixOS config
+
+**Config changes not applying:**
+- Ensure `services.toshy.config` points to your file
+- Rebuild after changes: `home-manager switch`
+- Check config syntax: `python3 ~/.config/toshy/toshy_config.py`
+
+**GUI not appearing:**
+- Verify: `services.toshy.enableGui = true;`
+- Check tray: `services.toshy.enableTray = true;`
+- Log: `journalctl --user -u toshy-tray.service`
 
 ### Options for installer script
 

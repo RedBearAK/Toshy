@@ -1060,10 +1060,15 @@ distro_groups_map = {
 
     'aerynos-based':            ["aerynos"],
 
+    # NixOS - declarative package management distribution
+    # Note: NixOS requires special handling as packages are configured declaratively
+    # in configuration.nix rather than installed with traditional package managers
+    'nixos-based':              ["nixos"],
+
     # Attempted to add and test KaOS Linux. Result:
-    # KaOS is NOT compatible with this project. 
-    # No packages provide "evtest", "libappindicator", "zenity". 
-    # The KaOS repos seem highly restricted to only Qt/KDE related packages. 
+    # KaOS is NOT compatible with this project.
+    # No packages provide "evtest", "libappindicator", "zenity".
+    # The KaOS repos seem highly restricted to only Qt/KDE related packages.
 
     # Add more as needed...
 }
@@ -2309,6 +2314,116 @@ class PackageInstallDispatcher:
             native_pkg_installer.install_pkg_list(cmd_lst, pkgs_to_install)
 
 
+class NixOSHandler:
+    """
+    Handler for NixOS-specific operations.
+
+    NixOS is a declarative Linux distribution where system configuration is managed
+    through /etc/nixos/configuration.nix. This handler generates configuration snippets
+    that users must add to their configuration.nix file instead of making system changes
+    directly (which is not possible on NixOS's immutable system).
+    """
+
+    @staticmethod
+    def check_nixos_requirements():
+        """
+        Verify required packages are available in the environment.
+
+        Returns:
+            list: Names of missing required tools
+        """
+        required_tools = ['python3', 'git', 'gcc', 'pkg-config']
+        missing = []
+        for tool in required_tools:
+            if not shutil.which(tool):
+                missing.append(tool)
+        return missing
+
+    @staticmethod
+    def generate_udev_rules_nix():
+        """
+        Generate NixOS udev rules configuration snippet.
+
+        Returns:
+            str: Nix configuration for udev rules
+        """
+        return '''  # Udev rules for input device access
+  services.udev.extraRules = \'\'
+    SUBSYSTEM=="input", GROUP="input", MODE="0660", TAG+="uaccess"
+    KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", TAG+="uaccess"
+  \'\';'''
+
+    @staticmethod
+    def generate_user_groups_nix(username):
+        """
+        Generate NixOS user groups configuration snippet.
+
+        Args:
+            username (str): Username to add to groups
+
+        Returns:
+            str: Nix configuration for user groups
+        """
+        return f'''  # Add user to required groups
+  users.users.{username}.extraGroups = [ "input" "systemd-journal" ];'''
+
+    @staticmethod
+    def generate_packages_nix():
+        """
+        Generate required packages list for NixOS.
+
+        Returns:
+            str: Nix configuration for system packages
+        """
+        return '''  # Required packages for Toshy
+  environment.systemPackages = with pkgs; [
+    git python3 python3Packages.pip python3Packages.dbus-python
+    libnotify zenity cairo gobject-introspection
+    libappindicator-gtk3 systemd libxkbcommon wayland
+    dbus gcc libjpeg evtest xorg.xset pkg-config
+  ];'''
+
+    @staticmethod
+    def generate_full_config_snippet():
+        """
+        Generate complete configuration.nix snippet for NixOS.
+
+        Returns:
+            str: Complete Nix configuration snippet with instructions
+        """
+        username = os.getenv('USER', '<username>')
+
+        return f'''
+# =============================================================================
+# Add to /etc/nixos/configuration.nix:
+# =============================================================================
+
+{{ config, pkgs, ... }}:
+{{
+{NixOSHandler.generate_packages_nix()}
+
+{NixOSHandler.generate_udev_rules_nix()}
+
+{NixOSHandler.generate_user_groups_nix(username)}
+
+  # Load uinput kernel module
+  boot.kernelModules = [ "uinput" ];
+}}
+
+# =============================================================================
+# After adding the above configuration:
+# =============================================================================
+
+# 1. If you used '<username>' placeholder, replace it with your actual username
+# 2. Run: sudo nixos-rebuild switch
+# 3. Log out and log back in (for group changes to take effect)
+# 4. Run the Toshy installer again: ./setup_toshy.py install
+
+# Note: NixOS manages packages declaratively, so this installer will skip
+# native package installation and only set up Toshy in your user directory.
+'''
+
+
 class PackageManagerGroups:
     """Container for package manager distro groupings and dispatch map"""
     
@@ -2615,6 +2730,15 @@ def install_udev_rules():
     """Set up `udev` rules file to give user/keymapper process access to uinput"""
     print(f'\n\n§  Installing "udev" rules file for keymapper...\n{cnfg.separator}')
 
+    # NixOS: udev rules must be configured declaratively
+    if cnfg.DISTRO_ID == 'nixos':
+        print('\n§  NixOS detected - udev rules must be configured declaratively\n')
+        print(NixOSHandler.generate_udev_rules_nix())
+        print('\nAdd the above to /etc/nixos/configuration.nix')
+        print('Then run: sudo nixos-rebuild switch')
+        print('\nAfter rebuilding, run this installer again.')
+        return  # Skip the rest of the function for NixOS
+
     rules_dir                   = '/etc/udev/rules.d'
 
     # systemd init systems can use the 'uaccess' tag to set owner of device to current user,
@@ -2769,10 +2893,25 @@ def add_user_to_group(group_name: str, user_name: str) -> None:
 def verify_user_groups():
     """
     Check if the 'input' group exists and user is in group.
-    Also check other groups like 'systemd-journal' in 
+    Also check other groups like 'systemd-journal' in
     special cases, like openSUSE Tumbleweed and Leap, and Solus.
     """
     print(f'\n\n§  Checking if user is in correct group(s)...\n{cnfg.separator}')
+
+    # NixOS: user groups must be configured declaratively
+    if cnfg.DISTRO_ID == 'nixos':
+        print('\n§  NixOS detected - user groups configured declaratively\n')
+        username = os.getenv('USER')
+        print(NixOSHandler.generate_user_groups_nix(username))
+        print('\nAdd to /etc/nixos/configuration.nix and run: sudo nixos-rebuild switch')
+
+        # Still check if user is in groups to provide feedback
+        groups = subprocess.check_output(['groups']).decode().split()
+        if 'input' not in groups:
+            print('WARNING: User not in "input" group. Add config above first.')
+        else:
+            print('User is already in "input" group.')
+        return  # Skip the rest of the function for NixOS
 
     # Handle 'input' group
     create_group(cnfg.input_group)

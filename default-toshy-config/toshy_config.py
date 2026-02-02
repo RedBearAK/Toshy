@@ -298,6 +298,10 @@ elif DESKTOP_ENV in known_wlroots_compositors:
 # elif (SESSION_TYPE, DESKTOP_ENV) == ('wayland', 'lxqt') and WINDOW_MGR in all_wlroots_compositors:
 #     debug(f"DE is LXQt, WM is '{WINDOW_MGR}', using 'wlroots' window context method.", ctx="CG")
 #     _desktop_env = 'wlroots'
+elif SESSION_TYPE == 'wayland' and DESKTOP_ENV == 'gnome' and WINDOW_MGR == 'WM_unidentified_by_logic':
+    # GNOME Wayland - window manager detection may fail, use DESKTOP_ENV as fallback
+    debug(f"GNOME Wayland detected, using DESKTOP_ENV as compositor.", ctx="CG")
+    _wl_compositor = 'gnome'
 else:
     _wl_compositor = WINDOW_MGR
 
