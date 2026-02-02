@@ -298,12 +298,14 @@ elif DESKTOP_ENV in known_wlroots_compositors:
 # elif (SESSION_TYPE, DESKTOP_ENV) == ('wayland', 'lxqt') and WINDOW_MGR in all_wlroots_compositors:
 #     debug(f"DE is LXQt, WM is '{WINDOW_MGR}', using 'wlroots' window context method.", ctx="CG")
 #     _desktop_env = 'wlroots'
-# REMOVED: NixOS GNOME fallback - no longer needed after env_context.py fix
-# The fix now properly detects wrapped NixOS binaries (.gnome-shell-wrapped → mutter)
-# elif SESSION_TYPE == 'wayland' and DESKTOP_ENV == 'gnome' and WINDOW_MGR == 'WM_unidentified_by_logic':
-#     debug(f"GNOME Wayland detected, using DESKTOP_ENV as compositor.", ctx="CG")
-#     _wl_compositor = 'gnome'
-_wl_compositor = WINDOW_MGR
+
+# Map window manager names to compositor names accepted by environ_api
+# On GNOME, 'mutter' should be mapped to 'gnome-shell' for environ_api
+if SESSION_TYPE == 'wayland' and DESKTOP_ENV == 'gnome' and WINDOW_MGR in ['mutter', 'gnome-shell']:
+    _wl_compositor = 'gnome-shell'
+    debug(f"GNOME Wayland: Using 'gnome-shell' compositor (detected WM: '{WINDOW_MGR}').", ctx="CG")
+else:
+    _wl_compositor = WINDOW_MGR
 
 try:
     # Help the keymapper select the correct window context provider object
