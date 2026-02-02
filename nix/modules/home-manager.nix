@@ -103,7 +103,8 @@ in
       Unit = {
         Description = "Toshy Keyboard Config";
         Documentation = "https://github.com/RedBearAK/toshy";
-        After = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ]
+          ++ optional (cfg.desktopEnvironment == "gnome") "org.gnome.Shell.target";
         PartOf = [ "graphical-session.target" ];
         ConditionEnvironment = "WAYLAND_DISPLAY";  # Adjust based on session type
       };
