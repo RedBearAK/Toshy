@@ -1,4 +1,4 @@
-__version__ = "20250713"
+__version__ = "20260201"
 
 """
 Terminal utilities for Toshy applications.
@@ -7,11 +7,16 @@ Simple terminal emulator detection and command execution with optional
 desktop environment awareness for optimal terminal selection.
 """
 
+import os
 import shutil
 import subprocess
 
 from toshy_common.logger import debug
 
+
+local_bin = os.path.join(os.path.expanduser('~'), '.local', 'bin')
+if local_bin not in os.environ.get('PATH', '').split(os.pathsep):
+    os.environ['PATH'] = local_bin + os.pathsep + os.environ.get('PATH', '')
 
 class TerminalNotFoundError(RuntimeError):
     """Raised when no suitable terminal emulator can be found"""
@@ -76,6 +81,7 @@ def run_cmd_lst_in_terminal(command_list, desktop_env: str=None):
 
         full_command = [terminal_path] + args_list + command_list
         try:
+
             subprocess.Popen(full_command)
             debug(f"Successfully launched command in {terminal_cmd}")
             return True
