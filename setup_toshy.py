@@ -213,6 +213,7 @@ class InstallerSettings:
         self.pkgs_for_distro        = None
 
         self.priv_elev_cmd          = None
+        self.first_priv_elev_done   = False     # For secondary password prompts after timeouts
         self.qdbus_cmd              = self.find_qdbus_command()
 
         # current stable Python release version (TODO: update when needed):
@@ -574,6 +575,14 @@ def call_attn_to_pwd_prompt_if_needed():
     )
     print(fancy_str('  -----------------------------------------  ', main_clr, bold=True))
     print()
+
+    # After native package install, the sudo timestamp may have expired.
+    # Block with input() so the user can return at their leisure before
+    # the actual sudo prompt appears (which has its own timeout).
+    if cnfg.first_priv_elev_done:
+        input(fancy_str('  Press Enter to continue (elevated privileges expired)... ',
+                            alt_clr, bold=True))
+        print()
 
 
 def enable_prompt_for_reboot():
@@ -957,6 +966,7 @@ def elevate_privileges():
         try:
             cmd_lst = [cnfg.priv_elev_cmd, 'bash', '-c', 'echo -e "\nUsing elevated privileges..."']
             subprocess.run(cmd_lst, check=True)
+            cnfg.first_priv_elev_done = True
         except subprocess.CalledProcessError as proc_err:
             print()
             if cnfg.prep_only:
@@ -2231,7 +2241,7 @@ class PackageInstallDispatcher:
             cmd_lst = [cnfg.priv_elev_cmd, 'pacman', '-S', '--noconfirm']
             native_pkg_installer.install_pkg_list(cmd_lst, pkgs_to_install)
 
-###########################################################################
+    ###########################################################################
     ###  EMERGE DISTROS  ######################################################
     ###########################################################################
     @staticmethod
@@ -2269,29 +2279,34 @@ class PackageInstallDispatcher:
 
         def is_pkg_installed_emerge(package):
             """utility function to check if a package is already installed on Gentoo"""
-            if equery_cmd:
-                result = subprocess.run(
-                    ['equery', 'list', package], stdout=DEVNULL, stderr=DEVNULL)
-                return result.returncode == 0
             if qlist_cmd:
-                result = subprocess.run(
-                    ['qlist', '-Iv', package], stdout=DEVNULL, stderr=DEVNULL)
+                # 'qlist' does not require superuser privileges, unlike 'equery'
+                cmd_lst         = ['qlist', '-Iv', package]
+                result          = subprocess.run(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
+                return result.returncode == 0
+            if equery_cmd:
+                cmd_lst         = [cnfg.priv_elev_cmd, 'equery', 'list', package]
+                result          = subprocess.run(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
                 return result.returncode == 0
             return False
 
         pkgs_to_install = []
-        if equery_cmd or qlist_cmd:
+        if qlist_cmd or equery_cmd:
+            if not qlist_cmd and equery_cmd:
+                # 'equery' throws a big exception/traceback if run without superuser priveleges !!!
+                call_attn_to_pwd_prompt_if_needed()
             for pkg in cnfg.pkgs_for_distro:
-                if not is_pkg_installed_emerge(pkg):
-                    pkgs_to_install.append(pkg)
-                else:
+                if is_pkg_installed_emerge(pkg):
                     print_skipping_installed_pkg(pkg)
+                else:
+                    print(f'Package not installed, queuing: {pkg}')
+                    pkgs_to_install.append(pkg)
         else:
-            print('Unable to check for installed packages. Commands "equery", "qlist" not found.')
-            pkgs_to_install = list(cnfg.pkgs_for_distro)
+            print('Unable to check for installed packages. Commands "qlist", "equery" not found.')
+            pkgs_to_install     = list(cnfg.pkgs_for_distro)
 
         if pkgs_to_install:
-            cmd_lst = [cnfg.priv_elev_cmd, 'emerge', '--ask=n', '--quiet-build']
+            cmd_lst             = [cnfg.priv_elev_cmd, 'emerge', '--ask=n', '--quiet-build']
             native_pkg_installer.install_pkg_list(cmd_lst, pkgs_to_install)
 
     ###########################################################################
