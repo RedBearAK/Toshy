@@ -1,4 +1,4 @@
-__version__ = '20250710'
+__version__ = '20260201'
 
 import shutil
 import subprocess
@@ -19,14 +19,27 @@ class NotificationManager:
         self.ntfy_id_new    = None
         self.ntfy_id_last   = '0'
 
+    # @staticmethod
+    # def check_p_option():
+    #     """check that notify-send command supports -p flag"""
+    #     try:
+    #         subprocess.run(['notify-send', '-p'], check=True, capture_output=True)
+    #     except subprocess.CalledProcessError as e:
+    #         # Check if the error message contains "Unknown option" for -p flag
+    #         error_output: bytes = e.stderr  # type hint to validate decode()
+    #         if 'Unknown option' in error_output.decode('utf-8'):
+    #             return False
+    #     return True
+
     @staticmethod
     def check_p_option():
         """check that notify-send command supports -p flag"""
+        if not shutil.which('notify-send'):
+            return False
         try:
             subprocess.run(['notify-send', '-p'], check=True, capture_output=True)
         except subprocess.CalledProcessError as e:
-            # Check if the error message contains "Unknown option" for -p flag
-            error_output: bytes = e.stderr  # type hint to validate decode()
+            error_output: bytes = e.stderr
             if 'Unknown option' in error_output.decode('utf-8'):
                 return False
         return True
@@ -35,6 +48,11 @@ class NotificationManager:
                                 urgency: str=None, replace_previous=True):
         """Show a notification with given message and icon.
             Replace existing notification unless argument is false."""
+
+        # Prevent exception from missing 'notify-send' command.
+        if not self.ntfy_cmd:
+            return
+
         _icon_arg = self.icon_arg if icon_file is None else f'--icon={icon_file}'
         _prio_arg = self.prio_arg if urgency is None else f'--urgency={urgency}'
         if self.is_p_option_supported and replace_previous:

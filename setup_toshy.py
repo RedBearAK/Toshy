@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260116'                        # CLI option "--version" will print this out.
+__version__ = '20260201'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -213,6 +213,7 @@ class InstallerSettings:
         self.pkgs_for_distro        = None
 
         self.priv_elev_cmd          = None
+        self.first_priv_elev_done   = False     # For secondary password prompts after timeouts
         self.qdbus_cmd              = self.find_qdbus_command()
 
         # current stable Python release version (TODO: update when needed):
@@ -288,12 +289,12 @@ class InstallerSettings:
         is_AerynOS_based     = cnfg.DISTRO_ID in distro_groups_map['aerynos-based']
 
         # Add '--copies' flag to avoid using symlinks to system Python interpreter, and
-        # hopefully prevent Toshy from breaking when user does a dist-upgrade. 
+        # hopefully prevent Toshy from breaking when user does a dist-upgrade.
         # (Didn't work for that purpose, but still a good idea for other reasons.)
 
         if is_AerynOS_based:
             # Use 'virtualenv' on AerynOS (formerly Serpent OS) because 'ensurepip' missing,
-            # which is a dependency for the 'venv' module. 
+            # which is a dependency for the 'venv' module.
             return [self.py_interp_path, '-m', 'virtualenv', '--copies', self.venv_path]
 
         return [self.py_interp_path, '-m', 'venv', '--copies', self.venv_path]
@@ -521,7 +522,7 @@ def fancy_str(text, color_name, *, bold=False, color_supported=term_supports_col
     :param bold: Boolean to indicate if text should be bold.
     :return: Colorized string if terminal likely supports it, otherwise the original string.
     """
-    color_codes = { 'red': '31', 'green': '32', 'yellow': '33', 'blue': '34', 
+    color_codes = { 'red': '31', 'green': '32', 'yellow': '33', 'blue': '34',
                     'magenta': '35', 'cyan': '36', 'white': '37', 'default': '0'}
 
     if color_supported and color_name in color_codes:
@@ -574,6 +575,14 @@ def call_attn_to_pwd_prompt_if_needed():
     )
     print(fancy_str('  -----------------------------------------  ', main_clr, bold=True))
     print()
+
+    # After native package install, the sudo timestamp may have expired.
+    # Block with input() so the user can return at their leisure before
+    # the actual sudo prompt appears (which has its own timeout).
+    if cnfg.first_priv_elev_done:
+        input(fancy_str('  Press Enter to continue (elevated privileges expired)... ',
+                            alt_clr, bold=True))
+        print()
 
 
 def enable_prompt_for_reboot():
@@ -716,7 +725,7 @@ def ask_add_home_local_bin():
 
 def ask_for_attn_on_info():
     """
-    Utility function to request confirmation of attention before 
+    Utility function to request confirmation of attention before
     moving on in the install process.
     """
     secret_code = generate_secret_code()
@@ -743,10 +752,10 @@ def get_enabled_gnome_extensions():
     # Return cached result if already fetched
     if cnfg.enabled_gnome_exts is not None:
         return cnfg.enabled_gnome_exts
-    
+
     gnome_ext_cmd_exists = shutil.which('gnome-extensions') is not None
     gsettings_cmd_exists = shutil.which('gsettings') is not None
-    
+
     # Prefer gnome-extensions CLI - it sees both user and system extensions
     if gnome_ext_cmd_exists:
         try:
@@ -759,7 +768,7 @@ def get_enabled_gnome_extensions():
             error(f"'gnome-extensions list --enabled' failed:\n\t{proc_err}")
     else:
         debug("Command 'gnome-extensions' not found", ctx="CG")
-    
+
     # Fallback: gsettings (only sees user-enabled extensions, not system defaults)
     if gsettings_cmd_exists:
         try:
@@ -779,7 +788,7 @@ def get_enabled_gnome_extensions():
             error(f"'gsettings get enabled-extensions' failed:\n\t{proc_err}")
     else:
         debug("Command 'gsettings' not found", ctx="CG")
-    
+
     error("Unable to get enabled GNOME extensions: no suitable command available")
     cnfg.enabled_gnome_exts = []
     return cnfg.enabled_gnome_exts
@@ -895,7 +904,7 @@ def check_gnome_indicator_ext():
 
 def check_kde_app_switcher():
     """
-    Utility function to check for the Application Switcher KWin script that enables 
+    Utility function to check for the Application Switcher KWin script that enables
     grouped-application-windows task switching in KDE/KWin environments.
     """
     if not cnfg.DESKTOP_ENV == 'kde':
@@ -945,7 +954,7 @@ def elevate_privileges():
         cnfg.detect_elevation_command()     # Get the actual command for elevated privileges
 
         # Do this here, only if the privilege elevation command is 'sudo':
-        # Invalidate any `sudo` ticket that might be hanging around, to maximize 
+        # Invalidate any `sudo` ticket that might be hanging around, to maximize
         # the length of time before `sudo` might demand the password again
         if cnfg.priv_elev_cmd == 'sudo':
             try:
@@ -957,6 +966,7 @@ def elevate_privileges():
         try:
             cmd_lst = [cnfg.priv_elev_cmd, 'bash', '-c', 'echo -e "\nUsing elevated privileges..."']
             subprocess.run(cmd_lst, check=True)
+            cnfg.first_priv_elev_done = True
         except subprocess.CalledProcessError as proc_err:
             print()
             if cnfg.prep_only:
@@ -980,13 +990,13 @@ def elevate_privileges():
         The admin user must install from a full desktop session, or from
         a "su --login adminuser" shell instance. The admin user can do
         just the "prep" steps with:
-        
+
         ./{this_file_name} prep-only
-        
+
         ... instead of using:
-        
+
         ./{this_file_name} install
-        
+
         Use the "prep-only" command if it is not desired that Toshy
         should also run when the admin user logs into a desktop session.
         When using "su --login adminuser", that user will also need to
@@ -999,9 +1009,9 @@ def elevate_privileges():
         print(md_wrapped_str)
         print()
         md_wrapped_str = md_wrap(width=55, text="""
-        If you understand everything written above or already took care 
-        of prepping the system and want to proceed with an unprivileged 
-        install, enter the secret code: 
+        If you understand everything written above or already took care
+        of prepping the system and want to proceed with an unprivileged
+        install, enter the secret code:
         """)
         response = input(md_wrapped_str)
         if response == secret_code:
@@ -1042,7 +1052,7 @@ distro_groups_map = {
 
     'ubuntu-based':             ["elementary", "mint", "neon", "pop", "tuxedo", "ubuntu", "zorin"],
 
-    # The 'linuxmint' distro ID will not be shown by `toshy-env`, environment module 
+    # The 'linuxmint' distro ID will not be shown by `toshy-env`, environment module
     # normalizes to 'mint' for matching in the config file.
     'debian-based':             ["debian", "deepin", "kali", "linuxmint", "lmde",
                                     "peppermint", "q4os"],
@@ -1060,18 +1070,20 @@ distro_groups_map = {
 
     'aerynos-based':            ["aerynos"],
 
+    'gentoo-based':             ["calculate", "gentoo", "redcore"],
+
     # Attempted to add and test KaOS Linux. Result:
-    # KaOS is NOT compatible with this project. 
-    # No packages provide "evtest", "libappindicator", "zenity". 
-    # The KaOS repos seem highly restricted to only Qt/KDE related packages. 
+    # KaOS is NOT compatible with this project.
+    # No packages provide "evtest", "libappindicator", "zenity".
+    # The KaOS repos seem highly restricted to only Qt/KDE related packages.
 
     # Add more as needed...
 }
 
 
-# Checklist of distro type representatives with 
+# Checklist of distro type representatives with
 # '/usr/bin/gdbus' pre-installed in clean VM:
-# 
+#
 # - AlmaLinux 8.x                               [Provided by 'glib2']
 # - AlmaLinux 9.x                               [Provided by 'glib2']
 # - CentOS 7                                    [Provided by 'glib2']
@@ -1082,7 +1094,7 @@ distro_groups_map = {
 # - openSUSE Leap 15.6                          [Provided by 'glib2-tools']
 # - Ubuntu 20.04 LTS                            [Provided by 'libglib2.0-bin']
 # - Void Linux (rolling)                        [Provided by 'glib']
-# 
+#
 
 
 pkg_groups_map = {
@@ -1134,7 +1146,7 @@ pkg_groups_map = {
                             "zenity"],
 
     # NOTE: for openSUSE (Tumbleweed, not applicable to Leap):
-    # How to get rid of the need to use specific version numbers in packages: 
+    # How to get rid of the need to use specific version numbers in packages:
     # pkgconfig(packagename)>=N.nn (version symbols optional)
     # How to query a package to see what the equivalent pkgconfig(packagename) syntax would be:
     # rpm -q --provides packagename | grep -i pkgconfig
@@ -1195,14 +1207,14 @@ pkg_groups_map = {
 
     'mageia-based':        ["cairo-devel",
                             "dbus-devel",
-                            "evtest", 
+                            "evtest",
                             "gcc", "git", "gobject-introspection-devel",
                             "libappindicator-gtk3", "lib64ayatanaappindicator3-gir0.1",
                                 "lib64cairo-gir1.0", "libnotify", "libxkbcommon-devel",
                             "python3-dbus", "python3-devel", "python3-pip", "python3-tkinter",
                             "systemd-devel",
                             "wayland-devel",
-                            "xset", 
+                            "xset",
                             "zenity"],
 
     # Separately handled with distro quirks handlers for Debian and Ubuntu systems, due
@@ -1215,7 +1227,7 @@ pkg_groups_map = {
                             # Ref: https://github.com/AyatanaIndicators/libayatana-appindicator-glib
                             # "gir1.2-ayatanaappindicatorglib-2.0",
                             "input-utils",
-                            "libcairo2-dev", "libdbus-1-dev", "libjpeg-dev", "libnotify-bin", 
+                            "libcairo2-dev", "libdbus-1-dev", "libjpeg-dev", "libnotify-bin",
                                 "libsystemd-dev", "libwayland-dev", "libxkbcommon-dev",
                             "python3-dbus", "python3-dev", "python3-pip", "python3-tk",
                                 "python3-venv",
@@ -1234,7 +1246,7 @@ pkg_groups_map = {
                             # Ref: https://github.com/AyatanaIndicators/libayatana-appindicator-glib
                             # "gir1.2-ayatanaappindicatorglib-2.0",
                             "input-utils",
-                            "libcairo2-dev", "libdbus-1-dev", "libjpeg-dev", "libnotify-bin", 
+                            "libcairo2-dev", "libdbus-1-dev", "libjpeg-dev", "libnotify-bin",
                                 "libsystemd-dev", "libwayland-dev", "libxkbcommon-dev",
                             "python3-dbus", "python3-dev", "python3-pip", "python3-tk",
                                 "python3-venv",
@@ -1274,7 +1286,7 @@ pkg_groups_map = {
                             "zenity"],
 
     'chimera-based':       ["cairo-devel", "clang", "cmake",
-                            "dbus-devel", 
+                            "dbus-devel",
                             "git", "gobject-introspection-devel",
                             "libayatana-appindicator-devel", "libnotify", "libxkbcommon-devel",
                             "pkgconf", "python-dbus", "python-devel", "python-evdev", "python-pip",
@@ -1296,13 +1308,21 @@ pkg_groups_map = {
                             "libayatana-appindicator", "libxkbcommon-devel",
                             "python-cairo-devel", "python-dbus-devel", "python-devel",
                                 "python-evdev", "python-pip", "python-pkgconfig",
-                                "python-pygobject-devel", "python-setuptools", "python-virtualenv", 
+                                "python-pygobject-devel", "python-setuptools", "python-virtualenv",
                             "zenity"],
+
+    # Leaving out Python tkinter because it's only needed for obsolete GUI app version.
+    'gentoo-based':        ["app-misc/evtest",
+                            "dev-libs/gobject-introspection", "dev-libs/libayatana-appindicator",
+                                "dev-libs/wayland", "dev-libs/wayland-protocols", "dev-vcs/git",
+                            "gnome-extra/zenity", "gui-libs/gtk", "gui-libs/libadwaita",
+                            "x11-apps/xset", "x11-libs/gtk+", "x11-libs/libnotify",
+                                "x11-libs/libxkbcommon", "x11-misc/xdg-utils"],
 
 }
 
 extra_pkgs_map = {
-    # Add a 2-tuple (2 quoted items in parentheses, separated by a comma) with 
+    # Add a 2-tuple (2 quoted items in parentheses, separated by a comma) with
     # distro name (ID), major version (or None)as the dict key,  and
     # then a list (in brackets) of  packages to be added as the dict value...
     # ('distro_id', '22'):        ["pkg1", "pkg2", ...],
@@ -1310,7 +1330,7 @@ extra_pkgs_map = {
 }
 
 remove_pkgs_map = {
-    # Add a 2-tuple (2 quoted items in parentheses, separated by a comma) with 
+    # Add a 2-tuple (2 quoted items in parentheses, separated by a comma) with
     # distro name (ID), major version (or None) as the dict key, and
     # then a list (in brackets) of packages to be removed as the dict value...
     # ('distro_id', '22'): ["pkg1", "pkg2", ...],
@@ -1329,7 +1349,7 @@ pip_pkgs   = [
     "lockfile",                 # Makes it easier to keep multiple apps/icons from appearing
     "psutil",                   # For checking running processes (window manager, KVM apps, ect.)
 
-    # NOTE: 
+    # NOTE:
     # Pygobject was pinned to 3.44.1 (or earlier) in Python quirks handlers, to get through
     # the install on RHEL 8.x and clones, and earlier CentOS [Stream] distros. This started
     # causing installation problems in late 2025 distro releases (Debian/Ubuntu mainly).
@@ -1406,7 +1426,7 @@ def get_supported_distro_ids_idx() -> str:
             distro_index += "\n\t" + distro[0].upper() + ": "
             line_length = len(distro[0]) + 2    # reset line length
             prev_char = distro[0]
-        
+
         next_distro_with_comma = distro + ", "
         if line_length + len(next_distro_with_comma) > 80:
             distro_index += "\n\t    "          # insert newline and tab/spaces for continuation
@@ -1459,7 +1479,7 @@ def is_dnf_repo_enabled(repo_name):
     try:
         native_pkg_installer.check_for_pkg_mgr_cmd('dnf')
         cmd_lst = ["dnf", "repolist", "enabled"]
-        result = subprocess.run(cmd_lst, stdout=PIPE, stderr=PIPE, 
+        result = subprocess.run(cmd_lst, stdout=PIPE, stderr=PIPE,
                                 universal_newlines=True, check=True)
         return repo_name.casefold() in result.stdout.casefold()
     except subprocess.CalledProcessError as proc_err:
@@ -1478,29 +1498,29 @@ class DistroQuirksHandler:
         """
         Check which packages from a list exist in repos and add them to the install list.
         Provides informative output about what was found/not found.
-        
+
         Args:
             pkg_list: List of package names to check
             description: Description for logging (e.g., "GTK4 GUI support packages")
         """
         if not pkg_list:
             return
-        
+
         print(f"Checking availability of {description}...")
-        
+
         available = []
         unavailable = []
-        
+
         for pkg in pkg_list:
             if DistroQuirksHandler.deb_pkg_exists_in_repos(pkg):
                 available.append(pkg)
             else:
                 unavailable.append(pkg)
-        
+
         if available:
             print(f"  Found and adding: {', '.join(available)}")
             cnfg.pkgs_for_distro += available
-        
+
         if unavailable:
             print(f"  Not available (skipping): {', '.join(unavailable)}")
 
@@ -1508,10 +1528,10 @@ class DistroQuirksHandler:
     def deb_pkg_exists_in_repos(pkg_name: str) -> bool:
         """
         Check if a package exists in Debian/Ubuntu repositories.
-        
+
         Args:
             pkg_name: Package name to check (e.g., 'libgirepository-2.0-dev')
-        
+
         Returns:
             True if package exists in repos, False otherwise
         """
@@ -1519,10 +1539,10 @@ class DistroQuirksHandler:
             distro_groups_map.get('debian-based', []) +
             distro_groups_map.get('ubuntu-based', [])
         )
-        
+
         if cnfg.DISTRO_ID not in deb_distros:
             return True  # Not a Debian/Ubuntu system, assume package handling is fine
-        
+
         try:
             result = subprocess.run(
                 ['apt-cache', 'show', pkg_name],
@@ -1538,12 +1558,12 @@ class DistroQuirksHandler:
         """
         CentOS 7 was end of life on June 30, 2024
         Centos Stream 8 was end of builds on May 31, 2024
-        
+
         https://mirrorlist.centos.org suddenly ceased to exist, making it impossible
-        to install Toshy with the current setup. 
-        We need to fix the repos to continue being able to 
-        install on CentOS 7 and CentOS Stream 8 
-        
+        to install Toshy with the current setup.
+        We need to fix the repos to continue being able to
+        install on CentOS 7 and CentOS Stream 8
+
         Online advice for fixing this issue manually:
         sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
         sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
@@ -1566,7 +1586,7 @@ class DistroQuirksHandler:
         commands += [
             f"sudo sed -i 's/^\\(mirrorlist=http\\)/#\\1/' {file_path}"
             for file_path in repo_files ]
-        
+
         for command in commands:
             try:
                 subprocess.run(command, shell=True, check=True)
@@ -1579,7 +1599,7 @@ class DistroQuirksHandler:
 
         # Now that repo URLs have been changed, we need to clear and refresh the cache
         # Seems unlikely that 'yum' would be removed, but 'dnf' is not pre-installed on CentOS 7.
-        # We'll check for both before attempting to refresh caches, just to be safe. 
+        # We'll check for both before attempting to refresh caches, just to be safe.
 
         if shutil.which('yum'):
             try:
@@ -1787,7 +1807,7 @@ class DistroQuirksHandler:
 
             # Why were we doing this AFTER the 'epel-release' install?
             # Because in RHEL 8 distros the 'epel-release' package installs '/usr/bin/crb' command!
-            # Also the repo ends up being named 'powertools' for some reason. 
+            # Also the repo ends up being named 'powertools' for some reason.
             print("Enabling CRB (CodeReady Builder) repo...")
             if not is_dnf_repo_enabled('powertools'):
                 # enable CRB repo on RHEL 8.x distros, but not CentOS Stream 8:
@@ -1809,7 +1829,7 @@ class DistroQuirksHandler:
 
             print("Enabling CRB (CodeReady Builder) repo...")
             if not is_dnf_repo_enabled('crb'):
-                # enable "CodeReady Builder" repo for 'gobject-introspection-devel' only on 
+                # enable "CodeReady Builder" repo for 'gobject-introspection-devel' only on
                 # RHEL 9.x and CentOS Stream 9:
                 # sudo dnf config-manager --set-enabled crb
                 cmd_lst = [cnfg.priv_elev_cmd, 'dnf', 'config-manager', '--set-enabled', 'crb']
@@ -1839,7 +1859,7 @@ class DistroQuirksHandler:
             else:
                 print("EPEL repository is already enabled.")
 
-            # Get a much newer Python version than the default 3.9 currently on 
+            # Get a much newer Python version than the default 3.9 currently on
             # CentOS Stream 9, RHEL 9 and clones
             get_newest_python_version()
 
@@ -1970,17 +1990,17 @@ class NativePackageInstaller:
 
     def install_pkg_list(self, cmd_lst, pkg_lst):
         """Install packages using the given package manager command list and package list."""
-        
+
         # Extract the package manager command to check
         pkg_mgr_cmd = next((cmd for cmd in cmd_lst if cmd != 'sudo'), None)
         # If we couldn't extract the command, exit with an error
         if not pkg_mgr_cmd:
             error(f'No valid package manager command in provided command list:\n\t{cmd_lst}')
             safe_shutdown(1)
-        
+
         call_attn_to_pwd_prompt_if_needed()
         self.check_for_pkg_mgr_cmd(pkg_mgr_cmd)
-        
+
         # Execute the package installation command
         try:
             subprocess.run(cmd_lst + pkg_lst, check=True)
@@ -1991,7 +2011,7 @@ class NativePackageInstaller:
 
 def print_skipping_installed_pkg(pkg_name):
     """
-    Utility function to print a formatted terminal message about 
+    Utility function to print a formatted terminal message about
     skipping an already installed package. Used by multiple dispatched
     installer methods in PackageInstallDispatcher utility class.
     """
@@ -2000,9 +2020,9 @@ def print_skipping_installed_pkg(pkg_name):
 
 class PackageInstallDispatcher:
     """
-    Utility class to hold the static methods that will optionally invoke any necessary 
-    distro quirks handling, and then proceed to prep for and finally invoke the correct 
-    NativePackageInstaller command to install the appropriate support package list for 
+    Utility class to hold the static methods that will optionally invoke any necessary
+    distro quirks handling, and then proceed to prep for and finally invoke the correct
+    NativePackageInstaller command to install the appropriate support package list for
     the detected Linux distro.
     """
 
@@ -2041,7 +2061,7 @@ class PackageInstallDispatcher:
                 print(f'Packages left to install:\n{filtered_pkg_lst}')
                 cmd_lst = [cnfg.priv_elev_cmd, 'transactional-update', '--non-interactive', 'pkg', 'in']
                 native_pkg_installer.install_pkg_list(cmd_lst, filtered_pkg_lst)
-                # might as well take care of user group and udev here, if rebooting is necessary. 
+                # might as well take care of user group and udev here, if rebooting is necessary.
                 verify_user_groups()
                 install_udev_rules()
                 show_reboot_prompt()
@@ -2110,7 +2130,7 @@ class PackageInstallDispatcher:
             # Native package install command can immediately proceed after prepping CentOS 7, so
             # this block that was all "if" layers has been changed to if/elif/elif logic. The
             # handling of CentOS Stream 8 was logically embedded in the RHEL 8/9 elif branch.
-            # Changed because order-sensitive "if" layers could be broken by re-ordering. 
+            # Changed because order-sensitive "if" layers could be broken by re-ordering.
 
             if True is False: pass
 
@@ -2222,6 +2242,74 @@ class PackageInstallDispatcher:
             native_pkg_installer.install_pkg_list(cmd_lst, pkgs_to_install)
 
     ###########################################################################
+    ###  EMERGE DISTROS  ######################################################
+    ###########################################################################
+    @staticmethod
+    def install_on_emerge_distro():
+        """utility function that gets dispatched for distros that use emerge package manager"""
+
+        native_pkg_installer.check_for_pkg_mgr_cmd('emerge')
+        call_attn_to_pwd_prompt_if_needed()
+
+        # Ensure required USE flags are set before emerging
+        pkg_use_file = '/etc/portage/package.use/python-appindicator-introspection'
+
+        use_flags_needed = {
+            'dev-libs/libayatana-appindicator': 'introspection',
+        }
+
+        for pkg, flags in use_flags_needed.items():
+            use_line = f'{pkg} {flags}'
+            already_set = False
+            if os.path.isfile(pkg_use_file):
+                with open(pkg_use_file, 'r') as f:
+                    for line in f:
+                        if line.strip() == use_line:
+                            already_set = True
+                            break
+            if not already_set:
+                print(f"Setting USE flag for emerge: {use_line}")
+                subprocess.run(
+                    [cnfg.priv_elev_cmd, 'bash', '-c',
+                        f'echo "{use_line}" >> {pkg_use_file}'],
+                    check=True)
+
+        equery_cmd              = shutil.which('equery')
+        qlist_cmd               = shutil.which('qlist')
+
+        def is_pkg_installed_emerge(package):
+            """utility function to check if a package is already installed on Gentoo"""
+            if qlist_cmd:
+                # 'qlist' does not require superuser privileges, unlike 'equery'
+                cmd_lst         = ['qlist', '-Iv', package]
+                result          = subprocess.run(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
+                return result.returncode == 0
+            if equery_cmd:
+                cmd_lst         = [cnfg.priv_elev_cmd, 'equery', 'list', package]
+                result          = subprocess.run(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
+                return result.returncode == 0
+            return False
+
+        pkgs_to_install = []
+        if qlist_cmd or equery_cmd:
+            if not qlist_cmd and equery_cmd:
+                # 'equery' throws a big exception/traceback if run without superuser priveleges !!!
+                call_attn_to_pwd_prompt_if_needed()
+            for pkg in cnfg.pkgs_for_distro:
+                if is_pkg_installed_emerge(pkg):
+                    print_skipping_installed_pkg(pkg)
+                else:
+                    print(f'Package not installed, queuing: {pkg}')
+                    pkgs_to_install.append(pkg)
+        else:
+            print('Unable to check for installed packages. Commands "qlist", "equery" not found.')
+            pkgs_to_install     = list(cnfg.pkgs_for_distro)
+
+        if pkgs_to_install:
+            cmd_lst             = [cnfg.priv_elev_cmd, 'emerge', '--ask=n', '--quiet-build']
+            native_pkg_installer.install_pkg_list(cmd_lst, pkgs_to_install)
+
+    ###########################################################################
     ###  EOPKG DISTROS  #######################################################
     ###########################################################################
     @staticmethod
@@ -2281,7 +2369,7 @@ class PackageInstallDispatcher:
             """Get set of installed package names from apk"""
             try:
                 # Using universal_newlines for Python 3.6 compatibility
-                result = subprocess.run(['apk', 'list', '--installed', '--manifest'], 
+                result = subprocess.run(['apk', 'list', '--installed', '--manifest'],
                                         stdout=PIPE, stderr=PIPE, universal_newlines=True, check=True)
                 installed_packages = set()
                 for line in result.stdout.splitlines():
@@ -2295,13 +2383,12 @@ class PackageInstallDispatcher:
 
         installed_packages = get_installed_packages_apk()
         pkgs_to_install = []
-        
+
         for pkg in cnfg.pkgs_for_distro:
             if pkg not in installed_packages:
                 pkgs_to_install.append(pkg)
             else:
                 print_skipping_installed_pkg(pkg)
-                
 
         if pkgs_to_install:
             # Install packages with --no-cache to avoid prompts about cache management
@@ -2311,12 +2398,13 @@ class PackageInstallDispatcher:
 
 class PackageManagerGroups:
     """Container for package manager distro groupings and dispatch map"""
-    
+
     def __init__(self):
         # Initialize empty package manager distro lists
         self.apk_distros        = []    # 'apk':                    Alpine/Chimera
         self.apt_distros        = []    # 'apt':                    Debian/Ubuntu
         self.dnf_distros        = []    # 'dnf':                    Fedora/Mageia/OpenMandriva/RHEL
+        self.emerge_distros     = []    # 'emerge':                 Gentoo
         self.eopkg_distros      = []    # 'eopkg':                  Solus
         self.moss_distros       = []    # 'moss':                   AerynOS (was Serpent OS)
         self.pacman_distros     = []    # 'pacman':                 Arch (BTW)
@@ -2348,6 +2436,9 @@ class PackageManagerGroups:
             self.dnf_distros            += distro_groups_map['mandriva-based']
             self.dnf_distros            += distro_groups_map['rhel-based']
 
+            # 'emerge': Gentoo
+            self.emerge_distros         += distro_groups_map['gentoo-based']
+
             # 'eopkg': Solus
             self.eopkg_distros          += distro_groups_map['solus-based']
 
@@ -2378,16 +2469,17 @@ class PackageManagerGroups:
         """Create mapping of distro lists to their installer methods"""
         self.populate_lists()       # Make sure lists contain correct info before creating map
         self.dispatch_map = {
-            tuple(self.apk_distros):         PackageInstallDispatcher.install_on_apk_distro,
-            tuple(self.apt_distros):         PackageInstallDispatcher.install_on_apt_distro,
-            tuple(self.dnf_distros):         PackageInstallDispatcher.install_on_dnf_distro,
-            tuple(self.eopkg_distros):       PackageInstallDispatcher.install_on_eopkg_distro,
-            tuple(self.moss_distros):        PackageInstallDispatcher.install_on_moss_distro,
-            tuple(self.pacman_distros):      PackageInstallDispatcher.install_on_pacman_distro,
-            tuple(self.rpmostree_distros):   PackageInstallDispatcher.install_on_rpmostree_distro,
-            tuple(self.transupd_distros):    PackageInstallDispatcher.install_on_transupd_distro,
-            tuple(self.xbps_distros):        PackageInstallDispatcher.install_on_xbps_distro,
-            tuple(self.zypper_distros):      PackageInstallDispatcher.install_on_zypper_distro,
+            tuple(self.apk_distros):        PackageInstallDispatcher.install_on_apk_distro,
+            tuple(self.apt_distros):        PackageInstallDispatcher.install_on_apt_distro,
+            tuple(self.dnf_distros):        PackageInstallDispatcher.install_on_dnf_distro,
+            tuple(self.emerge_distros):     PackageInstallDispatcher.install_on_emerge_distro,
+            tuple(self.eopkg_distros):      PackageInstallDispatcher.install_on_eopkg_distro,
+            tuple(self.moss_distros):       PackageInstallDispatcher.install_on_moss_distro,
+            tuple(self.pacman_distros):     PackageInstallDispatcher.install_on_pacman_distro,
+            tuple(self.rpmostree_distros):  PackageInstallDispatcher.install_on_rpmostree_distro,
+            tuple(self.transupd_distros):   PackageInstallDispatcher.install_on_transupd_distro,
+            tuple(self.xbps_distros):       PackageInstallDispatcher.install_on_xbps_distro,
+            tuple(self.zypper_distros):     PackageInstallDispatcher.install_on_zypper_distro,
         }
 
 
@@ -2434,7 +2526,7 @@ def install_distro_pkgs():
 
     # Filter out systemd packages if systemctl is not present
     cnfg.pkgs_for_distro = [
-        pkg for pkg in cnfg.pkgs_for_distro 
+        pkg for pkg in cnfg.pkgs_for_distro
         if cnfg.systemctl_present or 'systemd' not in pkg
     ]
 
@@ -2487,27 +2579,27 @@ def setup_uinput_module():
 
     # Step 2: Detect which init systems are available (not just currently running)
     # This matters for dual-init distros like MX Linux where user can choose at boot
-    
+
     systemd_available = (
         cnfg.systemctl_present or
         os.path.exists('/lib/systemd/systemd') or
         os.path.exists('/usr/lib/systemd/systemd')
     )
-    
+
     # Known dual-init distros that support both systemd and SysVinit
     dual_init_distros = ['mxlinux', 'antix']
     is_dual_init = cnfg.DISTRO_ID in dual_init_distros
-    
+
     # SysVinit is relevant if /etc/modules exists OR this is a known dual-init distro
     sysvinit_relevant = os.path.isfile('/etc/modules') or is_dual_init
 
     # Step 3: Check existing configurations and set up persistence
     print('Checking uinput module persistence configuration...')
-    
+
     modules_load_dir    = '/etc/modules-load.d'
     uinput_conf_path    = os.path.join(modules_load_dir, 'uinput.conf')
     etc_modules_path    = '/etc/modules'
-    
+
     systemd_configured  = False
     sysvinit_configured = False
 
@@ -2723,7 +2815,7 @@ def create_group(group_name):
             with open('/etc/group') as f:
                 if not re.search(rf'^{group_name}:', f.read(), re.MULTILINE):
                     # https://docs.fedoraproject.org/en-US/fedora-silverblue/troubleshooting/
-                    # Special command to make Fedora Silverblue/uBlue work, or usermod will fail: 
+                    # Special command to make Fedora Silverblue/uBlue work, or usermod will fail:
                     # grep -E '^input:' /usr/lib/group | sudo tee -a /etc/group
                     command = (f"grep -E '^{group_name}:' /usr/lib/group | "
                                 f"{cnfg.priv_elev_cmd} tee -a /etc/group >/dev/null")
@@ -2769,7 +2861,7 @@ def add_user_to_group(group_name: str, user_name: str) -> None:
 def verify_user_groups():
     """
     Check if the 'input' group exists and user is in group.
-    Also check other groups like 'systemd-journal' in 
+    Also check other groups like 'systemd-journal' in
     special cases, like openSUSE Tumbleweed and Leap, and Solus.
     """
     print(f'\n\n§  Checking if user is in correct group(s)...\n{cnfg.separator}')
@@ -2831,7 +2923,7 @@ def clone_keymapper_branch():
 
 def is_barebones_config_file() -> bool:
     """
-    Determines whether the existing Toshy configuration file is of the 
+    Determines whether the existing Toshy configuration file is of the
     'barebones' type by reading and checking its contents.
 
     :param config_directory: The directory where the configuration file is located.
@@ -2878,7 +2970,7 @@ def extract_slices(data: str):
         slice_end               = end.start()
         slices_dct[slice_name]  = data[slice_start:slice_end]
 
-    # Fix some deprecated variable names here, now that slice contents are 
+    # Fix some deprecated variable names here, now that slice contents are
     # in memory, prior to merging slices back into new config file.
     # Using a List of Tuples instead of a dict to guarantee processing order.
     deprecated_object_names_ordered_LoT = [
@@ -2912,12 +3004,12 @@ def extract_slices(data: str):
 
     slices_dct = updated_slices_dct
 
-    # Protect the barebones config file if a slice tagged with "barebones" found, 
+    # Protect the barebones config file if a slice tagged with "barebones" found,
     if 'barebones_user_cfg' in slices_dct or any('barebones' in key for key in slices_dct):
         cnfg.barebones_config = True
         print(f'Found "barebones" type config file. Will upgrade with same type.')
     # Confirm replacement of regular config file with barebones config if CLI option is used
-    # and there is a non-barebones existing config file. 
+    # and there is a non-barebones existing config file.
     elif cnfg.barebones_config:
         for attempt in range(3):
             response = input(
@@ -2940,7 +3032,7 @@ def extract_slices(data: str):
         # If user didn't confirm after 3 attempts, exit the program.
         print('User input invalid. Exiting...')
         safe_shutdown(1)
-    # 
+    #
     return slices_dct
 
 
@@ -2959,12 +3051,12 @@ def merge_slices(data: str, slices) -> str:
         slice_start     = begin.end()
         slice_end       = end.start()
         # add the part of the data before the slice, and the slice itself
-        data_slices.extend([data[previous_end:slice_start], 
+        data_slices.extend([data[previous_end:slice_start],
                             slices.get(slice_name, data[slice_start:slice_end])])
         previous_end = slice_end
     # add the part of the data after the last slice
     data_slices.append(data[previous_end:])
-    # 
+    #
     return "".join(data_slices)
 
 
@@ -3130,7 +3222,7 @@ class PythonVenvQuirksHandler():
             os.environ['C_INCLUDE_PATH'] = f"{include_path}:{os.environ['C_INCLUDE_PATH']}"
         else:
             os.environ['C_INCLUDE_PATH'] = include_path
-        
+
         print(f"C_INCLUDE_PATH updated: {os.environ['C_INCLUDE_PATH']}")
 
     def get_glib_version(self):
@@ -3250,7 +3342,7 @@ class PythonVenvQuirksHandler():
         print('Handling Python virtual environment quirks in OpenMandriva...')
         # We need to run the exact same command twice on OpenMandriva, for unknown reasons.
         # So this instance of the command is just "prep" for the seemingly duplicate
-        # command that follows it in setup_python_vir_env(). 
+        # command that follows it in setup_python_vir_env().
         subprocess.run(cnfg.venv_cmd_lst, check=True)
 
     def handle_venv_quirks_RHEL(self):
@@ -3280,7 +3372,7 @@ class PythonVenvQuirksHandler():
 # This FAILED to solve the issue of venv breaking when system Python version changes. Unused.
 # def create_virtualenv_with_bootstrap():
 #     """Creates a virtual environment using virtualenv installed in a temporary bootstrap venv.
-    
+
 #     Args:
 #         python_interpreter: Path to Python interpreter to use
 #         target_venv_path: Path where the final virtualenv should be created
@@ -3360,7 +3452,7 @@ def setup_python_vir_env():
         is_RHEL_based           = cnfg.DISTRO_ID in distro_groups_map['rhel-based']
         is_Tumbleweed_based     = cnfg.DISTRO_ID in distro_groups_map['tumbleweed-based']
 
-        # Order of elifs is very delicate unless conditions are 100% mutually exclusive, 
+        # Order of elifs is very delicate unless conditions are 100% mutually exclusive,
         # but the venv quirks handlers are set up to be independent (unlike distro quirks).
         if True is False: pass  # Dummy 'if' to equalize all 'elif' branches below
 
@@ -3434,15 +3526,15 @@ def install_pip_packages():
 
     print(f"Setting PYTHONPATH to: {include_path}")
     os.environ['PYTHONPATH'] = include_path
-    
+
     print(f"Setting CFLAGS to: -I{include_path}")
     os.environ['CFLAGS'] = f"-I{include_path}"
-    
+
     print(f"Setting LDFLAGS to: -L{lib_path}")
     os.environ['LDFLAGS'] = f"-L{lib_path}"
 
     # Bypass the install of 'dbus-python' pip package if option passed to 'install' command.
-    # Diminishes peripheral app functionality and disables some Wayland methods, but 
+    # Diminishes peripheral app functionality and disables some Wayland methods, but
     # allows installing Toshy even when 'dbus-python' build throws errors during install.
     if cnfg.no_dbus_python:
         pip_pkgs = [pkg for pkg in pip_pkgs if pkg != "dbus-python"]
@@ -3477,7 +3569,7 @@ def install_pip_packages():
 
     # Filter out systemd packages if no 'systemctl' present
     filtered_pip_pkgs   = [
-        pkg for pkg in pip_pkgs 
+        pkg for pkg in pip_pkgs
         if cnfg.systemctl_present or 'systemd' not in pkg
     ]
 
@@ -3519,8 +3611,8 @@ def install_bin_commands():
 
 def replace_home_in_file(filename):
     """
-    Utility function to replace '$HOME' in '.desktop' files with actual home path. 
-    Shell script takes care of desktop app install, but this is still used in 
+    Utility function to replace '$HOME' in '.desktop' files with actual home path.
+    Shell script takes care of desktop app install, but this is still used in
     placing other '.desktop' files.
     """
     # Read in the file
@@ -3535,7 +3627,7 @@ def replace_home_in_file(filename):
 
 def install_desktop_apps():
     """
-    Install the convenient desktop apps to manage Toshy. Script now also takes care of 
+    Install the convenient desktop apps to manage Toshy. Script now also takes care of
     installing app icons, and replacing the '$HOME' placeholder in the desktop files.
     """
     print(f'\n\n§  Installing Toshy desktop apps...\n{cnfg.separator}')
@@ -3576,9 +3668,9 @@ def do_kwin_reconfigure():
     # gdbus call --session --dest org.kde.KWin --object-path /KWin --method org.kde.KWin.reconfigure
     if shutil.which('gdbus'):
         try:
-            cmd_lst = [ 'gdbus', 'call', '--session', 
+            cmd_lst = [ 'gdbus', 'call', '--session',
                         '--dest', 'org.kde.KWin',
-                        '--object-path', '/KWin', 
+                        '--object-path', '/KWin',
                         '--method', 'org.kde.KWin.reconfigure']
             subprocess.run(cmd_lst, check=True, stderr=DEVNULL, stdout=DEVNULL)
             return
@@ -3840,7 +3932,7 @@ def setup_systemd_services():
 
 
 def autostart_systemd_kickstarter():
-    """Install the desktop file that will make sure the systemd services are restarted 
+    """Install the desktop file that will make sure the systemd services are restarted
     after a short logout-login sequence, when systemd fails to stop the user services"""
 
     ensure_XDG_autostart_dir_exists()
@@ -3862,14 +3954,14 @@ def autostart_systemd_kickstarter():
 def autostart_tray_icon():
     """Set up the tray icon to autostart at login"""
     print(f'\n\n§  Setting up tray icon to load automatically at login...\n{cnfg.separator}')
-    
+
     # Path to the database file
     toshy_cfg_dir_path          = os.path.join(home_dir, '.config', 'toshy')
     prefs_db_file_name          = 'toshy_user_preferences.sqlite'
     prefs_db_file_path          = os.path.join(toshy_cfg_dir_path, prefs_db_file_name)
-    
+
     autostart_preference        = True  # Default to autostarting tray icon
-    
+
     # Check if the database file exists
     if os.path.isfile(prefs_db_file_path):
         try:
@@ -3934,7 +4026,7 @@ def apply_tweaks_Cinnamon():
 def apply_tweaks_GNOME():
     """Utility function to add desktop tweaks to GNOME"""
 
-    # TODO: Find out if toggle-overview will be dropped(!) at some point. 
+    # TODO: Find out if toggle-overview will be dropped(!) at some point.
 
     # Disable GNOME 'overlay-key' binding to Meta/Super/Win/Cmd.
     # Interferes with some Meta/Super/Win/Cmd shortcuts.
@@ -3989,7 +4081,7 @@ def remove_tweaks_GNOME():
     """Utility function to remove the tweaks applied to GNOME"""
     subprocess.run(['gsettings', 'reset', 'org.gnome.mutter', 'overlay-key'])
     print(f'Removed tweak to disable GNOME "overlay-key" binding to Meta/Super.')
-    
+
     # gsettings reset org.gnome.desktop.wm.keybindings switch-applications
     subprocess.run(['gsettings', 'reset', 'org.gnome.desktop.wm.keybindings',
                     'switch-applications'])
@@ -4046,7 +4138,7 @@ def apply_tweaks_KDE():
         # git clone https://github.com/nclarius/kwin-application-switcher.git
         # cd kwin-application-switcher
         # ./install.sh
-        # 
+        #
         # switcher_url        = 'https://github.com/nclarius/kwin-application-switcher.git'
 
         # TODO: Revert to main repo if/when patch for this is accepted.
@@ -4144,7 +4236,7 @@ def remove_tweaks_KDE():
     # Disable the "Only one window per application" task switcher option
     subprocess.run([kwriteconfig_cmd,
                     '--file', 'kwinrc',
-                    '--group', 'TabBox', 
+                    '--group', 'TabBox',
                     '--key', 'ApplicationsMode', '--delete'],
                     check=True)
 
@@ -4197,7 +4289,7 @@ def install_coding_font():
             if len(top_dirs) > 1:
                 # Set the final folder name to the fallback from zip file name
                 final_folder_name = fallback_folder_name
-                # If the zip doesn't have a consistent top-level directory, 
+                # If the zip doesn't have a consistent top-level directory,
                 # adjust extract_dir and create one
                 extract_dir = os.path.join(extract_dir, fallback_folder_name)
             else:
@@ -4225,7 +4317,7 @@ def install_coding_font():
 def _show_cinnamon_menu_hotkey_reminder():
     """
     Show a reminder about configuring the Cinnamon menu hotkey for Cmd+Space.
-    
+
     Checks if the menu applet is using default Super_L shortcut, and if so,
     shows instructions for manually configuring it to work with Toshy.
     """
@@ -4325,9 +4417,9 @@ def apply_desktop_tweaks():
     """
     Fix things like Meta key activating overview in GNOME or KDE Plasma
     and fix the Unicode sequences in KDE Plasma
-    
+
     TODO: These tweaks should probably be done at startup of the config
-            instead of (or in addition to) here in the installer. 
+            instead of (or in addition to) here in the installer.
     """
 
     print(f'\n\n§  Applying any known desktop environment tweaks...\n{cnfg.separator}')
@@ -4390,14 +4482,14 @@ def remove_desktop_tweaks():
     if cnfg.DESKTOP_ENV == 'kde':
         print(f'Removing KDE Plasma desktop tweaks...')
         remove_tweaks_KDE()
-        
+
     print('Removed known desktop tweaks applied by installer.')
     show_task_completed_msg()
 
 
 def uninstall_toshy():
     print(f'\n\n§  Uninstalling Toshy...\n{cnfg.separator}')
-    
+
     # confirm if user really wants to uninstall
     response = input("\nThis will completely uninstall Toshy. Are you sure? [y/N]: ")
     if response not in ['y', 'Y']:
@@ -4405,15 +4497,15 @@ def uninstall_toshy():
         safe_shutdown(0)
     else:
         print(f'\nToshy uninstall proceeding...\n')
-    
+
     get_environment_info()
-    
+
     remove_desktop_tweaks()
-    
+
     # stop Toshy manual script if it is running
     toshy_cfg_stop_cmd = os.path.join(home_local_bin, 'toshy-config-stop')
     subprocess.run([toshy_cfg_stop_cmd])
-    
+
     if cnfg.systemctl_present and cnfg.init_system == 'systemd':
         # stop Toshy systemd services if they are running
         toshy_svcs_stop_cmd = os.path.join(home_local_bin, 'toshy-services-stop')
@@ -4550,7 +4642,7 @@ def run_install_sequence(cnfg: InstallerSettings):
     elevate_privileges()
 
     if not cnfg.skip_native and not cnfg.unprivileged_user:
-        # This will also be skipped if user proceeds with 
+        # This will also be skipped if user proceeds with
         # "unprivileged_user" install sequence.
         install_distro_pkgs()
 
@@ -4607,6 +4699,7 @@ def run_install_sequence(cnfg: InstallerSettings):
         # Check if we can skip the reboot notice on some systems where 'uaccess' works well
         if cnfg.should_reboot:
             if can_skip_reboot():
+                print()     # Blank line to separate from apply_desktop_tweaks() output.
                 print("Device permissions verified in current session.")
                 if os.path.exists(cnfg.reboot_tmp_file):
                     try:
