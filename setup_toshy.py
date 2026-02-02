@@ -1307,7 +1307,7 @@ pkg_groups_map = {
                                 "dev-libs/wayland", "dev-libs/wayland-protocols", "dev-vcs/git",
                             "gnome-extra/zenity", "gui-libs/gtk", "gui-libs/libadwaita",
                             "x11-apps/xset", "x11-libs/gtk+", "x11-libs/libnotify",
-                                "x11-libs/libxkbcommon"],
+                                "x11-libs/libxkbcommon", "x11-misc/xdg-utils"],
 
 }
 
