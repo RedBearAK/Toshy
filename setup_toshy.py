@@ -4700,6 +4700,7 @@ def run_install_sequence(cnfg: InstallerSettings):
         # Check if we can skip the reboot notice on some systems where 'uaccess' works well
         if cnfg.should_reboot:
             if can_skip_reboot():
+                print()     # Blank line to separate from apply_desktop_tweaks() output.
                 print("Device permissions verified in current session.")
                 if os.path.exists(cnfg.reboot_tmp_file):
                     try:
