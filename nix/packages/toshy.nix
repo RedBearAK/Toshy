@@ -48,7 +48,7 @@ let
 
 in stdenv.mkDerivation rec {
   pname = "toshy";
-  version = "20260116";
+  version = "20260202";
 
   src = finalSrc;
 
