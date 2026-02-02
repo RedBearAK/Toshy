@@ -21,6 +21,9 @@
 , xorg
 , pkg-config
 , wrapGAppsHook3
+, bash
+, coreutils
+, procps
 , src ? null  # Allow flake to override with local source
 }:
 
@@ -158,6 +161,37 @@ in stdenv.mkDerivation rec {
     # Helper scripts
     makeWrapper $out/share/toshy/scripts/toshy-env-dump.sh $out/bin/toshy-env \
       --prefix PATH : ${lib.makeBinPath [ systemd dbus ]}
+
+    # Copy service control scripts to libexec and create wrappers
+    # These scripts are used by both GUI and CLI
+    mkdir -p $out/libexec/toshy/bin
+    cp scripts/bin/*.sh $out/libexec/toshy/bin/
+
+    # Service control script wrappers
+    makeWrapper $out/libexec/toshy/bin/toshy-config-stop.sh $out/bin/toshy-config-stop \
+      --prefix PATH : ${lib.makeBinPath [ coreutils procps ]}
+
+    makeWrapper $out/libexec/toshy/bin/toshy-config-restart.sh $out/bin/toshy-config-restart \
+      --prefix PATH : ${lib.makeBinPath [ systemd coreutils procps ]}
+
+    makeWrapper $out/libexec/toshy/bin/toshy-services-start.sh $out/bin/toshy-services-start \
+      --prefix PATH : ${lib.makeBinPath [ systemd coreutils ]}
+
+    makeWrapper $out/libexec/toshy/bin/toshy-services-stop.sh $out/bin/toshy-services-stop \
+      --prefix PATH : ${lib.makeBinPath [ systemd coreutils ]}
+
+    makeWrapper $out/libexec/toshy/bin/toshy-services-restart.sh $out/bin/toshy-services-restart \
+      --prefix PATH : ${lib.makeBinPath [ systemd coreutils ]}
+
+    makeWrapper $out/libexec/toshy/bin/toshy-services-status.sh $out/bin/toshy-services-status \
+      --prefix PATH : ${lib.makeBinPath [ systemd coreutils ]}
+
+    makeWrapper $out/libexec/toshy/bin/toshy-services-log.sh $out/bin/toshy-services-log \
+      --prefix PATH : ${lib.makeBinPath [ systemd coreutils ]}
+
+    makeWrapper $out/libexec/toshy/bin/toshy-devices.sh $out/bin/toshy-devices \
+      --prefix PATH : ${lib.makeBinPath [ pythonEnv coreutils ]} \
+      --set PYTHONPATH "$out/share/toshy"
 
     # Patch systemd service files to use Nix store paths
     for service in $out/share/systemd/user/*.service; do
