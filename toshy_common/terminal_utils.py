@@ -82,7 +82,7 @@ def run_cmd_lst_in_terminal(command_list, desktop_env: str=None):
         full_command = [terminal_path] + args_list + command_list
         try:
 
-            subprocess.Popen(full_command)
+            subprocess.Popen(full_command, env=os.environ)
             debug(f"Successfully launched command in {terminal_cmd}")
             return True
         except subprocess.SubprocessError as e:
