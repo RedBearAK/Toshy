@@ -82,12 +82,20 @@ def run_cmd_lst_in_terminal(command_list, desktop_env: str=None):
         full_command = [terminal_path] + args_list + command_list
         try:
 
-            subprocess.Popen(full_command, env=os.environ)
+            subprocess.Popen(full_command)
+
             debug(f"Successfully launched command in {terminal_cmd}")
             return True
         except subprocess.SubprocessError as e:
             debug(f'Error launching {terminal_cmd}: {e}')
             return False
+
+    # Resolve bare command names to absolute paths so terminal emulators
+    # can find commands even if the launched shell lacks ~/.local/bin on PATH
+    if '/' not in command_list[0]:
+        resolved = shutil.which(command_list[0])
+        if resolved:
+            command_list = [resolved] + command_list[1:]
 
     # First pass: Try DE-specific terminals if desktop_env is provided
     if desktop_env:
