@@ -1,0 +1,31 @@
+# Development dependencies for Toshy TDD workflow
+# Install with: pip install -r requirements-dev.txt
+
+# Testing framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+pytest-xdist>=3.3.0  # Parallel test execution
+pytest-timeout>=2.1.0  # Timeout for hanging tests
+
+# Test utilities
+pytest-watch>=4.2.0  # Continuous testing
+coverage>=7.3.0
+mock>=5.1.0  # Backport for older Python versions
+
+# Mocking and fixtures
+freezegun>=1.2.2  # Time/date mocking
+responses>=0.23.0  # HTTP mocking
+faker>=19.0.0  # Test data generation
+
+# Code quality
+black>=23.7.0  # Code formatter
+flake8>=6.1.0  # Linting
+pylint>=2.17.0  # Advanced linting
+mypy>=1.5.0  # Type checking
+isort>=5.12.0  # Import sorting
+
+# Development tools
+ipython>=8.14.0  # Better REPL
+ipdb>=0.13.13  # Debugger
+rope>=1.9.0  # Refactoring tools

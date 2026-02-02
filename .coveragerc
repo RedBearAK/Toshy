@@ -1,0 +1,58 @@
+# Coverage.py configuration for Toshy
+
+[run]
+source = .
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */site-packages/*
+    */.venv/*
+    */venv/*
+    setup_toshy.py
+    */kwin-script/*
+    */cinnamon-extension/*
+
+branch = True
+parallel = True
+
+[report]
+precision = 2
+skip_empty = True
+show_missing = True
+
+# Fail if coverage is below this threshold
+fail_under = 80
+
+exclude_lines =
+    # Have to re-enable the standard pragma
+    pragma: no cover
+
+    # Don't complain about missing debug-only code
+    def __repr__
+    if self\.debug
+
+    # Don't complain if tests don't hit defensive assertion code
+    raise AssertionError
+    raise NotImplementedError
+
+    # Don't complain if non-runnable code isn't run
+    if 0:
+    if __name__ == .__main__.:
+
+    # Don't complain about abstract methods
+    @(abc\.)?abstractmethod
+
+    # Don't complain about type checking blocks
+    if TYPE_CHECKING:
+    if typing.TYPE_CHECKING:
+
+    # Don't complain about platform-specific code
+    if sys.platform
+    if platform.system
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml

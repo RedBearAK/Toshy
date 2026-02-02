@@ -210,6 +210,13 @@ OVERRIDE_DESKTOP_ENV            = None
 OVERRIDE_DE_MAJ_VER             = None
 OVERRIDE_WINDOW_MGR             = None
 
+# Read overrides from environment variables (set by NixOS module or other deployment methods)
+# These take precedence over the None values above
+if os.environ.get('TOSHY_DE_OVERRIDE'):
+    OVERRIDE_DESKTOP_ENV = os.environ.get('TOSHY_DE_OVERRIDE')
+if os.environ.get('TOSHY_WM_OVERRIDE'):
+    OVERRIDE_WINDOW_MGR = os.environ.get('TOSHY_WM_OVERRIDE')
+
 wlroots_compositors             = [
     # Comma-separated list of Wayland desktop environments or window managers
     # that should try to use the 'wlroots' window context provider. Use the
@@ -298,6 +305,12 @@ elif DESKTOP_ENV in known_wlroots_compositors:
 # elif (SESSION_TYPE, DESKTOP_ENV) == ('wayland', 'lxqt') and WINDOW_MGR in all_wlroots_compositors:
 #     debug(f"DE is LXQt, WM is '{WINDOW_MGR}', using 'wlroots' window context method.", ctx="CG")
 #     _desktop_env = 'wlroots'
+
+# Map window manager names to compositor names accepted by environ_api
+# On GNOME, 'mutter' should be mapped to 'gnome-shell' for environ_api
+if SESSION_TYPE == 'wayland' and DESKTOP_ENV == 'gnome' and WINDOW_MGR in ['mutter', 'gnome-shell']:
+    _wl_compositor = 'gnome-shell'
+    debug(f"GNOME Wayland: Using 'gnome-shell' compositor (detected WM: '{WINDOW_MGR}').", ctx="CG")
 else:
     _wl_compositor = WINDOW_MGR
 

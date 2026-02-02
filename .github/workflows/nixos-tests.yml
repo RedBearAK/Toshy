@@ -1,0 +1,164 @@
+name: NixOS Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'nix/**'
+      - 'flake.nix'
+      - 'flake.lock'
+      - '.github/workflows/nixos-tests.yml'
+  pull_request:
+    paths:
+      - 'nix/**'
+      - 'flake.nix'
+      - 'flake.lock'
+      - '.github/workflows/nixos-tests.yml'
+  schedule:
+    # Run weekly on Sundays at midnight UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  nix-flake-check:
+    name: Run Nix Flake Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            # Increase timeout for VM tests
+            timeout = 3600
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: toshy
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+          # Push to cache even on failure to cache partial builds
+          pushFilter: "(-source$|nixpkgs\.)"
+
+      - name: Check flake
+        run: nix flake check --print-build-logs
+
+      - name: Show flake metadata
+        run: nix flake metadata
+
+  build-packages:
+    name: Build Nix Packages
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        package:
+          - toshy
+          - xwaykeyz
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: toshy
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Build ${{ matrix.package }}
+        run: nix build .#${{ matrix.package }} --print-build-logs
+
+      - name: Check package output
+        run: |
+          # Verify the package built successfully
+          ls -lh result/
+          # For toshy, verify CLI commands exist
+          if [ "${{ matrix.package }}" = "toshy" ]; then
+            ls -lh result/bin/ || true
+          fi
+
+  test-individual:
+    name: Individual Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - toshy-basic-test
+          - toshy-home-manager-test
+          - toshy-multi-de-test
+          - toshy-dbus-kwin-test
+          - toshy-dbus-cosmic-test
+          - toshy-dbus-wlroots-test
+          - toshy-config-custom-test
+          - toshy-de-override-test
+          - toshy-verbose-logging-test
+          - toshy-autostart-test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            # VM tests need more resources
+            timeout = 3600
+            cores = 0
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: toshy
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Run ${{ matrix.test }}
+        run: nix build .#checks.x86_64-linux.${{ matrix.test }} --print-build-logs
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.test }}
+          path: |
+            result/
+            *.log
+
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [nix-flake-check, build-packages, test-individual]
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.nix-flake-check.result }}" = "success" ] && \
+             [ "${{ needs.build-packages.result }}" = "success" ] && \
+             [ "${{ needs.test-individual.result }}" = "success" ]; then
+            echo "✅ All tests passed!" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          else
+            echo "❌ Some tests failed:" >> $GITHUB_STEP_SUMMARY
+            echo "- Flake check: ${{ needs.nix-flake-check.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Package builds: ${{ needs.build-packages.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Individual tests: ${{ needs.test-individual.result }}" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

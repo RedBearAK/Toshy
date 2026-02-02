@@ -187,3 +187,20 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+###############################################################################
+# Nix build artifacts
+
+# Nix build results
+result
+result-*
+
+# Nix flake lock (uncomment if you want to ignore flake.lock)
+# flake.lock
+
+# Nix development environments
+.direnv/
+.envrc
+
+# Test virtual environment (local testing)
+test-venv/
