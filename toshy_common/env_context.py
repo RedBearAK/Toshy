@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20250713'
+__version__ = '20260202'
 
 import os
 import re
@@ -596,6 +596,7 @@ class EnvironmentInfo:
             ],
 
             # Older GNOME may have 'mutter' integrated into 'gnome-shell' process
+            # On NixOS, 'mutter' observed as window manager process in Wayland session, 2026-02-02
             'gnome': [
                 'mutter',
                 'gnome-shell',
