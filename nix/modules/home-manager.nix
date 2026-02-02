@@ -81,6 +81,22 @@ in
       '';
     };
 
+    windowManager = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "gnome-shell";
+      description = ''
+        Override window manager detection.
+        If null, Toshy will auto-detect the WM.
+
+        WORKAROUND: On NixOS with GNOME, set this to "gnome-shell" if auto-detection
+        fails due to wrapped binary names. This is a temporary fix while we investigate
+        why the NixOS wrapped binary detection doesn't work in service context.
+
+        Common values: "gnome-shell", "mutter", "kwin_wayland", "sway", "hyprland"
+      '';
+    };
+
     verboseLogging = mkOption {
       type = types.bool;
       default = false;
@@ -119,7 +135,8 @@ in
         # Environment variables - critical for finding toshy Python modules
         Environment = [
           "PYTHONPATH=${cfg.package}/share/toshy"
-        ] ++ optional (cfg.desktopEnvironment != null) "TOSHY_DE_OVERRIDE=${cfg.desktopEnvironment}";
+        ] ++ optional (cfg.desktopEnvironment != null) "TOSHY_DE_OVERRIDE=${cfg.desktopEnvironment}"
+          ++ optional (cfg.windowManager != null) "TOSHY_WM_OVERRIDE=${cfg.windowManager}";
       };
 
       Install = mkIf cfg.autoStart {

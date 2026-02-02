@@ -210,6 +210,13 @@ OVERRIDE_DESKTOP_ENV            = None
 OVERRIDE_DE_MAJ_VER             = None
 OVERRIDE_WINDOW_MGR             = None
 
+# Read overrides from environment variables (set by NixOS module or other deployment methods)
+# These take precedence over the None values above
+if os.environ.get('TOSHY_DE_OVERRIDE'):
+    OVERRIDE_DESKTOP_ENV = os.environ.get('TOSHY_DE_OVERRIDE')
+if os.environ.get('TOSHY_WM_OVERRIDE'):
+    OVERRIDE_WINDOW_MGR = os.environ.get('TOSHY_WM_OVERRIDE')
+
 wlroots_compositors             = [
     # Comma-separated list of Wayland desktop environments or window managers
     # that should try to use the 'wlroots' window context provider. Use the
