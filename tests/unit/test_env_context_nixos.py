@@ -9,6 +9,7 @@ Following TDD RED-GREEN-REFACTOR cycle:
 """
 
 import os
+import subprocess
 import pytest
 from unittest import mock
 from toshy_common.env_context import EnvironmentInfo
@@ -135,3 +136,86 @@ class TestNixOSEnvironmentInfo:
             env.release_files['/etc/os-release'] = mock_os_release
             env.get_env_info()
             assert env.DISTRO_VER == '24.05'
+
+
+class TestNixOSWindowManagerDetection:
+    """Test window manager detection on NixOS, particularly for GNOME"""
+
+    def test_should_detect_gnome_shell_on_nixos_gnome_wayland(self):
+        """
+        GNOME Shell should be detected on NixOS with GNOME Wayland.
+
+        On NixOS, processes may have full Nix store paths, but is_process_running()
+        should still detect them correctly.
+        """
+        # ARRANGE - Set up NixOS with GNOME Wayland environment
+        mock_os_release = [
+            'NAME="NixOS"',
+            'ID=nixos',
+            'VERSION_ID="24.05"'
+        ]
+
+        mock_env_vars = {
+            'XDG_SESSION_TYPE': 'wayland',
+            'XDG_CURRENT_DESKTOP': 'GNOME',
+            'WAYLAND_DISPLAY': 'wayland-0'
+        }
+
+        # Mock pgrep to return success for gnome-shell
+        def mock_check_output(cmd, *args, **kwargs):
+            if 'gnome-shell' in ' '.join(cmd):
+                return b'12345\n'  # PID of gnome-shell
+            elif 'mutter' in ' '.join(cmd):
+                return b'12346\n'  # PID of mutter
+            raise subprocess.CalledProcessError(1, cmd)
+
+        # ACT
+        with mock.patch('os.path.isfile', return_value=False), \
+             mock.patch.dict(os.environ, mock_env_vars, clear=True), \
+             mock.patch('subprocess.check_output', side_effect=mock_check_output):
+            env = EnvironmentInfo()
+            env.release_files['/etc/os-release'] = mock_os_release
+            env.get_env_info()
+
+        # ASSERT - Window manager should be detected as gnome-shell or mutter
+        assert env.WINDOW_MGR in ['gnome-shell', 'mutter'], \
+            f"Expected gnome-shell or mutter, got '{env.WINDOW_MGR}'"
+        assert env.WINDOW_MGR != 'WM_unidentified_by_logic', \
+            "GNOME window manager should be detected, not unidentified"
+
+    def test_should_explain_why_gnome_wm_not_detected_on_nixos(self):
+        """
+        This test documents the issue: when pgrep fails to find gnome-shell/mutter,
+        WINDOW_MGR becomes 'WM_unidentified_by_logic'.
+
+        This is a RED test - it demonstrates the problem before we fix it.
+        """
+        # ARRANGE - NixOS GNOME Wayland where pgrep fails
+        mock_os_release = [
+            'NAME="NixOS"',
+            'ID=nixos',
+            'VERSION_ID="24.05"'
+        ]
+
+        mock_env_vars = {
+            'XDG_SESSION_TYPE': 'wayland',
+            'XDG_CURRENT_DESKTOP': 'GNOME',
+        }
+
+        # Mock pgrep to fail (simulating the NixOS issue)
+        def mock_check_output_fail(cmd, *args, **kwargs):
+            # All pgrep calls fail
+            raise subprocess.CalledProcessError(1, cmd)
+
+        # ACT
+        with mock.patch('os.path.isfile', return_value=False), \
+             mock.patch.dict(os.environ, mock_env_vars, clear=True), \
+             mock.patch('subprocess.check_output', side_effect=mock_check_output_fail):
+            env = EnvironmentInfo()
+            env.release_files['/etc/os-release'] = mock_os_release
+            env.get_env_info()
+
+        # ASSERT - This documents the bug
+        assert env.DESKTOP_ENV == 'gnome'
+        assert env.WINDOW_MGR == 'WM_unidentified_by_logic', \
+            "When pgrep fails, WINDOW_MGR should be 'WM_unidentified_by_logic' (documenting the bug)"

@@ -29,6 +29,10 @@ I don't really know many other places where it might be considered appropriate t
 
 # Current status: Stable Beta (Please Read)
 
+**2026-02-02 UPDATE**: Finally added official support for installing on Gentoo Linux. Maybe also Calculate Linux and Redcore Linux, but only plain Gentoo is tested. Thanks to user @sazz who proved that it was possible to get Toshy running on Gentoo in issue 775.
+
+**2026-01 UPDATE**: Toshy user @armerpunkt implemented support for AerynOS (formerly known as Serpent OS). See PR 771.
+
 **2025-07-10 UPDATE**: Substantial refactoring of multiple internal components has taken place. There should be very little obvious external sign of the changes, but submit issues if you run into problems. 
 
 **2025-07-01 UPDATE**: Added experimental support for fully `asyncio` implementation of multi-tap functionality. Have a key or combo do different things based on how many times it's tapped within the time limit (25ms default). Does not affect other remaps that aren't marked as multi-tap. 
