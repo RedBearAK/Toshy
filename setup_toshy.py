@@ -1302,13 +1302,10 @@ pkg_groups_map = {
                             "zenity"],
 
     # Leaving out Python tkinter because it's only needed for obsolete GUI app version.
-    'gentoo-based':        ["dev-libs/gobject-introspection", "dev-libs/libayatana-appindicator",
-                            # "dev-libs/wayland",   # Necessary or not?
-                            "dev-libs/wayland-protocols",
-                            "dev-vcs/git",
-                            "gnome-extra/zenity",
-                            "gui-libs/gtk", "gui-libs/libadwaita",
-                            "app-misc/evtest",
+    'gentoo-based':        ["app-misc/evtest",
+                            "dev-libs/gobject-introspection", "dev-libs/libayatana-appindicator",
+                                "dev-libs/wayland", "dev-libs/wayland-protocols", "dev-vcs/git",
+                            "gnome-extra/zenity", "gui-libs/gtk", "gui-libs/libadwaita",
                             "x11-apps/xset", "x11-libs/gtk+", "x11-libs/libnotify",
                                 "x11-libs/libxkbcommon"],
 
