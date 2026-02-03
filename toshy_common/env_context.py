@@ -7,8 +7,6 @@ import time
 import shutil
 import subprocess
 
-from typing import Dict
-
 from toshy_common import logger
 from toshy_common.logger import *
 
@@ -50,8 +48,8 @@ class EnvironmentInfo:
         # self.de_major_ver                   = None        # Just in case we need it later
         # self.de_minor_ver                   = None        # Just in case we need it later
 
-        self.env_info_dct: Dict[str, str]   = {}
-        self.release_files: Dict[str, str]  = self.read_release_files()
+        self.env_info_dct: "dict[str, str]"   = {}
+        self.release_files: "dict[str, str]"  = self.read_release_files()
 
     def get_env_info(self):
         """Primary method to get complete environment info"""
@@ -89,7 +87,7 @@ class EnvironmentInfo:
 
         return self.env_info_dct
 
-    def read_release_files(self) -> Dict[str, str]:
+    def read_release_files(self) -> "dict[str, str]":
         paths = [
             '/etc/os-release', '/etc/lsb-release', '/etc/arch-release'
         ]
