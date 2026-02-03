@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-__version__ = '20250713'
+__version__ = '20260202'
 
 import os
 import re
 import time
 import shutil
 import subprocess
-
-from typing import Dict
 
 from toshy_common import logger
 from toshy_common.logger import *
@@ -50,8 +48,8 @@ class EnvironmentInfo:
         # self.de_major_ver                   = None        # Just in case we need it later
         # self.de_minor_ver                   = None        # Just in case we need it later
 
-        self.env_info_dct: Dict[str, str]   = {}
-        self.release_files: Dict[str, str]  = self.read_release_files()
+        self.env_info_dct: "dict[str, str]"   = {}
+        self.release_files: "dict[str, str]"  = self.read_release_files()
 
     def get_env_info(self):
         """Primary method to get complete environment info"""
@@ -89,7 +87,7 @@ class EnvironmentInfo:
 
         return self.env_info_dct
 
-    def read_release_files(self) -> Dict[str, str]:
+    def read_release_files(self) -> "dict[str, str]":
         paths = [
             '/etc/os-release', '/etc/lsb-release', '/etc/arch-release'
         ]
@@ -104,7 +102,13 @@ class EnvironmentInfo:
         """
         Utility function to check if a process with a specific name is running.
         For names >15 chars, uses pgrep -f with careful pattern matching to avoid false positives.
+
+        On NixOS, binaries are wrapped (e.g., gnome-shell → .gnome-shell-wrapped),
+        and process names are truncated to 15 chars by the kernel (.gnome-shell-wr).
+        This function handles both standard and NixOS wrapped process names using
+        exact matching to avoid false positives.
         """
+        KERNEL_COMM_LEN = 15  # Linux kernel TASK_COMM_LEN is 16, but includes null terminator
         use_pgrep_i = True
 
         distros_without_pgrep_i = [
@@ -118,22 +122,63 @@ class EnvironmentInfo:
                 use_pgrep_i = False
                 break
 
-        if len(process_name) <= 15:
+        def _get_nixos_wrapped_name(name):
+            """
+            Generate the NixOS-wrapped process name as it would appear in the kernel's
+            process table (truncated to 15 characters).
+
+            NixOS uses wrapProgram which creates: .{basename}-wrapped
+            The kernel then truncates to TASK_COMM_LEN (15 chars).
+
+            Args:
+                process_name: Original process name (e.g., 'gnome-shell')
+
+            Returns:
+                The wrapped name truncated to 15 chars (e.g., '.gnome-shell-wr')
+            """
+            wrapped = f'.{name}-wrapped'
+            return wrapped[:KERNEL_COMM_LEN]
+
+        def _build_pgrep_cmd(name, use_full_match=False):
+            """Build pgrep command with appropriate flags."""
+            if use_full_match:
+                # For long names, use -f with careful pattern matching
+                pattern = f'(/|^){name}($| )'
+                return ['pgrep', '-f', pattern]
             # Standard exact match for short names
             cmd = ['pgrep', '-x']
             if use_pgrep_i:
                 cmd.append('-i')
-            cmd.append(process_name)
-        else:
-            # For long names, use -f with careful pattern matching
-            pattern = f"(/|^){process_name}($| )"
-            cmd = ['pgrep', '-f', pattern]
+            cmd.append(name)
+            return cmd
 
-        try:
-            result = subprocess.check_output(cmd)
-            return bool(result.strip())
-        except subprocess.CalledProcessError:
+        def _run_pgrep(cmd):
+            """Execute pgrep command and return True if process found."""
+            try:
+                result = subprocess.check_output(cmd)
+                return bool(result.strip())
+            except subprocess.CalledProcessError:
+                return False
+
+        if len(process_name) <= KERNEL_COMM_LEN:
+            # Standard exact match for short names
+            cmd = _build_pgrep_cmd(process_name)
+            if _run_pgrep(cmd):
+                return True
+
+            # On NixOS, try the wrapped binary pattern with exact matching
+            if self.DISTRO_ID == 'nixos':
+                wrapped_name = _get_nixos_wrapped_name(process_name)
+                cmd = _build_pgrep_cmd(wrapped_name)
+                if _run_pgrep(cmd):
+                    return True
+
             return False
+
+        # For long names (>15 chars), use -f with careful pattern matching
+        cmd = _build_pgrep_cmd(process_name, use_full_match=True)
+        return _run_pgrep(cmd)
+
 
 ####################################################################################################
 ##                                                                                                ##
@@ -596,6 +641,7 @@ class EnvironmentInfo:
             ],
 
             # Older GNOME may have 'mutter' integrated into 'gnome-shell' process
+            # On NixOS, 'mutter' observed as window manager process in Wayland session, 2026-02-02
             'gnome': [
                 'mutter',
                 'gnome-shell',
