@@ -282,7 +282,10 @@ class WaylandClient:
 
     def check_connection(self):
         try:
-            self.display.roundtrip()
+            ret = self.display.flush()
+            if ret == -1:
+                error("Wayland connection check: flush failed")
+                return False
         except Exception as e:
             error(f"Wayland connection lost: {e}")
             return False
@@ -319,11 +322,11 @@ def wayland_event_callback(fd, condition, display: Display):
         clean_shutdown()  # Perform cleanup and shutdown
         return False  # Stop calling this function
     if condition & GLib.IO_IN:
-        # display.dispatch()    # dispatch() fails to prompt new events to appear
-        # dispatch() also seems to trigger the callback to get called many times in a loop,
-        # but without any new useful events appearing, while roundtrip() just shows
-        # the new events that I need to see, as they happen.
-        display.roundtrip()     # gets new events to appear immediately
+        # Use read() + dispatch() instead of roundtrip() to avoid blocking loop
+        # read() reads events from the FD into the queue
+        # dispatch() processes queued events and returns immediately
+        display.read()
+        display.dispatch()
     return True
 
 
