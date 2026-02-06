@@ -547,7 +547,7 @@ This submenu is a sort of temporary hack to force all attached keyboard devices 
 
 The main reason you'd need to use this is when a keyboard that is not made by Apple either was made for use with macOS, or just has the modifier keys next to the Space bar swapped like an Apple keyboard (common in small keyboards made to work with multiple devices including iOS/iPadOS devices), so you need to force it to be treated like an Apple keyboard. These types of keyboards can't be easily identified as the correct type by just looking at the device name.  
 
-After verifying that the forced keyboard type puts the modifiers in the correct place to work with muscle memory from using an Apple keyboard with macOS, you'll want to fix this permanently by opening your config file and editing the custom dictionary item to make the config see your device name as the correct type. See [here](#my-keyboard-is-not-recognized-as-the-correct-type) for more information.  
+After verifying that the forced keyboard type puts the modifiers in the correct place to work with muscle memory from using an Apple keyboard with macOS, you'll want to fix this permanently by opening your config file and editing the custom dictionary item to make the config see your device name as the correct type. See [here](https://github.com/RedBearAK/toshy/wiki/FAQ-(Frequently-Asked-Questions)#my-keyboard-is-not-recognized-as-the-correct-type) for more information.
 
 ◊  
 
