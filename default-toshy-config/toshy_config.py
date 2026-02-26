@@ -28,9 +28,9 @@ import subprocess
 
 # Removing problematic types before they get deprecated:
 # from typing import Any, Callable, Optional, Union, List, Dict, Tuple
-from collections.abc import Callable
+from typing import Any
 from subprocess import DEVNULL
-from typing import Any, Optional, Union
+from collections.abc import Callable
 
 from xwaykeyz.config_api import *
 from xwaykeyz.lib.key_context import KeyContext

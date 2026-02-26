@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260101'
+__version__ = '20260224'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -26,8 +26,11 @@ import asyncio
 import inspect
 import subprocess
 
+# Removing problematic types before they get deprecated:
+# from typing import Any, Callable, Optional, Union, List, Dict, Tuple
+from typing import Any
 from subprocess import DEVNULL
-from typing import Any, Callable, Optional, Union, List, Dict, Tuple
+from collections.abc import Callable
 
 from xwaykeyz.config_api import *
 from xwaykeyz.lib.key_context import KeyContext
@@ -163,7 +166,7 @@ DE_MAJ_VER                      = None
 WINDOW_MGR                      = None
 
 env_ctxt_getter = EnvironmentInfo()
-env_ctxt: Dict[str, str] = env_ctxt_getter.get_env_info()
+env_ctxt: 'dict[str, str]' = env_ctxt_getter.get_env_info()
 
 DISTRO_ID       = locals().get('OVERRIDE_DISTRO_ID')    or env_ctxt.get('DISTRO_ID',    'keymissing')
 DISTRO_VER      = locals().get('OVERRIDE_DISTRO_VER')   or env_ctxt.get('DISTRO_VER',   'keymissing')
@@ -612,11 +615,11 @@ def matchProps(*,
     # bool parameters
     numlk: bool = None, capslk: bool = None, cse: bool = None,
     # list of dicts of parameters (positive)
-    lst: List[Dict[str, Union[str, bool]]] = None,
+    lst: 'list[dict[str, str | bool]]' = None,
     # list of dicts of parameters (negative)
-    not_lst: List[Dict[str, Union[str, bool]]] = None,
+    not_lst: 'list[dict[str, str | bool]]' = None,
     dbg: str = None,    # debugging info (such as: which modmap/keymap?)
-) -> Callable[[KeyContext], bool]:
+):  # returns Callable[[KeyContext], bool]
     """
     ### Match all given properties to current window context.       \n
     - Parameters must be _named_, no positional arguments.          \n
@@ -669,14 +672,10 @@ def matchProps(*,
     global MAX_MATCHPROPS_ITERATIONS_REACHED
     global total_matchProps_iterations
 
-    # Return `False` immediately if screen does not have focus (e.g. Synergy),
-    # but only after the guard clauses have had a chance to evaluate on
-    # all possible uses of the function that may exist in the config.
-    if MAX_MATCHPROPS_ITERATIONS_REACHED and not cnfg.screen_has_focus:
-        # return False    # Returning a boolean here causes as exception. Must return a callable!
-        return lambda _: False
 
-    if total_matchProps_iterations >= MAX_MATCHPROPS_ITERATIONS:
+    if MAX_MATCHPROPS_ITERATIONS_REACHED:
+        bypass_guard_clauses = True
+    elif total_matchProps_iterations >= MAX_MATCHPROPS_ITERATIONS:
         MAX_MATCHPROPS_ITERATIONS_REACHED = True
         bypass_guard_clauses = True
     else:
@@ -711,7 +710,14 @@ def matchProps(*,
         'numlk', 'capslk', 'cse', 'lst', 'not_lst', 'dbg'
     ]
 
-    if not MAX_MATCHPROPS_ITERATIONS_REACHED or not bypass_guard_clauses:
+    # De Morgan's Law requires this to use "and" unless using parentheses to combine.
+    # Ugly and confusing either way, if the negation is involved.
+    # if not MAX_MATCHPROPS_ITERATIONS_REACHED and not bypass_guard_clauses:
+
+    # Reversing the action order to use more understandable positive boolean logic
+    if MAX_MATCHPROPS_ITERATIONS_REACHED or bypass_guard_clauses:
+        pass            # guards already validated during warmup
+    else:
         if all([x is None for x in allowed_params]):
             raise ValueError(f"\n\n(EE) matchProps(): Received no valid argument\n")
         if any([x not in (True, False, None) for x in (numlk, capslk, cse)]):
@@ -733,7 +739,14 @@ def matchProps(*,
     # process lists of conditions
     if _lst is not None:
 
-        if not MAX_MATCHPROPS_ITERATIONS_REACHED or not bypass_guard_clauses:
+        # De Morgan's Law requires this to use "and" unless using parentheses to combine.
+        # Ugly and confusing either way, if the negation is involved.
+        # if not MAX_MATCHPROPS_ITERATIONS_REACHED and not bypass_guard_clauses:
+
+        # Reversing the action order to use more understandable positive boolean logic
+        if MAX_MATCHPROPS_ITERATIONS_REACHED or bypass_guard_clauses:
+            pass            # guards already validated during warmup
+        else:
             if any([x is not None for x in lst_dct_params]):
                 raise TypeError(f"\n\n(EE) matchProps(): Param 'lst|not_lst' must be used alone\n")
             if not isinstance(_lst, list) or not all(isinstance(item, dict) for item in _lst):
@@ -753,8 +766,6 @@ def matchProps(*,
                             f"See log output before traceback.\n")
 
         def _matchProps_Lst(ctx: KeyContext):
-            if not cnfg.screen_has_focus:
-                return False
             if not_lst is not None:
                 if logging_enabled: print(f"## _matchProps_Lst()[not_lst] ## {dbg=}")
                 return not any(matchProps(**dct)(ctx) for dct in not_lst)
@@ -770,9 +781,6 @@ def matchProps(*,
     if _devn is not None: devn_rgx = re.compile(_devn, 0 if cse else re.I)
 
     def _matchProps(ctx: KeyContext):
-        if not cnfg.screen_has_focus:
-            return False
-
         nt_err = 'ERR: matchProps: NoneType in ctx.'
 
         # Full debug mode: use original cond_list approach for complete visibility
@@ -1140,12 +1148,12 @@ def process_multitap_command(command, ctx):
 
 
 # Per-combo state tracking using action tuple as key
-tap_states: Dict[tuple, Dict[str, Any]] = {}
+tap_states: 'dict[tuple, dict[str, Any]]' = {}
 
-event_loop: Optional[asyncio.AbstractEventLoop] = None
+event_loop: 'asyncio.AbstractEventLoop | None' = None
 
 
-def get_loop() -> Optional[asyncio.AbstractEventLoop]:
+def get_loop() -> 'asyncio.AbstractEventLoop | None':
     global event_loop
     if event_loop is None or event_loop.is_closed():
         try:
@@ -1193,13 +1201,13 @@ def multitap_config(tap_interval=None, min_tap_delay=None):
                 f"adjusted to {_MULTITAP_CONFIG['min_tap_delay']:.3f}s")
 
 
-def isMultiTap( tap_1_action: Optional[Callable] = None,
-                tap_2_action: Optional[Callable] = None,
-                tap_3_action: Optional[Callable] = None,
-                tap_4_action: Optional[Callable] = None,
-                tap_5_action: Optional[Callable] = None,
+def isMultiTap( tap_1_action: 'Callable | None' = None,
+                tap_2_action: 'Callable | None' = None,
+                tap_3_action: 'Callable | None' = None,
+                tap_4_action: 'Callable | None' = None,
+                tap_5_action: 'Callable | None' = None,
                 tap_interval: float = None,
-                min_tap_delay: float = None) -> Callable:
+                min_tap_delay: float = None):    # returns Callable
     """
     Multi-tap handler that supports 1-5 taps with asyncio.
 
@@ -1343,7 +1351,7 @@ def isMultiTap( tap_1_action: Optional[Callable] = None,
             state = tap_states[action_key]
 
         # Cancel any pending finalization
-        finalize_handle: Optional[asyncio.Handle] = state['finalize_handle']
+        finalize_handle: 'asyncio.Handle | None' = state['finalize_handle']
         if finalize_handle is not None:
             finalize_handle.cancel()
             state['finalize_handle'] = None
@@ -1420,11 +1428,12 @@ keymap("Diagnostics (isMultiTap)", {
                                 C("Enter"), C("Enter")],
                         ),
 
-}, when = lambda ctx: ctx is ctx)
+}, when = lambda _: True is True)
 
 
 # keymap("Diagnostics (isDoubleTap)", {
 #     C("Shift-Alt-RC-i"):        isDoubleTap(notify_context),    # Diagnostic dialog (primary)
 #     C("Shift-Alt-RC-h"):        isDoubleTap(notify_context),    # Diagnostic dialog (alternate)
 #     C("Shift-Alt-RC-t"):        isDoubleTap(macro_tester),      # Type out test macro
-# }, when = lambda ctx: ctx is ctx )
+# }, when = lambda _: True is True)
+
