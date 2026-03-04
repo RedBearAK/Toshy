@@ -66,4 +66,5 @@ python-xlib==0.31
 # No way to 'pin' a version range in this syntax, but window context method
 # for KDE Plasma changed, and requires >=1.2.0 for `xwaykeyz` to be talking
 # to the correct D-Bus interface/object path. (org.toshy.Plasma)
+# New required minimum version for xwaykeyz >=1.12.0 (matchProps moved to config_api)
 git+https://github.com/RedBearAK/xwaykeyz.git@main#egg=xwaykeyz
