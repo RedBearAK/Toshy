@@ -560,7 +560,9 @@ Toshy does its best to set itself up automatically on any Linux system that uses
 - `apk`
 - `apt`
 - `dnf`
+- `emerge`
 - `eopkg`
+- `moss`
 - `pacman`
 - `rpm-ostree`
 - `transactional-update`
