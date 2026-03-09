@@ -4108,6 +4108,15 @@ keymap("Overrides for Falkon browser", {
     cnfg.screen_has_focus and
     hmp_is_falkon_browser(ctx) )
 
+# Brave is a Chromium-based web browser
+hmp_is_brave_browser            = matchProps(clas="^brave-browser$")
+keymap("Brave Browser Overrides", {
+    # This won't do anything unless Brave's "Exit" shortcut is set to use Ctrl+Q
+    C("RC-q"):                  C("RC-q"),                      # Quit Brave browser with Cmd+Q
+}, when = lambda ctx:
+    cnfg.screen_has_focus and
+    hmp_is_brave_browser(ctx) )
+
 keymap("Chrome Browsers Overrides", {
     # C("C-comma"):              [C("Alt-e"), C("s"),C("Enter")], # Open preferences (Settings)
     C("C-comma"):              [C("C-t"), sleep(0.2),
@@ -5456,4 +5465,3 @@ keymap("Diagnostics (isMultiTap)", {
 #     C("Shift-Alt-RC-h"):        isDoubleTap(notify_context),    # Diagnostic dialog (alternate)
 #     C("Shift-Alt-RC-t"):        isDoubleTap(macro_tester),      # Type out test macro
 # }, when = lambda _: True is True)
-
