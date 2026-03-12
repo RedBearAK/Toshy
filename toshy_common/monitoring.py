@@ -1,7 +1,8 @@
-__version__ = "20250710"
+__version__ = "20260311"
 
 import time
 import threading
+import subprocess
 try:
     import dbus
 except ModuleNotFoundError:
@@ -118,83 +119,126 @@ class ServiceMonitor:
 
     def _monitor_loop(self):
         """Main monitoring loop that runs in a separate thread."""
-        if dbus is None:
-            error('The "dbus" module is not available. Cannot monitor services.')
-            return
 
         config_status = self.svc_status_glyph_unknown
         session_monitor_status = self.svc_status_glyph_unknown
         last_status_tuple = (None, None)
-        
-        session_bus = dbus.SessionBus()
-        systemd1_dbus_obj = session_bus.get_object(
-            'org.freedesktop.systemd1', 
-            '/org/freedesktop/systemd1'
-        )
-        systemd1_mgr_iface = dbus.Interface(
-            systemd1_dbus_obj, 
-            'org.freedesktop.systemd1.Manager'
-        )
 
-        config_unit_path = None
-        sessmon_unit_path = None
+        # Try D-Bus approach first
+        use_dbus = False
+        session_bus = None
+        systemd1_mgr_iface = None
 
-        def get_service_states():
+        if dbus is not None:
+            try:
+                session_bus = dbus.SessionBus()
+                systemd1_dbus_obj = session_bus.get_object(
+                    'org.freedesktop.systemd1',
+                    '/org/freedesktop/systemd1'
+                )
+                systemd1_mgr_iface = dbus.Interface(
+                    systemd1_dbus_obj,
+                    'org.freedesktop.systemd1.Manager'
+                )
+                use_dbus = True
+                debug("Service monitor: using D-Bus to monitor systemd services.")
+            except dbus.exceptions.DBusException as dbus_err:
+                debug(f"Service monitor: D-Bus systemd1 not available, "
+                        f"falling back to systemctl subprocess.\n\t{dbus_err}")
+        else:
+            debug("Service monitor: dbus module not available, "
+                    "using systemctl subprocess.")
+
+        config_unit_path        = None
+        sessmon_unit_path       = None
+
+        def get_service_states_via_dbus():
             """Get current service states via D-Bus."""
             nonlocal config_unit_path, sessmon_unit_path
-            
-            config_obj = session_bus.get_object('org.freedesktop.systemd1', config_unit_path)
-            config_iface = dbus.Interface(config_obj, 'org.freedesktop.DBus.Properties')
-            config_state = str(config_iface.Get('org.freedesktop.systemd1.Unit', 'ActiveState'))
 
-            sessmon_obj = session_bus.get_object('org.freedesktop.systemd1', sessmon_unit_path)
-            sessmon_iface = dbus.Interface(sessmon_obj, 'org.freedesktop.DBus.Properties')
-            sessmon_state = str(sessmon_iface.Get('org.freedesktop.systemd1.Unit', 'ActiveState'))
-            
+            config_obj = session_bus.get_object(
+                'org.freedesktop.systemd1', config_unit_path)
+            config_iface = dbus.Interface(
+                config_obj, 'org.freedesktop.DBus.Properties')
+            config_state = str(config_iface.Get(
+                'org.freedesktop.systemd1.Unit', 'ActiveState'))
+
+            sessmon_obj = session_bus.get_object(
+                'org.freedesktop.systemd1', sessmon_unit_path)
+            sessmon_iface = dbus.Interface(
+                sessmon_obj, 'org.freedesktop.DBus.Properties')
+            sessmon_state = str(sessmon_iface.Get(
+                'org.freedesktop.systemd1.Unit', 'ActiveState'))
+
+            return (config_state, sessmon_state)
+
+        def get_service_states_via_shell_cmd():
+            """Get current service states via systemctl subprocess."""
+            def _get_state(service_name):
+                try:
+                    result = subprocess.run(
+                        ['systemctl', '--user', 'is-active', service_name],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    return result.stdout.strip()
+                except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                    return 'unknown'
+
+            config_state = _get_state(self.toshy_svc_config)
+            sessmon_state = _get_state(self.toshy_svc_sessmon)
             return (config_state, sessmon_state)
 
         time.sleep(0.6)  # Initial delay before starting monitoring
 
         while not self.stop_monitoring:
-            # Get unit paths if we don't have them
-            if not config_unit_path or not sessmon_unit_path:
+
+            if use_dbus:
+                # D-Bus path: get unit paths if we don't have them
+                if not config_unit_path or not sessmon_unit_path:
+                    try:
+                        config_unit_path = systemd1_mgr_iface.GetUnit(
+                            self.toshy_svc_config)
+                        sessmon_unit_path = systemd1_mgr_iface.GetUnit(
+                            self.toshy_svc_sessmon)
+                    except dbus.exceptions.DBusException as dbus_err:
+                        debug(f'DBusException trying to get unit paths: {dbus_err}')
+                        time.sleep(3)
+                        continue
+
                 try:
-                    config_unit_path = systemd1_mgr_iface.GetUnit(self.toshy_svc_config)
-                    sessmon_unit_path = systemd1_mgr_iface.GetUnit(self.toshy_svc_sessmon)
+                    current_status_tuple = get_service_states_via_dbus()
+                    config_state, sessmon_state = current_status_tuple
                 except dbus.exceptions.DBusException as dbus_err:
-                    debug(f'DBusException trying to get unit paths: {dbus_err}')
-                    time.sleep(3)
+                    debug(f'DBusException getting service states: {dbus_err}')
+                    config_unit_path = None
+                    sessmon_unit_path = None
+                    time.sleep(2)
                     continue
 
-            # Get current service states
-            try:
-                current_status_tuple = get_service_states()
+            else:
+                # Subprocess fallback path
+                current_status_tuple = get_service_states_via_shell_cmd()
                 config_state, sessmon_state = current_status_tuple
-            except dbus.exceptions.DBusException as dbus_err:
-                debug(f'DBusException getting service states: {dbus_err}')
-                config_unit_path = None
-                sessmon_unit_path = None
-                time.sleep(2)
-                continue
 
             # Convert states to status strings
             if config_state == "active":
                 config_status = self.svc_status_glyph_active
-            elif config_state == "inactive":
+            elif config_state in ("inactive", "deactivating"):
                 config_status = self.svc_status_glyph_inactive
             else:
                 config_status = self.svc_status_glyph_unknown
 
             if sessmon_state == "active":
                 session_monitor_status = self.svc_status_glyph_active
-            elif sessmon_state == "inactive":
+            elif sessmon_state in ("inactive", "deactivating"):
                 session_monitor_status = self.svc_status_glyph_inactive
             else:
                 session_monitor_status = self.svc_status_glyph_unknown
 
             # Notify callback if status changed
             if current_status_tuple != last_status_tuple:
-                debug(f"Service status changed: Config={config_status}, SessionMonitor={session_monitor_status}")
+                debug(f"Service status changed: "
+                        f"Config={config_status}, SessionMonitor={session_monitor_status}")
                 self.on_status_changed(config_status, session_monitor_status)
 
             last_status_tuple = current_status_tuple
