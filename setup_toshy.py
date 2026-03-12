@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260201'                        # CLI option "--version" will print this out.
+__version__ = '20260312'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1050,7 +1050,8 @@ distro_groups_map = {
 
     'mageia-based':             ["mageia"],
 
-    'ubuntu-based':             ["elementary", "mint", "neon", "pop", "tuxedo", "ubuntu", "zorin"],
+    'ubuntu-based':             ["elementary", "mint", "nebios", "neon", "pop",
+                                    "tuxedo", "ubuntu", "zorin"],
 
     # The 'linuxmint' distro ID will not be shown by `toshy-env`, environment module
     # normalizes to 'mint' for matching in the config file.
