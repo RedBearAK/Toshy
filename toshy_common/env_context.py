@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260311'
+__version__ = '20260312'
 
 import os
 import re
@@ -33,6 +33,7 @@ logger.FLUSH = True
 
 class EnvironmentInfo:
     def __init__(self):
+        self.DISTRO_NAME                    = None
         self.DISTRO_ID                      = None
         self.DISTRO_VER                     = None
         self.VARIANT_ID                     = None
@@ -55,7 +56,8 @@ class EnvironmentInfo:
         """Primary method to get complete environment info"""
 
         # Call methods to harvest environment info and populate the instance variables.
-        # As of 2024-09-04 there are seven different bits of primary info to generate.
+        # As of 2026-03-11 there are eight different bits of primary info to generate.
+        self._get_distro_name()
         self._get_distro_id()
         self._get_distro_version()
         self._get_variant_id()
@@ -67,6 +69,7 @@ class EnvironmentInfo:
 
         # Collect all info into a dictionary
         self.env_info_dct = {
+            'DISTRO_NAME':      self.DISTRO_NAME,
             'DISTRO_ID':        self.DISTRO_ID,
             'DISTRO_VER':       self.DISTRO_VER,
             'VARIANT_ID':       self.VARIANT_ID,
@@ -195,6 +198,46 @@ class EnvironmentInfo:
 
 ####################################################################################################
 ##                                                                                                ##
+##     ██████  ██ ███████ ████████ ██████   ██████      ███    ██  █████  ███    ███ ███████      ##
+##     ██   ██ ██ ██         ██    ██   ██ ██    ██     ████   ██ ██   ██ ████  ████ ██           ##
+##     ██   ██ ██ ███████    ██    ██████  ██    ██     ██ ██  ██ ███████ ██ ████ ██ █████        ##
+##     ██   ██ ██      ██    ██    ██   ██ ██    ██     ██  ██ ██ ██   ██ ██  ██  ██ ██           ##
+##     ██████  ██ ███████    ██    ██   ██  ██████      ██   ████ ██   ██ ██      ██ ███████      ##
+##                                                                                                ##
+####################################################################################################
+
+# Distro name is not that useful for installing, since installer decisions are usually
+# based on the distro ID, a more standardized label for the distro like "fedora".
+# But this may be useful for some distro variants that require some special behavior
+# from the config but don't adequately identify themselves in the "ID=" field any
+# differently from the base distro. Example: NebiOS 10.2, still shows "ubuntu" as
+# its ID, but shows "10.2" as the distro version, which makes no sense. 
+
+    def _get_distro_name(self):
+        """Get the distro display name from os-release NAME= field.
+        Stored casefolded for easy comparison and use in config file.
+        Available before _get_distro_id() for distro ID correction."""
+
+        if self.release_files.get('/etc/os-release'):
+            for line in self.release_files['/etc/os-release']:
+                if line.startswith('NAME='):
+                    self.DISTRO_NAME = line.split('=')[1].strip().strip('"')
+                    break
+
+        if not self.DISTRO_NAME and self.release_files.get('/etc/lsb-release'):
+            for line in self.release_files['/etc/lsb-release']:
+                if line.startswith('DISTRIB_ID='):
+                    self.DISTRO_NAME = line.split('=')[1].strip().strip('"')
+                    break
+
+        if not self.DISTRO_NAME:
+            self.DISTRO_NAME = 'notfound'
+
+        if isinstance(self.DISTRO_NAME, str):
+            self.DISTRO_NAME = self.DISTRO_NAME.casefold()
+
+####################################################################################################
+##                                                                                                ##
 ##                ██████  ██ ███████ ████████ ██████   ██████      ██ ██████                      ##
 ##                ██   ██ ██ ██         ██    ██   ██ ██    ██     ██ ██   ██                     ##
 ##                ██   ██ ██ ███████    ██    ██████  ██    ██     ██ ██   ██                     ##
@@ -207,7 +250,7 @@ class EnvironmentInfo:
         """logic to set self.DISTRO_ID"""
         _distro_id          = ""
 
-        if _distro_id == "" and self.release_files['/etc/os-release']:
+        if _distro_id == "" and self.release_files.get('/etc/os-release'):
             for prefix in ['ID=', 'NAME=', 'PRETTY_NAME=']:
                 for line in self.release_files['/etc/os-release']:
                     if line.startswith(prefix):
@@ -216,7 +259,7 @@ class EnvironmentInfo:
                 if _distro_id != "":
                     break
 
-        if _distro_id == "" and self.release_files['/etc/lsb-release']:
+        if _distro_id == "" and self.release_files.get('/etc/lsb-release'):
             for prefix in ['DISTRIB_ID=', 'DISTRIB_DESCRIPTION=']:
                 for line in self.release_files['/etc/lsb-release']:
                     if line.startswith(prefix):
@@ -225,7 +268,7 @@ class EnvironmentInfo:
                 if _distro_id != "":
                     break
 
-        if _distro_id == "" and self.release_files['/etc/arch-release']:
+        if _distro_id == "" and self.release_files.get('/etc/arch-release'):
             _distro_id = 'arch'
 
         distro_names = {            # simplify distro names to an ID, if necessary
@@ -236,6 +279,7 @@ class EnvironmentInfo:
             'Manjaro':              'manjaro',
             'KDE.*Neon':            'neon',
             'Linux.*Mint':          'mint',
+            'NebiOS':               'nebios',
             'openSUSE.*Tumbleweed': 'opensuse-tumbleweed',
             'Peppermint.*':         'peppermint',
             'Pop!_OS':              'pop',
@@ -262,6 +306,15 @@ class EnvironmentInfo:
         if isinstance(self.DISTRO_ID, str):
             self.DISTRO_ID = self.DISTRO_ID.casefold()
 
+        # Correct DISTRO_ID when os-release ID= is too generic.
+        # Some derivatives (e.g., NebiOS) use 'ubuntu' as their ID
+        # but have a distinct NAME= that better identifies the distro.
+        # Add more 'elif' branches as needed to catch other distros.
+        if self.DISTRO_ID == 'ubuntu' and 'nebios' in self.DISTRO_NAME:
+            debug(f"DISTRO_ID is '{self.DISTRO_ID}' but DISTRO_NAME "
+                    f"contains 'nebios'. Overriding DISTRO_ID to 'nebios'.")
+            self.DISTRO_ID = 'nebios'
+
 ####################################################################################################
 ##                                                                                                ##
 ##           ██████  ██ ███████ ████████ ██████   ██████      ██    ██ ███████ ██████             ##
@@ -275,13 +328,13 @@ class EnvironmentInfo:
     def _get_distro_version(self):
         """logic to set self.DISTRO_VER"""
 
-        if self.release_files['/etc/os-release']:
+        if self.release_files.get('/etc/os-release'):
             for line in self.release_files['/etc/os-release']:
                 line: str
                 if line.startswith('VERSION_ID='):
                     self.DISTRO_VER = line.split('=')[1].strip().strip('"')
                     break
-        elif self.release_files['/etc/lsb-release']:
+        elif self.release_files.get('/etc/lsb-release'):
             for line in self.release_files['/etc/lsb-release']:
                 line: str
                 if line.startswith('DISTRIB_RELEASE='):
@@ -321,13 +374,13 @@ class EnvironmentInfo:
     def _get_variant_id(self):
         """logic to set self.VARIANT_ID, if variant info available"""
 
-        if self.release_files['/etc/os-release']:
+        if self.release_files.get('/etc/os-release'):
             for line in self.release_files['/etc/os-release']:
                 line: str
                 if line.startswith('VARIANT_ID='):
                     self.VARIANT_ID = line.split('=')[1].strip().strip('"')
                     break
-        elif self.release_files['/etc/lsb-release']:
+        elif self.release_files.get('/etc/lsb-release'):
             for line in self.release_files['/etc/lsb-release']:
                 line: str
                 if line.startswith('DISTRIB_DESCRIPTION='):
@@ -795,6 +848,7 @@ if __name__ == "__main__":
     _env_info = env_info_getter.get_env_info()
     print('')
     debug(  f'Toshy env_context module sees this environment:'
+            f'\n\t\t DISTRO_NAME     = \'{_env_info["DISTRO_NAME"]}\''
             f'\n\t\t DISTRO_ID       = \'{_env_info["DISTRO_ID"]}\''
             f'\n\t\t DISTRO_VER      = \'{_env_info["DISTRO_VER"]}\''
             f'\n\t\t VARIANT_ID      = \'{_env_info["VARIANT_ID"]}\''
