@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260202'
+__version__ = '20260311'
 
 import os
 import re
@@ -179,6 +179,19 @@ class EnvironmentInfo:
         cmd = _build_pgrep_cmd(process_name, use_full_match=True)
         return _run_pgrep(cmd)
 
+    def _safe_cmd_output(self, command_list, context="command"):
+        """Run a command and return decoded stripped output, or None on failure.
+        Catches missing commands and process errors with a calm log message."""
+        cmd_name = command_list[0] if command_list else "<empty>"
+        try:
+            output = subprocess.check_output(command_list)
+            return output.decode().strip()
+        except FileNotFoundError as file_err:
+            error(f"Command '{cmd_name}' not found while checking {context}:\n\t{file_err}")
+            return None
+        except subprocess.CalledProcessError as proc_err:
+            error(f"Error obtaining {context}: {proc_err}")
+            return None
 
 ####################################################################################################
 ##                                                                                                ##
@@ -458,6 +471,7 @@ class EnvironmentInfo:
             'Miracle-WM':               'miracle-wm',
             'miracle-wm:mir':           'miracle-wm',
             'Miriway':                  'miriway',
+            'NebiDE':                   'nebide',   # NebiOS Wayfire-based DE
             'Niri':                     'niri',
             'Pantheon':                 'pantheon',
             'Plasma':                   'kde',
@@ -488,7 +502,16 @@ class EnvironmentInfo:
                 if self.DESKTOP_ENV:
                     break
 
-        # say DE should be added to list only if it it isn't None
+        # Correct misidentified DE when Wayfire socket is present.
+        # Some distros (e.g., NebiOS) set XDG_CURRENT_DESKTOP to "GNOME"
+        # despite using Wayfire as the compositor.
+        if os.environ.get('WAYFIRE_SOCKET') and self.DESKTOP_ENV not in ['wayfire', 'nebide']:
+            prev_de = self.DESKTOP_ENV or _desktop_env or '<unset>'
+            error(f"WAYFIRE_SOCKET is set but DE was identified as '{prev_de}'. "
+                    f"Overriding to 'wayfire'.")
+            self.DESKTOP_ENV = 'wayfire'
+
+        # say DE should be added to list only if it isn't None
         if not self.DESKTOP_ENV and _desktop_env is not None:
             error(f'DE or window manager not in desktop_env_names list! Should fix this.'
                     f'\n\t{_desktop_env}')
@@ -562,6 +585,7 @@ class EnvironmentInfo:
         # Desktop environments for which we need the major version:
         # - GNOME
         # - KDE Plasma
+        # - LXQt
 
         if self.DESKTOP_ENV == 'gnome':
             self.DE_MAJ_VER = self.get_gnome_version()
@@ -574,16 +598,15 @@ class EnvironmentInfo:
             self.DE_MAJ_VER = 'no_logic_for_DE'
 
     def get_gnome_version(self):
-            try:
-                # Run the gnome-shell command to get the version
-                output = subprocess.check_output(["gnome-shell", "--version"]).decode().strip()
-                # Use regular expression to extract the major version number
-                match = re.search(r"GNOME Shell (\d+)\.", output)
-                if match:
-                    return match.group(1)
-            except subprocess.CalledProcessError as proc_err:
-                error(f"Error obtaining GNOME version: {proc_err}")
-                return 'gnome_ver_check_err'
+        cmd_lst = ["gnome-shell", "--version"]
+        output = self._safe_cmd_output(cmd_lst, context="GNOME version")
+        if output is None:
+            return 'gnome_ver_check_err'
+        # Use regular expression to extract the major version number
+        match = re.search(r"GNOME Shell (\d+)\.", output)
+        if match:
+            return match.group(1)
+        return 'gnome_ver_check_err'
 
     def get_kde_version(self):
         KDE_session_ver = os.environ.get('KDE_SESSION_VERSION')
@@ -605,14 +628,14 @@ class EnvironmentInfo:
         return 'kde_ver_check_err'
 
     def get_lxqt_version(self):
-        try:
-            output = subprocess.check_output(["lxqt-session", "--version"]).decode().strip()
-            match = re.search(r"lxqt-session (\d+\.\d+\.\d+)", output)
-            if match:
-                major_version = match.group(1).split('.')[0]
-                return major_version
-        except subprocess.CalledProcessError:
+        cmd_lst = ["lxqt-session", "--version"]
+        output = self._safe_cmd_output(cmd_lst, context="LXQt version")
+        if output is None:
             return 'lxqt_ver_check_err'
+        match = re.search(r"lxqt-session (\d+\.\d+\.\d+)", output)
+        if match:
+            return match.group(1).split('.')[0]
+        return 'lxqt_ver_check_err'
 
 ####################################################################################################
 ##                                                                                                ##
@@ -685,6 +708,7 @@ class EnvironmentInfo:
             'lxde':             ['openbox'],
             'mate':             ['marco'],
             'miracle-wm':       ['miracle-wm'],
+            'nebide':           ['wayfire'],
             'openbox':          ['openbox'],
             'pantheon':         ['gala'],
             'pop':              ['gnome-shell'],
