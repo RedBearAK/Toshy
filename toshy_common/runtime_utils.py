@@ -12,6 +12,18 @@ from dataclasses import dataclass
 from toshy_common.logger import debug, error
 
 
+# If LC_ALL is unset (as observed on NebiOS 10.2), try to fix so
+# that Unicode characters are supported. Fall back to sanitizing.
+try:
+    locale.setlocale(locale.LC_ALL, '')
+except locale.Error:
+    try:
+        locale.setlocale(locale.LC_ALL, 'C.UTF-8')
+        os.environ['LC_ALL'] = 'C.UTF-8'
+    except locale.Error:
+        pass  # truly broken, sanitize_text handles it
+
+
 def _check_locale_utf8():
     """Check whether the current locale supports UTF-8 encoding."""
     try:
