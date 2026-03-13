@@ -1,4 +1,4 @@
-__version__ = "20260201"
+__version__ = "20260313"
 
 """
 Terminal utilities for Toshy applications.
@@ -8,6 +8,7 @@ desktop environment awareness for optimal terminal selection.
 """
 
 import os
+import re
 import shutil
 import subprocess
 
@@ -114,3 +115,48 @@ def run_cmd_lst_in_terminal(command_list, desktop_env: str=None):
     message = 'No suitable terminal emulator could be found.'
     debug(f"ERROR: {message} (terminal_utils)")
     raise TerminalNotFoundError(message)
+
+
+def print_pango_text(text, newline_str='\n'):
+    """Render a Pango-formatted dialog message to the terminal.
+
+    Converts Pango markup tags to ANSI escape codes where possible,
+    and replaces the dialog's newline string with actual newlines.
+    Intended as a terminal fallback when a GUI dialog is unavailable
+    or broken.
+
+    Args:
+        text:           The Pango-formatted message string.
+        newline_str:    The newline placeholder used in the message
+                        (e.g., '\\n' or '<br>').
+    """
+
+    # ANSI escape codes
+    BOLD        = '\033[1m'
+    ITALIC      = '\033[3m'
+    RESET       = '\033[0m'
+
+    # Replace the dialog newline string with actual newlines
+    output = text.replace(newline_str, '\n')
+
+    # Convert Pango bold tags to ANSI bold
+    output = output.replace('<b>', BOLD)
+    output = output.replace('</b>', RESET)
+
+    # Convert Pango italic tags to ANSI italic
+    output = output.replace('<i>', ITALIC)
+    output = output.replace('</i>', RESET)
+
+    # Strip tags that have no useful terminal equivalent
+    output = output.replace('<tt>', '')
+    output = output.replace('</tt>', '')
+
+    # Strip any remaining XML/Pango tags (e.g., <span>, etc.)
+    output = re.sub(r'<[^>]+>', '', output)
+
+    # Unescape XML entities that escape_markup() applied
+    output = output.replace('&lt;', '<')
+    output = output.replace('&gt;', '>')
+    output = output.replace('&amp;', '&')
+
+    print(output)

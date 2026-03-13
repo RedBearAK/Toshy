@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260309'
+__version__ = '20260313'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -167,7 +167,9 @@ sys.path.insert(0, current_folder_path)
 from toshy_common.env_context import EnvironmentInfo
 from toshy_common.machine_context import get_machine_id_hash
 from toshy_common.notification_manager import NotificationManager
+from toshy_common.runtime_utils import sanitize_text
 from toshy_common.settings_class import Settings
+from toshy_common.terminal_utils import print_pango_text
 
 assets_path         = os.path.join(current_folder_path, 'assets')
 icon_file_active    = os.path.join(assets_path, "toshy_app_icon_rainbow.svg")
@@ -1189,15 +1191,18 @@ def notify_context():
             f"</tt>"
         )
 
+        # Sanitize Unicode characters in dialog text if locale does not support
+        sane_message = sanitize_text(message)
+
         zenity_cmd_lst = [  zenity_cmd, '--info', '--no-wrap',
                             '--title=Toshy Context Info',
-                            '--text=' + message ]
+                            '--text=' + sane_message ]
 
         # insert the icon argument if it's supported
         if zenity_icon_option is not None:
             zenity_cmd_lst.insert(3, zenity_icon_option)
 
-        kdialog_cmd_lst = [kdialog_cmd, '--msgbox', message, '--title', 'Toshy Context Info']
+        kdialog_cmd_lst = [kdialog_cmd, '--msgbox', sane_message, '--title', 'Toshy Context Info']
         # Add icon if needed: kdialog_cmd_lst += ['--icon', '/path/to/icon']
         # Figure out why icon argument doesn't work. Need a proper icon theme folder?
         # DONE: Figured out that Kdialog does not support custom icons at all!
@@ -1207,6 +1212,15 @@ def notify_context():
             subprocess.Popen(kdialog_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
         elif dialog_cmd == zenity_cmd:
             subprocess.Popen(zenity_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
+
+        # Also print out the diagnostics to the terminal, in case the dialog doesn't work.
+        # Trim the last 4 lines (dialog-only hints) for terminal output
+        term_message = nwln_str.join(message.split(nwln_str)[:-4])
+        print(f"\n{'=' * 50}")
+        print(f"  Toshy Context Info (diagnostic dialog content)")
+        print(f"{'=' * 50}")
+        print_pango_text(term_message, nwln_str)
+        print()     # separate from following lines
 
         # Optionally, also send a system notification:
         # ntfy.send_notification(message)

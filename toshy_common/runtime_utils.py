@@ -1,12 +1,109 @@
-__version__ = '20250710'
+__version__ = '20260313'
 
 import os
 import re
 import sys
+import locale
+import unicodedata
+
 from pathlib import Path
 from dataclasses import dataclass
 
 from toshy_common.logger import debug, error
+
+
+# If LC_ALL is unset (as observed on NebiOS 10.2), try to fix so
+# that Unicode characters are supported. Fall back to sanitizing.
+try:
+    locale.setlocale(locale.LC_ALL, '')
+except locale.Error:
+    try:
+        locale.setlocale(locale.LC_ALL, 'C.UTF-8')
+        os.environ['LC_ALL'] = 'C.UTF-8'
+    except locale.Error:
+        pass  # truly broken, sanitize_text handles it
+
+
+def _check_locale_utf8():
+    """Check whether the current locale supports UTF-8 encoding."""
+    try:
+        encoding = locale.getpreferredencoding() or ''
+        return 'utf' in encoding.lower()
+    except Exception:
+        return False
+
+
+locale_is_utf8 = _check_locale_utf8()
+
+
+
+# Common Unicode characters found in Linux desktop/app UI elements,
+# mapped to their closest ASCII equivalents.
+_unicode_to_ascii_map = {
+    # Bullets and markers
+    '\u2022':   '*',        # •  bullet
+    '\u2023':   '>',        # ‣  triangular bullet
+    '\u25cf':   '*',        # ●  black circle
+    '\u25cb':   'o',        # ○  white circle
+    '\u2043':   '-',        # ⁃  hyphen bullet
+
+    # Dashes
+    '\u2014':   '--',       # —  em dash
+    '\u2013':   '-',        # –  en dash
+    '\u2012':   '-',        # ‒  figure dash
+
+    # Quotation marks
+    '\u201c':   '"',        # "  left double quotation
+    '\u201d':   '"',        # "  right double quotation
+    '\u2018':   "'",        # '  left single quotation
+    '\u2019':   "'",        # '  right single quotation
+    '\u00ab':   '<<',       # «  left guillemet
+    '\u00bb':   '>>',       # »  right guillemet
+
+    # Arrows
+    '\u2192':   '->',       # →  rightwards arrow
+    '\u2190':   '<-',       # ←  leftwards arrow
+    '\u2191':   '^',        # ↑  upwards arrow
+    '\u2193':   'v',        # ↓  downwards arrow
+
+    # Common symbols
+    '\u2026':   '...',      # …  horizontal ellipsis
+    '\u00d7':   'x',        # ×  multiplication sign
+    '\u2212':   '-',        # −  minus sign
+    '\u00b7':   '*',        # ·  middle dot
+    '\u2010':   '-',        # ‐  hyphen
+    '\u00a0':   ' ',        # non-breaking space
+}
+
+
+def sanitize_text(text):
+    """Sanitize Unicode text to ASCII-safe equivalents when the locale
+    does not support UTF-8. Returns the text unchanged when UTF-8 is
+    available.
+
+    Uses a manual mapping for common UI characters, NFKD normalization
+    for decomposable characters (accented letters, ligatures), and
+    a final ASCII encode with '?' replacement as a safety net."""
+
+    if not isinstance(text, str):
+        error(f"sanitize_text expected str, got {type(text).__name__}")
+        return str(text)
+
+    if locale_is_utf8:
+        return text
+
+    # Apply the manual mapping for known characters
+    for unicode_char, ascii_replacement in _unicode_to_ascii_map.items():
+        if unicode_char in text:
+            text = text.replace(unicode_char, ascii_replacement)
+
+    # NFKD normalization decomposes characters like é → e + combining accent
+    text = unicodedata.normalize('NFKD', text)
+
+    # Encode to ASCII, replacing anything still non-ASCII with '?'
+    text = text.encode('ascii', 'replace').decode('ascii')
+
+    return text
 
 
 @dataclass
