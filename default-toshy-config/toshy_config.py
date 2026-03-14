@@ -5305,6 +5305,14 @@ if DESKTOP_ENV == 'miracle-wm':
         hmp_not_remote(ctx)
     )
 
+if DESKTOP_ENV == 'nebide':
+    keymap("GenGUI overrides: NebiDE", {
+        C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # Open Launcher with Cmd+Space
+    }, when = lambda ctx:
+        cnfg.screen_has_focus and
+        hmp_not_remote(ctx)
+    )
+
 if DESKTOP_ENV == 'pantheon':
     keymap("GenGUI overrides: Pantheon", {
         C("RC-F3"):                 C("Super-d"),                   # Show Desktop (gnome/kde,elementary)
