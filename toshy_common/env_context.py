@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260312'
+__version__ = '20260313'
 
 import os
 import re
@@ -563,6 +563,14 @@ class EnvironmentInfo:
             error(f"WAYFIRE_SOCKET is set but DE was identified as '{prev_de}'. "
                     f"Overriding to 'wayfire'.")
             self.DESKTOP_ENV = 'wayfire'
+
+        # Detect NebiDE when Wayfire config file path indicates it.
+        # NebiDE is a Wayfire-based DE that may not identify itself
+        # in the standard XDG desktop environment variables, in NebiOS.
+        if self.DESKTOP_ENV == 'wayfire':
+            wayfire_config = os.environ.get('WAYFIRE_CONFIG_FILE', '')
+            if 'nebide' in wayfire_config.casefold():
+                self.DESKTOP_ENV = 'nebide'
 
         # say DE should be added to list only if it isn't None
         if not self.DESKTOP_ENV and _desktop_env is not None:
