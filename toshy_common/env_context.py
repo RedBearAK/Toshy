@@ -560,7 +560,7 @@ class EnvironmentInfo:
         # despite using Wayfire as the compositor.
         if os.environ.get('WAYFIRE_SOCKET') and self.DESKTOP_ENV not in ['wayfire', 'nebide']:
             prev_de = self.DESKTOP_ENV or _desktop_env or '<unset>'
-            error(f"WAYFIRE_SOCKET is set but DE was identified as '{prev_de}'. "
+            debug(f"WAYFIRE_SOCKET is set but DE was identified as '{prev_de}'. "
                     f"Overriding to 'wayfire'.")
             self.DESKTOP_ENV = 'wayfire'
 
