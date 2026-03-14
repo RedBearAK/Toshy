@@ -29,6 +29,8 @@ I don't really know many other places where it might be considered appropriate t
 
 # Current status: Stable Beta (Please Read)
 
+**2026-03-13**: Added support for NebiOS, an Ubuntu-based distro with a Wayfire-based Mac-like desktop environment (NebiDE). 
+
 **2026-02-02 UPDATE**: Finally added official support for installing on Gentoo Linux. Maybe also Calculate Linux and Redcore Linux, but only plain Gentoo is tested. Thanks to user @sazz who proved that it was possible to get Toshy running on Gentoo in issue 775.
 
 **2026-01 UPDATE**: Toshy user @armerpunkt implemented support for AerynOS (formerly known as Serpent OS). See PR 771.
