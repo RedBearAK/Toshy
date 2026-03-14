@@ -5305,7 +5305,7 @@ if DESKTOP_ENV == 'miracle-wm':
         hmp_not_remote(ctx)
     )
 
-if DESKTOP_ENV == 'wayfire' and DISTRO_ID == 'nebios':      # Assume NebiDE if Wayfire on NebiOS
+if DESKTOP_ENV == 'nebide':
     keymap("GenGUI overrides: NebiDE", {
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # Open Launcher with Cmd+Space
     }, when = lambda ctx:
