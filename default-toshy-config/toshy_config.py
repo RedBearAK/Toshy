@@ -56,6 +56,7 @@ throttle_delays(
     key_post_delay_ms   = 12,      # default: 0 ms, range: 0-150 ms, suggested: 1-100 ms
 )
 
+
 # ─── Devices API Reference ───────────────────────────────────────────────────
 #
 # Use `devices_api()` to control which input devices the keymapper grabs.
@@ -414,6 +415,7 @@ applelogoalert_enabled = True   # Default: True
 ###                                                ###
 ###                                                ###
 ######################################################
+
 
 def toRgxStr(lst_of_str) -> str:
     """
@@ -1259,8 +1261,8 @@ def notify_context():
 
 from toshy_common.xkb_check import XKBOptionsCheck
 
-_xkb_checker                    = XKBOptionsCheck() if XKBOptionsCheck else None
-_xkb_has_issues                 = _xkb_checker.check_for_issues() if _xkb_checker else False
+_xkb_checker                    = XKBOptionsCheck()
+_xkb_has_issues                 = _xkb_checker.check_for_issues()
 
 if _xkb_has_issues:
     _xkb_sep = '!' * 72
