@@ -56,7 +56,6 @@ throttle_delays(
     key_post_delay_ms   = 12,      # default: 0 ms, range: 0-150 ms, suggested: 1-100 ms
 )
 
-
 # ─── Devices API Reference ───────────────────────────────────────────────────
 #
 # Use `devices_api()` to control which input devices the keymapper grabs.
@@ -77,7 +76,6 @@ throttle_delays(
 # path, or synthetic ID for entries that should survive across reboots.
 
 devices_api(
-
     # Only the specified devices will be "grabbed" and watched for
     # during device connections/disconnections. When empty or omitted,
     # the keymapper autodetects all keyboard-like devices.
@@ -89,9 +87,12 @@ devices_api(
     # allowlist above. Useful for combo keyboard/mouse devices that
     # cause pointer stutter when grabbed, or media control devices
     # that do not need remapping.
-    ignore_devices = [
-        # 'Example Wireless Receiver Mouse',
-    ],
+    # NOTE: `ignore_devices` is not supported by the installed xwaykeyz
+    # v1.15.0 (commented out in its config_api.py). Re-enable after the
+    # venv is upgraded to a version that accepts this kwarg.
+    # ignore_devices = [
+    #     # 'Example Wireless Receiver Mouse',
+    # ],
 )
 
 
@@ -415,7 +416,6 @@ applelogoalert_enabled = True   # Default: True
 ###                                                ###
 ###                                                ###
 ######################################################
-
 
 def toRgxStr(lst_of_str) -> str:
     """
@@ -1259,10 +1259,15 @@ def notify_context():
 
 ###  XKB OPTIONS CHECK  ###
 
-from toshy_common.xkb_check import XKBOptionsCheck
+try:
+    from toshy_common.xkb_check import XKBOptionsCheck
+except ImportError:
+    # Installed toshy_common is older than this config template and does
+    # not ship xkb_check yet. Skip the check until the runtime is upgraded.
+    XKBOptionsCheck = None
 
-_xkb_checker                    = XKBOptionsCheck()
-_xkb_has_issues                 = _xkb_checker.check_for_issues()
+_xkb_checker                    = XKBOptionsCheck() if XKBOptionsCheck else None
+_xkb_has_issues                 = _xkb_checker.check_for_issues() if _xkb_checker else False
 
 if _xkb_has_issues:
     _xkb_sep = '!' * 72
@@ -3152,6 +3157,22 @@ keymap("Escape actions for dead keys - Overrides for ABC Extended", {
 
 }, when = lambda _: ac_Chr_main in deadkeys_list and cnfg.optspec_layout == 'ABC')
 
+keymap("Escape actions for dead keys - Overrides for DE Mac", {
+
+    ###  activate other dead keys correctly while one is active
+    ###
+    ###  The German Mac Option layer only exposes TWO dead keys:
+    ###      Alt+U  →  ¨  umlaut/diaeresis
+    ###      Alt+N  →  ~  tilde
+    ###  The circumflex (^), acute (´) and grave (`) accents live on bare
+    ###  keys on a German keyboard and are handled by the Linux German
+    ###  layout itself, so they are NOT listed here.
+
+    C("Alt-U"):         [getDK(),UC(0x00A8),C("Shift-Left"),setDK(0x00A8)], # Dead Key Accent: Umlaut/Diaeresis
+    C("Alt-N"):         [getDK(),UC(0x02DC),C("Shift-Left"),setDK(0x02DC)], # Dead Key Accent: Tilde
+
+}, when = lambda _: ac_Chr_main in deadkeys_list and cnfg.optspec_layout == 'de')
+
 keymap("Escape actions for dead keys", {
     # special case shortcuts that should cancel dead keys
     C("Esc"):           [getDK(),setDK(None)],                              # Leave accent char if dead keys Escaped
@@ -3616,6 +3637,199 @@ keymap("OptSpecialChars - US", {
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     cnfg.optspec_layout == 'US' and
+    hmp_not_term_or_remote(ctx)
+)
+
+
+
+##############################################################################
+###                                                                        ###
+###                                                                        ###
+###      ██████  ███████     ███    ███  █████  ██ ███    ██               ###
+###      ██   ██ ██          ████  ████ ██   ██ ██ ████   ██               ###
+###      ██   ██ █████       ██ ████ ██ ███████ ██ ██ ██  ██               ###
+###      ██   ██ ██          ██  ██  ██ ██   ██ ██ ██  ██ ██               ###
+###      ██████  ███████     ██      ██ ██   ██ ██ ██   ████               ###
+###                                                                        ###
+###                                                                        ###
+##############################################################################
+# Main keymap for special characters on the German (Deutsch) Mac layout.
+#
+# The 'de' slot in cnfg.optspec_layout produces the characters that macOS
+# generates for the German (Deutsch) keyboard layout when Option /
+# Shift+Option are held. Set `cnfg.optspec_layout = 'de'` in your Toshy
+# config to activate it.
+#
+# IMPORTANT — key naming follows PHYSICAL positions on a German Mac keyboard,
+# because Toshy sits at the Linux evdev layer (before the X/Wayland layout
+# mapping). Linux evdev scancodes are still US-positional, so on a German
+# QWERTZ keyboard:
+#
+#       evdev name         label on German Mac key
+#       -----------        ------------------------
+#       Grave              ^     (top-left, next to 1)
+#       Minus              ß     (right of 0)
+#       Equal              ´     (right of ß)
+#       Y                  Z     (QWERTZ swap!)
+#       Z                  Y     (QWERTZ swap!)
+#       Left_Brace         ü
+#       Right_Brace        +
+#       Semicolon          ö
+#       Apostrophe         ä
+#       Backslash          #
+#       Slash              -     (bottom row, right of . )
+#       Key_102ND          <     (extra key left of the Z-labelled key)
+#
+# Only two dead keys exist on the German Mac Option layer: Alt+U (umlaut)
+# and Alt+N (tilde). The circumflex/acute/grave dead keys live on bare
+# keys on a German keyboard and are handled by the Linux German layout,
+# not by Toshy.
+#
+# NB: the Shift+Option glyphs for rarer slots (ligatures, diacritics) vary
+# slightly between macOS versions and between "German" vs. "German – Standard"
+# input sources. The programming-critical characters (@, [], {}, |, \, €, ~)
+# are rock solid;
+keymap("OptSpecialChars - DE", {
+
+    # Number row with Option
+    ######################################################
+    # Alt+^ (evdev Grave) and Alt+´ (evdev Equal) are not assigned on
+    # German Mac — leave them unmapped so the native Linux layout handles them.
+
+    C("Alt-1"):                 UC(0x00A1),                     # ¡ Inverted Exclamation Mark
+    C("Alt-2"):                 UC(0x201C),                     # “ Left Double Quotation Mark
+    C("Alt-3"):                 UC(0x00B6),                     # ¶ Pilcrow / paragraph mark
+    C("Alt-4"):                 UC(0x00A2),                     # ¢ Cent sign
+    C("Alt-5"):                 UC(0x005B),                     # [ Left Square Bracket
+    C("Alt-6"):                 UC(0x005D),                     # ] Right Square Bracket
+    C("Alt-7"):                 UC(0x007C),                     # | Vertical Bar (pipe)
+    C("Alt-8"):                 UC(0x007B),                     # { Left Curly Brace
+    C("Alt-9"):                 UC(0x007D),                     # } Right Curly Brace
+    C("Alt-0"):                 UC(0x2260),                     # ≠ Not Equal To
+    C("Alt-Minus"):             UC(0x00BF),                     # ¿ Inverted Question Mark  (on the ß key)
+
+    # Number row with Shift+Option
+    ######################################################
+    C("Shift-Alt-1"):           UC(0x201D),                     # ” Right Double Quotation Mark
+    C("Shift-Alt-2"):           UC(0x201E),                     # „ Double Low-9 Quotation Mark
+    C("Shift-Alt-3"):           UC(0x00A3),                     # £ British Pound
+    C("Shift-Alt-4"):           UC(0x2039),                     # ‹ Single Left-Pointing Angle Quotation
+    C("Shift-Alt-5"):           UC(0x203A),                     # › Single Right-Pointing Angle Quotation
+    C("Shift-Alt-6"):           UC(0xFB01),                     # ﬁ Latin Small Ligature Fi
+    C("Shift-Alt-7"):           UC(0x005C),                     # \ Backslash  *** Shift+Option+7 ***
+    C("Shift-Alt-8"):           UC(0x007E),                     # ~ ASCII Tilde
+    C("Shift-Alt-9"):           UC(0x00B7),                     # · Middle Dot
+    C("Shift-Alt-0"):           UC(0x00B0),                     # ° Degree Sign
+    C("Shift-Alt-Minus"):       UC(0x02D9),                     # ˙ Dot Above (non-combining)
+
+    # Top letter row (QWERTZ) with Option
+    ######################################################
+    C("Alt-Q"):                 UC(0x00AB),                     # « Left-Pointing Double Angle Quotation
+    C("Alt-W"):                 UC(0x2211),                     # ∑ N-Ary Summation
+    C("Alt-E"):                 UC(0x20AC),                     # € Euro currency symbol
+    C("Alt-R"):                 UC(0x00AE),                     # ® Registered Trade Mark
+    C("Alt-T"):                 UC(0x2020),                     # † Dagger
+
+    # Alt-Y in evdev == the Z-labelled key on German QWERTZ
+    C("Alt-Y"):                 UC(0x03A9),                     # Ω Greek Omega  (Option+Z on Mac DE)
+
+    C("Alt-U"):         [UC(0x00A8),C("Shift-Left"),setDK(0x00A8)],      # Dead Key Accent: Umlaut/Diaeresis
+
+    C("Alt-I"):                 UC(0x02C6),                     # ˆ Circumflex (non-combining)
+    C("Alt-O"):                 UC(0x00F8),                     # ø Latin Small o with Stroke
+    C("Alt-P"):                 UC(0x03C0),                     # π Greek Small Pi
+    C("Alt-Left_Brace"):        UC(0x2022),                     # • Bullet  (Option+ü)
+    C("Alt-Right_Brace"):       UC(0x00B1),                     # ± Plus-Minus  (Option+ +)
+
+    # Top letter row (QWERTZ) with Shift+Option
+    ######################################################
+    C("Shift-Alt-Q"):           UC(0x00BB),                     # » Right-Pointing Double Angle Quotation
+    C("Shift-Alt-W"):           UC(0x201E),                     # „ Double Low-9 Quotation
+    C("Shift-Alt-E"):           UC(0x2030),                     # ‰ Per mille symbol
+    C("Shift-Alt-R"):           UC(0x00B8),                     # ¸ Spacing Cedilla (non-combining)
+    C("Shift-Alt-T"):           UC(0x02C7),                     # ˇ Caron / háček (non-combining)
+
+    # Shift-Alt-Y in evdev == the Z-labelled key on German QWERTZ
+    C("Shift-Alt-Y"):           UC(0x02DB),                     # ˛ Ogonek  (Shift+Option+Z on Mac DE)
+
+    C("Shift-Alt-U"):           UC(0x2014),                     # — Em Dash
+    C("Shift-Alt-I"):           UC(0x00B7),                     # · Middle Dot
+    C("Shift-Alt-O"):           UC(0x00D8),                     # Ø Capital O with Stroke
+    C("Shift-Alt-P"):           UC(0x220F),                     # ∏ N-Ary Product
+    C("Shift-Alt-Left_Brace"):  UC(0x00B0),                     # ° Degree  (Shift+Option+ü)
+    C("Shift-Alt-Right_Brace"): UC(0x02DD),                     # ˝ Double Acute (non-combining)
+
+    # Home row with Option
+    ######################################################
+    C("Alt-A"):                 UC(0x00E5),                     # å Small a with Ring Above
+    C("Alt-S"):                 UC(0x222B),                     # ∫ Integral
+    C("Alt-D"):                 UC(0x2202),                     # ∂ Partial Differential
+    C("Alt-F"):                 UC(0x0192),                     # ƒ Florin / function symbol
+    C("Alt-G"):                 UC(0x00A9),                     # © Copyright
+    C("Alt-H"):                 UC(0x00AA),                     # ª Feminine Ordinal Indicator
+    C("Alt-J"):                 UC(0x00BA),                     # º Masculine Ordinal Indicator
+    C("Alt-K"):                 UC(0x2206),                     # ∆ Increment / Laplace
+    C("Alt-L"):                 UC(0x0040),                     # @ AT SIGN  *** the big one ***
+    C("Alt-Semicolon"):         UC(0x0153),                     # œ Small OE ligature  (Option+ö)
+    C("Alt-Apostrophe"):        UC(0x00E6),                     # æ Small AE ligature  (Option+ä)
+    C("Alt-Backslash"):         UC(0x2018),                     # ‘ Left Single Quotation Mark  (Option+#)
+
+    # Home row with Shift+Option
+    ######################################################
+    C("Shift-Alt-A"):           UC(0x00C5),                     # Å Capital A with Ring Above
+    C("Shift-Alt-S"):           UC(0x00CD),                     # Í
+    C("Shift-Alt-D"):           UC(0x00CE),                     # Î
+    C("Shift-Alt-F"):           UC(0x00CF),                     # Ï
+    C("Shift-Alt-G"):           UC(0x02DD),                     # ˝ Double Acute (non-combining)
+    C("Shift-Alt-H"):           UC(0x00D3),                     # Ó
+    C("Shift-Alt-J"):           UC(0x00D4),                     # Ô
+    # Shift-Alt-K is unmapped on German Mac (Apple-logo slot on US layout)
+    C("Shift-Alt-L"):           UC(0x00D2),                     # Ò
+    C("Shift-Alt-Semicolon"):   UC(0x0152),                     # Œ Capital OE ligature  (Shift+Option+ö)
+    C("Shift-Alt-Apostrophe"):  UC(0x00C6),                     # Æ Capital AE ligature
+    C("Shift-Alt-Backslash"):   UC(0x2019),                     # ’ Right Single Quotation Mark  (Shift+Option+#)
+
+    # Bottom row (<YXCV…) with Option
+    ######################################################
+    # Key_102ND == the <  key between left Shift and the Z-labelled key.
+    # If your keyszer/Toshy version rejects this name, try plain "102ND".
+    C("Alt-Key_102ND"):         UC(0x2264),                     # ≤ Less-Than or Equal
+
+    # Alt-Z in evdev == the Y-labelled key on German QWERTZ
+    C("Alt-Z"):                 UC(0x00A5),                     # ¥ Japanese Yen  (Option+Y on Mac DE)
+
+    C("Alt-X"):                 UC(0x2248),                     # ≈ Almost Equal
+    C("Alt-C"):                 UC(0x00E7),                     # ç Small c with Cedilla
+    C("Alt-V"):                 UC(0x221A),                     # √ Square Root
+    C("Alt-B"):                 UC(0x2018),                     # ‘ Left Single Quotation
+
+    C("Alt-N"):         [UC(0x02DC),C("Shift-Left"),setDK(0x02DC)],      # Dead Key Accent: Tilde
+
+    C("Alt-M"):                 UC(0x00B5),                     # µ Micro sign
+    C("Alt-Comma"):             UC(0x221E),                     # ∞ Infinity
+    C("Alt-Dot"):               UC(0x2026),                     # … Horizontal Ellipsis
+    C("Alt-Slash"):             UC(0x2013),                     # – En Dash  (on the - key → evdev Slash)
+
+    # Bottom row with Shift+Option
+    ######################################################
+    C("Shift-Alt-Key_102ND"):   UC(0x2265),                     # ≥ Greater-Than or Equal
+
+    # Shift-Alt-Z in evdev == the Y-labelled key on German QWERTZ
+    C("Shift-Alt-Z"):           UC(0x0178),                     # Ÿ Capital Y with Diaeresis  (Shift+Option+Y on Mac DE)
+
+    C("Shift-Alt-X"):           UC(0x02D8),                     # ˘ Breve (non-combining)
+    C("Shift-Alt-C"):           UC(0x00C7),                     # Ç
+    C("Shift-Alt-V"):           UC(0x25CA),                     # ◊ Lozenge
+    C("Shift-Alt-B"):           UC(0x2019),                     # ’ Right Single Quotation
+    C("Shift-Alt-N"):           UC(0x0131),                     # ı Dotless i
+    C("Shift-Alt-M"):           UC(0x00C2),                     # Â
+    C("Shift-Alt-Comma"):       UC(0x02DC),                     # ˜ Small Tilde (non-combining)
+    C("Shift-Alt-Dot"):         UC(0x00F7),                     # ÷ Division
+    C("Shift-Alt-Slash"):       UC(0x2014),                     # — Em Dash
+
+}, when = lambda ctx:
+    cnfg.screen_has_focus and
+    cnfg.optspec_layout == 'de' and
     hmp_not_term_or_remote(ctx)
 )
 

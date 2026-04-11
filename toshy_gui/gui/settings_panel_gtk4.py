@@ -400,8 +400,16 @@ class SettingsPanel(Gtk.Box):
         self.optspec_abc_radio.setting_value = "ABC"
         self.optspec_abc_radio.connect('toggled', self.on_optspec_toggled)
         radio_container.append(self.optspec_abc_radio)
-        
+
         # Third radio button (part of same group)
+        self.optspec_de_radio = Gtk.CheckButton(label="Option-key Special Characters (German Mac)")
+        self.optspec_de_radio.add_css_class("radio-control")
+        self.optspec_de_radio.set_group(self.optspec_us_radio)  # Join the group
+        self.optspec_de_radio.setting_value = "de"
+        self.optspec_de_radio.connect('toggled', self.on_optspec_toggled)
+        radio_container.append(self.optspec_de_radio)
+
+        # Fourth radio button (part of same group)
         self.optspec_disabled_radio = Gtk.CheckButton(label="Disable Option-key Special Characters*")
         self.optspec_disabled_radio.add_css_class("radio-control")
         self.optspec_disabled_radio.set_group(self.optspec_us_radio)  # Join the group
@@ -415,6 +423,8 @@ class SettingsPanel(Gtk.Box):
             self.optspec_us_radio.set_active(True)
         elif current_value == 'ABC':
             self.optspec_abc_radio.set_active(True)
+        elif current_value == 'de':
+            self.optspec_de_radio.set_active(True)
         elif current_value == 'Disabled':
             self.optspec_disabled_radio.set_active(True)
         
@@ -545,6 +555,8 @@ class SettingsPanel(Gtk.Box):
             target_radio = self.optspec_us_radio
         elif current_optspec == 'ABC':
             target_radio = self.optspec_abc_radio
+        elif current_optspec == 'de':
+            target_radio = self.optspec_de_radio
         elif current_optspec == 'Disabled':
             target_radio = self.optspec_disabled_radio
             

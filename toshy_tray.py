@@ -525,6 +525,7 @@ if not runtime.barebones_config:
         layout = cnfg.optspec_layout
         if   layout == 'US':            set_item_active_thread_safe(optspec_us_item, True)
         elif layout == 'ABC':           set_item_active_thread_safe(optspec_abc_extended_item, True)
+        elif layout == 'de':            set_item_active_thread_safe(optspec_de_item, True)
         elif layout == 'Disabled':      set_item_active_thread_safe(optspec_disabled_item, True)
 
     def save_optspec_layout_setting(menu_item, layout):
@@ -551,6 +552,10 @@ if not runtime.barebones_config:
     optspec_abc_extended_item = Gtk.RadioMenuItem.new_with_label(group_optspec, 'ABC Extended')
     optspec_abc_extended_item.connect('toggled', save_optspec_layout_setting, 'ABC')
     optspec_layout_submenu.append(optspec_abc_extended_item)
+
+    optspec_de_item = Gtk.RadioMenuItem.new_with_label(group_optspec, 'German (Deutsch) Mac')
+    optspec_de_item.connect('toggled', save_optspec_layout_setting, 'de')
+    optspec_layout_submenu.append(optspec_de_item)
 
     optspec_disabled_item = Gtk.RadioMenuItem.new_with_label(group_optspec, 'Disabled*')
     optspec_disabled_item.connect('toggled', save_optspec_layout_setting, 'Disabled')

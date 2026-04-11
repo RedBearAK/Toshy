@@ -586,8 +586,16 @@ optspec_ABC_radio_btn = ttk.Radiobutton(
     mid_right_column,
     text='  Option-key Special Characters (ABC Extended)',
     style='Switch.TRadiobutton',
-    variable=optspec_var, 
+    variable=optspec_var,
     value="ABC"
+)
+
+optspec_DE_radio_btn = ttk.Radiobutton(
+    mid_right_column,
+    text='  Option-key Special Characters (German Mac)',
+    style='Switch.TRadiobutton',
+    variable=optspec_var,
+    value="de"
 )
 
 optspec_Disabled_radio_btn = ttk.Radiobutton(
@@ -618,6 +626,7 @@ if not runtime.barebones_config:
     media_arrows_fix_label.pack(anchor=tk.W, padx=sw_lbl_indent, pady=btn_lbl_pady)
     optspec_US_radio_btn.pack(anchor=tk.W, padx=rad_btn_padx, pady=btn_pady)
     optspec_ABC_radio_btn.pack(anchor=tk.W, padx=rad_btn_padx, pady=btn_pady)
+    optspec_DE_radio_btn.pack(anchor=tk.W, padx=rad_btn_padx, pady=btn_pady)
     optspec_Disabled_radio_btn.pack(anchor=tk.W, padx=rad_btn_padx, pady=btn_pady)
     optspec_label.pack(anchor=tk.W, padx=sw_lbl_indent, pady=btn_lbl_pady)
 
@@ -647,6 +656,7 @@ media_arrows_fix_switch.config(
         cnfg, media_arrows_fix_switch_var, 'media_arrows_fix'))
 optspec_US_radio_btn.config(command=lambda: save_radio_settings(cnfg, optspec_var, "optspec_layout"))
 optspec_ABC_radio_btn.config(command=lambda: save_radio_settings(cnfg, optspec_var, "optspec_layout"))
+optspec_DE_radio_btn.config(command=lambda: save_radio_settings(cnfg, optspec_var, "optspec_layout"))
 optspec_Disabled_radio_btn.config(command=lambda: save_radio_settings(cnfg, optspec_var, "optspec_layout"))
 
 
