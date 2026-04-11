@@ -76,6 +76,7 @@ throttle_delays(
 # path, or synthetic ID for entries that should survive across reboots.
 
 devices_api(
+
     # Only the specified devices will be "grabbed" and watched for
     # during device connections/disconnections. When empty or omitted,
     # the keymapper autodetects all keyboard-like devices.
@@ -87,12 +88,9 @@ devices_api(
     # allowlist above. Useful for combo keyboard/mouse devices that
     # cause pointer stutter when grabbed, or media control devices
     # that do not need remapping.
-    # NOTE: `ignore_devices` is not supported by the installed xwaykeyz
-    # v1.15.0 (commented out in its config_api.py). Re-enable after the
-    # venv is upgraded to a version that accepts this kwarg.
-    # ignore_devices = [
-    #     # 'Example Wireless Receiver Mouse',
-    # ],
+    ignore_devices = [
+        # 'Example Wireless Receiver Mouse',
+    ],
 )
 
 
@@ -1259,12 +1257,7 @@ def notify_context():
 
 ###  XKB OPTIONS CHECK  ###
 
-try:
-    from toshy_common.xkb_check import XKBOptionsCheck
-except ImportError:
-    # Installed toshy_common is older than this config template and does
-    # not ship xkb_check yet. Skip the check until the runtime is upgraded.
-    XKBOptionsCheck = None
+from toshy_common.xkb_check import XKBOptionsCheck
 
 _xkb_checker                    = XKBOptionsCheck() if XKBOptionsCheck else None
 _xkb_has_issues                 = _xkb_checker.check_for_issues() if _xkb_checker else False
