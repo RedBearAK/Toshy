@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260404'
+__version__ = '20260415'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -511,6 +511,13 @@ termStr                         = toRgxStr(terminals)
 # DEPRECATED
 # This is only for use with 'remotes_lod', otherwise regex pattern string is used.
 terminals_lod = create_list_of_dicts(terminals)
+
+term_sigint_preventer_lst = [
+    ".*Ptyxis.*",
+    "konsole",
+    "org.kde.konsole",
+]
+term_sigint_preventer_Str       = toRgxStr(term_sigint_preventer_lst)
 
 vscodes = [
     "code",
@@ -4796,6 +4803,72 @@ keymap("Elementary Terminal tab switching", {
 ###                                                                                    ###
 ###                                                                                    ###
 ##########################################################################################
+
+
+# ============================================================================
+# SIGINT Preventer — Cmd+C in Ptyxis/Konsole without a text selection
+# ----------------------------------------------------------------------------
+# Problem:
+#   In some terminals (currently confirmed: Ptyxis, Konsole), pressing the
+#   default Copy shortcut (Ctrl+Shift+C) with NO active text selection
+#   causes the terminal to fall through and deliver a plain Ctrl+C to the
+#   running process as SIGINT, killing whatever is running at the prompt.
+#
+#   Other terminals tested — WezTerm, Ghostty, Xfce4-terminal, Qterminal,
+#   and the older GNOME Terminal (VTE-based) — are NOT affected. They
+#   swallow Ctrl+Shift+C unconditionally when nothing is selected, which
+#   is the correct behavior.
+#
+#   Toshy cannot query the terminal's selection state from the outside,
+#   so a fully transparent fix is not possible. The workaround here is to
+#   remap Cmd+C to Ctrl+Insert (the legacy X11/Windows Copy shortcut) for
+#   the affected terminals only. This is strictly safer than the current
+#   Ctrl+Shift+C behavior, even for users who do no additional setup:
+#
+#     • Before (Ctrl+Shift+C, no selection): SIGINT kills running process.
+#     • After  (Ctrl+Insert, no selection):  a short escape sequence
+#                                             (\e[2;5~) reaches the pty,
+#                                             which appears as a few
+#                                             stray characters at the
+#                                             prompt or is ignored by
+#                                             most running processes.
+#
+#   Visual noise is a clear improvement over destroying work.
+#
+# OPTIONAL MANUAL SETUP — for fully clean behavior with no stray output:
+#
+#   Bind the terminal's "Copy" action to Ctrl+Insert. Once bound, the
+#   terminal intercepts the combo as a shortcut and the escape sequence
+#   no longer reaches the pty.
+#
+#     • Konsole:
+#         Settings → Configure Keyboard Shortcuts → search "Copy"
+#         Set "Copy" to Ctrl+Insert.
+#         NOTE: Konsole caches shortcuts at launch. You must fully quit
+#         and relaunch Konsole (all windows) for the new binding to
+#         take effect. Changing it while Konsole is running will appear
+#         to do nothing.
+#
+#     • Ptyxis:
+#         Check Preferences → Shortcuts for a "Copy" entry and set it
+#         to Ctrl+Insert. If the current Ptyxis version does not expose
+#         an editable Copy shortcut, the mouse / right-click menu
+#         remains available for copying until it does.
+#
+# To extend this fix to additional terminals that are later confirmed to
+# exhibit the same bug, append their window class strings to
+# term_sigint_preventer_lst in the LISTS section near the top of the file.
+# ============================================================================
+
+
+hmp_is_term_sigint_preventer    = matchProps(clas=term_sigint_preventer_Str)
+keymap("SIGINT Preventer", {
+    # Activating this may require manual Copy shortcut rebind in affected terminal apps
+    C("RC-C"):                  C("Ctrl-Insert"),
+}, when = lambda ctx:
+    cnfg.screen_has_focus and
+    hmp_is_term_sigint_preventer(ctx)
+)
 
 
 hmp_is_term_alacritty           = matchProps(clas="^alacritty$")
