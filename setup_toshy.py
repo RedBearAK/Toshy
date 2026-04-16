@@ -268,6 +268,7 @@ class InstallerSettings:
         self.tweak_applied          = None
         self.remind_extensions      = None
         self.enabled_gnome_exts     = None
+        self.dwt_quirk_installed    = None
         self.should_reboot          = None
 
         self.run_tmp_dir            = run_tmp_dir
@@ -638,6 +639,12 @@ def can_skip_reboot():
     Determine if reboot can be skipped despite should_reboot being set.
     If permissions are working and service is running, uaccess did its job.
     """
+
+    # A freshly installed DWT quirk genuinely needs a compositor restart
+    # (log out or reboot) — device permissions being fine doesn't help.
+    if cnfg.dwt_quirk_installed:
+        return False
+
     perms_ok, perms_msg = verify_device_permissions()
     if not perms_ok:
         debug(f"Permission check failed: {perms_msg}")
@@ -2845,7 +2852,8 @@ def install_libinput_dwt_quirk():
 
     # If we get here it means we installed the libinput quirk, so user needs to
     # at least log out, or restart the system to activate the quirk.
-    cnfg.should_reboot = True
+    cnfg.dwt_quirk_installed    = True
+    cnfg.should_reboot          = True
 
     show_task_completed_msg()
 
