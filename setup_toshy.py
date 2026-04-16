@@ -268,7 +268,7 @@ class InstallerSettings:
         self.tweak_applied          = None
         self.remind_extensions      = None
         self.enabled_gnome_exts     = None
-        self.dwt_quirk_installed    = True
+        self.dwt_quirk_installed    = None
         self.should_reboot          = None
 
         self.run_tmp_dir            = run_tmp_dir
@@ -2852,8 +2852,8 @@ def install_libinput_dwt_quirk():
 
     # If we get here it means we installed the libinput quirk, so user needs to
     # at least log out, or restart the system to activate the quirk.
-    cnfg.should_reboot          = True
     cnfg.dwt_quirk_installed    = True
+    cnfg.should_reboot          = True
 
     show_task_completed_msg()
 
