@@ -947,7 +947,7 @@ ctx_in_remote                   = False
 ctx_in_terminal                 = False
 
 
-def context_pre_check(ctx: KeyContext):
+def context_pre_check():
     """Side-effect trigger: pre-computes per-event context once at the
     top of the event chain, so downstream keymaps and modmaps can read
     cached values instead of repeating the same checks dozens of times.
@@ -957,18 +957,20 @@ def context_pre_check(ctx: KeyContext):
         - ctx_in_terminal
         - keyboard type (via getKBtype())
     """
-    global ctx_in_remote
-    global ctx_in_terminal
+    def _context_pre_check(ctx: KeyContext):
+        global ctx_in_remote
+        global ctx_in_terminal
 
-    # Update the boolean global vars to minimize repeated (hoisted) matchProps calls
-    ctx_in_remote               = hmp_is_remote(ctx)
-    ctx_in_terminal             = hmp_is_terminal(ctx)
+        # Update the boolean global vars to minimize repeated (hoisted) matchProps calls
+        ctx_in_remote               = hmp_is_remote(ctx)
+        ctx_in_terminal             = hmp_is_terminal(ctx)
 
-    # Establish the keyboard type during the context pre-check
-    getKBtype()(ctx)
+        # Establish the keyboard type during the context pre-check
+        getKBtype()(ctx)
 
-    # Always return false so the trigger modmap and keymap are never active
-    return False    # never matches; runs only for the side effect
+        # Always return false so the trigger modmap and keymap are never active
+        return False    # never matches; runs only for the side effect
+    return _context_pre_check
 
 
 def isDoubleTap(dt_combo):
