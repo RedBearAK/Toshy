@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260427'
+__version__ = '20260428'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -941,10 +941,14 @@ def getKBtype():
     return _getKBtype  # Return the inner function
 
 
-# Global variables to store the truthiness of an app being a remote/VM or terminal.
-# Should speed up the config, replacing dozens of hoisted matchProps evals with bools.
-ctx_in_remote                   = False
-ctx_in_terminal                 = False
+# Global variables to store per-event context, set by `_context_pre_check`.
+# Replace dozens of hoisted matchProps and isKBtype calls with bool reads.
+ctx_app_is_remote               = False
+ctx_app_is_terminal             = False
+ctx_kbd_is_apple                = False
+ctx_kbd_is_chromebook           = False
+ctx_kbd_is_ibm                  = False
+ctx_kbd_is_windows              = False
 
 
 def context_pre_check():
@@ -953,20 +957,30 @@ def context_pre_check():
     cached values instead of repeating the same checks dozens of times.
 
     Updates:
-        - ctx_in_remote
-        - ctx_in_terminal
+        - ctx_app_is_remote
+        - ctx_app_is_terminal
         - keyboard type (via getKBtype())
     """
     def _context_pre_check(ctx: KeyContext):
-        global ctx_in_remote
-        global ctx_in_terminal
+        global ctx_app_is_remote
+        global ctx_app_is_terminal
+        global ctx_kbd_is_apple
+        global ctx_kbd_is_chromebook
+        global ctx_kbd_is_ibm
+        global ctx_kbd_is_windows
 
         # Update the boolean global vars to minimize repeated (hoisted) matchProps calls
-        ctx_in_remote               = hmp_is_remote(ctx)
-        ctx_in_terminal             = hmp_is_terminal(ctx)
+        ctx_app_is_remote               = hmp_is_remote(ctx)
+        ctx_app_is_terminal             = hmp_is_terminal(ctx)
 
         # Establish the keyboard type during the context pre-check
         getKBtype()(ctx)
+
+        # Sync keyboard type bools from the (now-current) KBTYPE global
+        ctx_kbd_is_apple            = (KBTYPE == 'Apple')
+        ctx_kbd_is_chromebook       = (KBTYPE == 'Chromebook')
+        ctx_kbd_is_ibm              = (KBTYPE == 'IBM')
+        ctx_kbd_is_windows          = (KBTYPE == 'Windows')
 
         # Always return false so the trigger modmap and keymap are never active
         return False    # never matches; runs only for the side effect
@@ -1841,7 +1855,7 @@ modmap("Cond modmap - Media Arrows Fix",{
 }, when = lambda ctx:
     cnfg.media_arrows_fix and
     cnfg.screen_has_focus and
-    not ctx_in_remote
+    not ctx_app_is_remote
 )
 
 
@@ -1909,7 +1923,7 @@ modmap("Cond modmap - Forced Numpad feature",{
     cnfg.forced_numpad and
     cnfg.screen_has_focus and
     hmp_not_kpad_devs(ctx) and
-    not ctx_in_remote
+    not ctx_app_is_remote
 )
 
 
@@ -1935,7 +1949,7 @@ modmap("Cond modmap - GTK3 numpad nav keys fix", {
     cnfg.screen_has_focus and
     hmp_numlk_off(ctx) and
     hmp_not_kpad_devs(ctx) and
-    not ctx_in_remote
+    not ctx_app_is_remote
 )
 
 
@@ -1951,7 +1965,7 @@ multipurpose_modmap("Enter2Cmd", {
 }, when = lambda ctx:
     cnfg.Enter2Ent_Cmd and
     cnfg.screen_has_focus and
-    not ctx_in_remote
+    not ctx_app_is_remote
 )
 
 multipurpose_modmap("Caps2Esc - not Chromebook kbd", {
@@ -1960,7 +1974,7 @@ multipurpose_modmap("Caps2Esc - not Chromebook kbd", {
     cnfg.Caps2Esc_Cmd and
     cnfg.screen_has_focus and
     not isKBtype('Chromebook')(ctx) and
-    not ctx_in_remote
+    not ctx_app_is_remote
 )
 
 multipurpose_modmap("Caps2Esc - Chromebook kbd", {
@@ -1969,7 +1983,7 @@ multipurpose_modmap("Caps2Esc - Chromebook kbd", {
     cnfg.Caps2Esc_Cmd and
     cnfg.screen_has_focus and
     isKBtype('Chromebook')(ctx) and
-    not ctx_in_remote
+    not ctx_app_is_remote
 )
 
 
@@ -1998,16 +2012,16 @@ modmap("Cond modmap - GUI - Caps2Cmd - not Cbk kdb", {
 }, when = lambda ctx:
     cnfg.Caps2Cmd and
     cnfg.screen_has_focus and
-    not isKBtype('Chromebook')(ctx) and
-    not ctx_in_terminal and not ctx_in_remote
+    not ctx_kbd_is_chromebook and
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 modmap("Cond modmap - GUI - Caps2Cmd - Cbk kdb", {
     Key.LEFT_META:              Key.RIGHT_CTRL,                 # Caps2Cmd - Chromebook
 }, when = lambda ctx:
     cnfg.Caps2Cmd and
     cnfg.screen_has_focus and
-    isKBtype('Chromebook')(ctx) and
-    not ctx_in_terminal and not ctx_in_remote
+    ctx_kbd_is_chromebook and
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 modmap("Cond modmap - GUI - IBM kbd - multi_lang OFF", {
     # - IBM
@@ -2016,8 +2030,8 @@ modmap("Cond modmap - GUI - IBM kbd - multi_lang OFF", {
 }, when = lambda ctx:
     not cnfg.multi_lang and
     cnfg.screen_has_focus and
-    isKBtype('IBM', map='mmap GUI IBM ML-OFF')(ctx) and
-    not ctx_in_terminal and not ctx_in_remote
+    ctx_kbd_is_ibm and
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 modmap("Cond modmap - GUI - IBM kbd", {
     # - IBM
@@ -2026,8 +2040,8 @@ modmap("Cond modmap - GUI - IBM kbd", {
     Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # IBM
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    isKBtype('IBM', map='mmap GUI IBM')(ctx) and
-    not ctx_in_terminal and not ctx_in_remote
+    ctx_kbd_is_ibm and
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 modmap("Cond modmap - GUI - Cbk kbd - multi_lang OFF", {
     # - Chromebook
@@ -2036,8 +2050,8 @@ modmap("Cond modmap - GUI - Cbk kbd - multi_lang OFF", {
 }, when = lambda ctx:
     not cnfg.multi_lang and
     cnfg.screen_has_focus and
-    isKBtype('Chromebook', map='mmap GUI Cbk ML-OFF')(ctx) and
-    not ctx_in_terminal and not ctx_in_remote
+    ctx_kbd_is_chromebook and
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 modmap("Cond modmap - GUI - Cbk kbd", {
     # - Chromebook
@@ -2045,8 +2059,8 @@ modmap("Cond modmap - GUI - Cbk kbd", {
     Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # Chromebook
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    isKBtype('Chromebook', map='mmap GUI Cbk')(ctx) and
-    not ctx_in_terminal and not ctx_in_remote
+    ctx_kbd_is_chromebook and
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 modmap("Cond modmap - GUI - Win kbd - multi_lang OFF", {
     # - Default Mac/Win
@@ -2057,8 +2071,8 @@ modmap("Cond modmap - GUI - Win kbd - multi_lang OFF", {
 }, when = lambda ctx:
     not cnfg.multi_lang and
     cnfg.screen_has_focus and
-    isKBtype('Windows', map='mmap GUI Win ML-OFF')(ctx) and
-    not ctx_in_terminal and not ctx_in_remote
+    ctx_kbd_is_windows and
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 modmap("Cond modmap - GUI - Win kbd", {
     # - Default Mac/Win
@@ -2068,8 +2082,8 @@ modmap("Cond modmap - GUI - Win kbd", {
     Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # WinMac
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    isKBtype('Windows', map='mmap GUI Win')(ctx) and
-    not ctx_in_terminal and not ctx_in_remote
+    ctx_kbd_is_windows and
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 modmap("Cond modmap - GUI - Mac kbd - multi_lang OFF", {
     # - Mac Only
@@ -2078,8 +2092,8 @@ modmap("Cond modmap - GUI - Mac kbd - multi_lang OFF", {
 }, when = lambda ctx:
     not cnfg.multi_lang and
     cnfg.screen_has_focus and
-    isKBtype('Apple', map='mmap GUI Apple ML-OFF')(ctx) and
-    not ctx_in_terminal and not ctx_in_remote
+    ctx_kbd_is_apple and
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 modmap("Cond modmap - GUI - Mac kbd", {
     # - Mac Only
@@ -2087,8 +2101,8 @@ modmap("Cond modmap - GUI - Mac kbd", {
     Key.LEFT_META:              Key.RIGHT_CTRL,                 # Mac
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    isKBtype('Apple', map='mmap GUI Apple')(ctx) and
-    not ctx_in_terminal and not ctx_in_remote
+    ctx_kbd_is_apple and
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 
 
@@ -2099,8 +2113,8 @@ modmap("Cond modmap - Terms - IBM kbd - multi_lang OFF", {
 }, when = lambda ctx:
     not cnfg.multi_lang and
     cnfg.screen_has_focus and
-    isKBtype('IBM', map='mmap terms IBM ML-OFF')(ctx) and
-    ctx_in_terminal
+    ctx_kbd_is_ibm and
+    ctx_app_is_terminal
 )
 modmap("Cond modmap - Terms - IBM kbd", {
     # - IBM
@@ -2111,8 +2125,8 @@ modmap("Cond modmap - Terms - IBM kbd", {
     Key.RIGHT_CTRL:             Key.RIGHT_ALT,                  # IBM
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    isKBtype('IBM', map='mmap terms IBM')(ctx) and
-    ctx_in_terminal
+    ctx_kbd_is_ibm and
+    ctx_app_is_terminal
 )
 modmap("Cond modmap - Terms - Cbk kbd - multi_lang OFF", {
     # - Chromebook
@@ -2120,8 +2134,8 @@ modmap("Cond modmap - Terms - Cbk kbd - multi_lang OFF", {
 }, when = lambda ctx:
     not cnfg.multi_lang and
     cnfg.screen_has_focus and
-    isKBtype('Chromebook', map='mmap terms Cbk ML-OFF')(ctx) and
-    ctx_in_terminal
+    ctx_kbd_is_chromebook and
+    ctx_app_is_terminal
 )
 modmap("Cond modmap - Terms - Cbk kbd", {
     # - Chromebook
@@ -2132,8 +2146,8 @@ modmap("Cond modmap - Terms - Cbk kbd", {
     Key.RIGHT_CTRL:             Key.RIGHT_ALT,                  # Chromebook
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    isKBtype('Chromebook', map='mmap terms Cbk')(ctx) and
-    ctx_in_terminal
+    ctx_kbd_is_chromebook and
+    ctx_app_is_terminal
 )
 modmap("Cond modmap - Terms - Win kbd - multi_lang OFF", {
     # - Default Mac/Win
@@ -2144,8 +2158,8 @@ modmap("Cond modmap - Terms - Win kbd - multi_lang OFF", {
 }, when = lambda ctx:
     not cnfg.multi_lang and
     cnfg.screen_has_focus and
-    isKBtype('Windows', map='mmap terms Win ML-OFF')(ctx) and
-    ctx_in_terminal
+    ctx_kbd_is_windows and
+    ctx_app_is_terminal
 )
 modmap("Cond modmap - Terms - Win kbd", {
     # - Default Mac/Win
@@ -2155,8 +2169,8 @@ modmap("Cond modmap - Terms - Win kbd", {
     Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # WinMac
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    isKBtype('Windows', map='mmap terms Win')(ctx) and
-    ctx_in_terminal
+    ctx_kbd_is_windows and
+    ctx_app_is_terminal
 )
 modmap("Cond modmap - Terms - Mac kbd - multi_lang OFF", {
     # - Mac Only
@@ -2166,8 +2180,8 @@ modmap("Cond modmap - Terms - Mac kbd - multi_lang OFF", {
 }, when = lambda ctx:
     not cnfg.multi_lang and
     cnfg.screen_has_focus and
-    isKBtype('Apple', map='mmap terms Apple ML-OFF')(ctx) and
-    ctx_in_terminal
+    ctx_kbd_is_apple and
+    ctx_app_is_terminal
 )
 modmap("Cond modmap - Terms - Mac kbd", {
     # - Mac Only
@@ -2178,8 +2192,8 @@ modmap("Cond modmap - Terms - Mac kbd", {
     Key.RIGHT_ALT:              Key.RIGHT_ALT,                  # Mac (self-modmap)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    isKBtype('Apple', map='mmap terms Apple')(ctx) and
-    ctx_in_terminal
+    ctx_kbd_is_apple and
+    ctx_app_is_terminal
 )
 
 
@@ -3506,7 +3520,7 @@ keymap("OptSpecialChars - ABC", {
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     cnfg.optspec_layout == 'ABC' and
-    not ctx_in_terminal and not ctx_in_remote
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 
 
@@ -3657,7 +3671,7 @@ keymap("OptSpecialChars - US", {
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     cnfg.optspec_layout == 'US' and
-    not ctx_in_terminal and not ctx_in_remote
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 
 
@@ -3690,7 +3704,7 @@ keymap("User hardware keys", {
 
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    not ctx_in_remote
+    not ctx_app_is_remote
 )
 
 ###  SLICE_MARK_END: user_apps  ###  EDITS OUTSIDE THESE MARKS WILL BE LOST ON UPGRADE
@@ -3707,7 +3721,7 @@ keymap("User hardware keys", {
 #     C("Shift-LC-Space"):        None,    # block the default general terminals shortcut for input switching
 # }, when = lambda ctx:
 #       cnfg.screen_has_focus and
-#       ctx_in_terminal
+#       ctx_app_is_terminal
 # )
 # keymap("User overrides general", {
 #     C("Super-Space"):           [iEF2NT(),C("THE-REAL-COMBO-FOR-SOME-LAUNCHER")],    # Spotlight equivalent
@@ -3717,7 +3731,7 @@ keymap("User hardware keys", {
 #     C("Shift-RC-Space"):        [bind,C("THE-REAL-COMBO-FOR-REVERSE-INPUT-SWITCHING")],    # input switch reverse (OPTIONAL)
 # }, when = lambda ctx:
 #       cnfg.screen_has_focus and
-#       hmp_is_remote(ctx)
+#       ctx_app_is_remote
 # )
 
 
@@ -4449,8 +4463,8 @@ keymap("VSCodes overrides for Chromebook/IBM - Sublime", {
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     cnfg.ST3_in_VSCode and
-    (   isKBtype('Chromebook', map="vscodes ovr cbook - sublime")(ctx) or
-        isKBtype('IBM', map="vscodes ovr ibm - sublime")(ctx) ) and
+    (   ctx_kbd_is_chromebook or
+        ctx_kbd_is_ibm ) and
     hmp_is_vscode(ctx)
 )
 keymap("VSCodes overrides for not Chromebook/IBM - Sublime", {
@@ -4458,8 +4472,8 @@ keymap("VSCodes overrides for not Chromebook/IBM - Sublime", {
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     cnfg.ST3_in_VSCode and
-    not ( isKBtype('Chromebook', map="vscodes ovr not cbook - sublime")(ctx) or
-    isKBtype('IBM', map="vscodes ovr not ibm - sublime")(ctx) ) and
+    not ( ctx_kbd_is_chromebook or
+    ctx_kbd_is_ibm ) and
     hmp_is_vscode(ctx)
 )
 keymap("VSCodes overrides for Chromebook/IBM", {
@@ -4467,8 +4481,8 @@ keymap("VSCodes overrides for Chromebook/IBM", {
     C("Alt-x"):                 C("C-x"),                       #  Chromebook/IBM - Terminal - Exit nano
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    (   isKBtype('Chromebook', map="vscodes ovr cbook")(ctx) or
-        isKBtype('IBM', map="vscodes ovr ibm")(ctx) ) and
+    (   ctx_kbd_is_chromebook or
+        ctx_kbd_is_ibm ) and
     hmp_is_vscode(ctx)
 )
 keymap("VSCodes overrides for not Chromebook/IBM", {
@@ -4476,8 +4490,8 @@ keymap("VSCodes overrides for not Chromebook/IBM", {
     C("Super-x"):               C("C-x"),                       # Default - Terminal - Exit nano
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    not (   isKBtype('Chromebook', map="vscodes ovr not cbook")(ctx) or
-            isKBtype('IBM', map="vscodes ovr not ibm")(ctx) ) and
+    not (   ctx_kbd_is_chromebook or
+            ctx_kbd_is_ibm ) and
     hmp_is_vscode(ctx)
 )
 keymap("VSCodes", {
@@ -4567,8 +4581,8 @@ keymap("Sublime Text overrides for Chromebook/IBM", {
     C("Alt-C-g"):               C("Alt-Refresh"),               # Chromebook/IBM - find_all_under
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    (   isKBtype('Chromebook', map="sublime ovr cbook")(ctx) or
-        isKBtype('IBM', map="sublime ovr ibm")(ctx) ) and
+    (   ctx_kbd_is_chromebook or
+        ctx_kbd_is_ibm ) and
     hmp_is_sublime_text(ctx)
 )
 keymap("Sublime Text overrides for not Chromebook/IBM", {
@@ -4578,8 +4592,8 @@ keymap("Sublime Text overrides for not Chromebook/IBM", {
     C("Super-C-g"):             C("Alt-f3"),                    # Default - find_all_under
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    not (   isKBtype('Chromebook', map="sublime ovr not cbook")(ctx) or
-            isKBtype('IBM', map="sublime ovr not ibm")(ctx) ) and
+    not (   ctx_kbd_is_chromebook or
+            ctx_kbd_is_ibm ) and
     hmp_is_sublime_text(ctx)
 )
 keymap("Sublime Text", {
@@ -5014,7 +5028,7 @@ if DISTRO_ID in ['fedora', 'almalinux'] and DESKTOP_ENV == 'gnome':
         C("RC-H"):                  C("Super-h"),                   # Hide Window/Minimize app (gnome/fedora)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        ctx_in_terminal
+        ctx_app_is_terminal
     )
 
 if DISTRO_ID == 'pop':
@@ -5023,7 +5037,7 @@ if DISTRO_ID == 'pop':
         C("LC-Left"):               [bind,C("Super-C-Down")],       # SL - Change workspace (pop)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        ctx_in_terminal
+        ctx_app_is_terminal
     )
 
 if DISTRO_ID in ['ubuntu', 'fedora'] and DESKTOP_ENV == 'gnome':
@@ -5033,7 +5047,7 @@ if DISTRO_ID in ['ubuntu', 'fedora'] and DESKTOP_ENV == 'gnome':
         C("LC-Left"):               [bind,C("Super-Page_Down")],    # SL - Change workspace (ubuntu/fedora)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        ctx_in_terminal
+        ctx_app_is_terminal
     )
 
 
@@ -5045,7 +5059,7 @@ if DESKTOP_ENV == 'budgie':
         C("LC-Left"):               [bind,C("C-Alt-Left")],         # Default SL - Change workspace (budgie)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        ctx_in_terminal
+        ctx_app_is_terminal
     )
 
 # On Pop!_OS 22.04, System76 seems to have changed the name of the DE from 'cosmic' to 'pop'.
@@ -5055,7 +5069,7 @@ if DESKTOP_ENV in ['cosmic', 'pop']:
         C("LC-RC-F"):               C("Super-M"),                   # Maximize window toggle (overrides General terminals)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        ctx_in_terminal
+        ctx_app_is_terminal
     )
 
 if DESKTOP_ENV == 'gnome':
@@ -5065,7 +5079,7 @@ if DESKTOP_ENV == 'gnome':
         C("Shift-LC-Space"):       [bind,C("Super-Shift-Space")],   # keyboard input source (layout) switching (reverse) (gnome)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        ctx_in_terminal
+        ctx_app_is_terminal
     )
 
 if DESKTOP_ENV == 'kde':
@@ -5086,7 +5100,7 @@ if DESKTOP_ENV == 'kde':
 
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        ctx_in_terminal
+        ctx_app_is_terminal
     )
 
 if DESKTOP_ENV == 'pantheon':
@@ -5095,7 +5109,7 @@ if DESKTOP_ENV == 'pantheon':
         C("LC-Left"):               [bind,C("Super-Left")],         # SL - Change workspace (elementary)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        ctx_in_terminal
+        ctx_app_is_terminal
     )
 
 if DESKTOP_ENV == 'sway':
@@ -5103,7 +5117,7 @@ if DESKTOP_ENV == 'sway':
         C("RC-Q"):                  C("Shift-C-Q"),                 # Override sway GenGUI Cmd+Q
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        ctx_in_terminal
+        ctx_app_is_terminal
     )
 
 if DESKTOP_ENV == 'xfce':
@@ -5114,7 +5128,7 @@ if DESKTOP_ENV == 'xfce':
         C("LC-Left"):              [bind,C("C-Alt-End")],           # SL - Change workspace xfce4
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        ctx_in_terminal
+        ctx_app_is_terminal
     )
 
 
@@ -5193,7 +5207,7 @@ keymap("General Terminals", {
 
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    ctx_in_terminal
+    ctx_app_is_terminal
 )
 
 
@@ -5215,7 +5229,7 @@ keymap("Cmd+Dot not in terminals", {
     C("RC-Dot"):                C("Esc"),                       # Mimic macOS Cmd+dot = Escape key (not in terminals)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    not ctx_in_terminal and not ctx_in_remote
+    not ctx_app_is_terminal and not ctx_app_is_remote
 )
 
 
@@ -5229,9 +5243,9 @@ keymap("GenGUI overrides: Chromebook/IBM", {
     C("LAlt-Backspace"):        C("C-Backspace"),                   # Chromebook/IBM - Delete Left Word of Cursor
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    (   isKBtype('Chromebook', map="gengui ovr cbook")(ctx) or
-        isKBtype('IBM', map="gengui ovr ibm")(ctx) ) and
-    not ctx_in_remote
+    (   ctx_kbd_is_chromebook or
+        ctx_kbd_is_ibm ) and
+    not ctx_app_is_remote
 )
 keymap("GenGUI overrides: not Chromebook", {
     # In-App Tab switching
@@ -5240,8 +5254,8 @@ keymap("GenGUI overrides: not Chromebook", {
     C("Alt-Backspace"):         C("C-Backspace"),                   # Default not-chromebook
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    not isKBtype('Chromebook', map="gengui ovr not cbook")(ctx) and
-    not ctx_in_remote
+    not ctx_kbd_is_chromebook and
+    not ctx_app_is_remote
 )
 
 
@@ -5252,7 +5266,7 @@ if DISTRO_ID in ['almalinux', 'rhel', 'rocky'] and DESKTOP_ENV == 'xfce':
         C("RC-Space"):             [iEF2NT(),C("Alt-F3")],       # Launch App Finder xfce4 (AlmaLinux/Rocky)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DISTRO_ID == 'debian' and DESKTOP_ENV == 'xfce':
@@ -5260,7 +5274,7 @@ if DISTRO_ID == 'debian' and DESKTOP_ENV == 'xfce':
         C("RC-Space"):             [iEF2NT(),C("Alt-F1")],     # Launch Application Menu xfce4 (Debian)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DISTRO_ID in ['fedora', 'almalinux'] and DESKTOP_ENV == 'gnome':
@@ -5271,7 +5285,7 @@ if DISTRO_ID in ['fedora', 'almalinux'] and DESKTOP_ENV == 'gnome':
         C("Super-Left"):           [bind,C("Super-Page_Down")],     # SL - Change workspace (ubuntu/fedora)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DISTRO_ID == 'manjaro' and DESKTOP_ENV == 'gnome':
@@ -5279,7 +5293,7 @@ if DISTRO_ID == 'manjaro' and DESKTOP_ENV == 'gnome':
         C("RC-Q"):              C("Super-Q"),                       # Close window
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DISTRO_ID == 'manjaro' and DESKTOP_ENV == 'xfce':
@@ -5287,7 +5301,7 @@ if DISTRO_ID == 'manjaro' and DESKTOP_ENV == 'xfce':
         C("RC-Space"):             [iEF2NT(),C("Alt-F1")],          # Open Whisker Menu with Cmd+Space
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DISTRO_ID == 'manjaro':
@@ -5295,7 +5309,7 @@ if DISTRO_ID == 'manjaro':
         C("Super-RC-f"):              C("Super-PAGE_UP"),             # SL- Maximize app manjaro
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DISTRO_ID == 'mint' and DESKTOP_ENV == 'xfce':
@@ -5303,7 +5317,7 @@ if DISTRO_ID == 'mint' and DESKTOP_ENV == 'xfce':
         C("RC-Space"):             [iEF2NT(),C("Super-Space")],     # Launch Application Menu xfce4 (Linux Mint)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DISTRO_ID == 'neon':
@@ -5313,7 +5327,7 @@ if DISTRO_ID == 'neon':
                                                                     # SL - Default SL - Change workspace (kde_neon)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DISTRO_ID == 'pop':
@@ -5325,7 +5339,7 @@ if DISTRO_ID == 'pop':
         C("RC-Q"):                  C("Super-q"),                   # SL - Close Apps (pop)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DISTRO_ID == 'ubuntu':
@@ -5335,7 +5349,7 @@ if DISTRO_ID == 'ubuntu':
         C("Super-Left"):           [bind,C("Super-Page_Down")],     # SL - Change workspace (ubuntu)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 
@@ -5349,7 +5363,7 @@ if DESKTOP_ENV == 'budgie':
         C("RC-H"):                  C("Super-h"),                   # Minimize app (gnome/budgie/popos/fedora) not-deepin
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'cinnamon':
@@ -5357,7 +5371,7 @@ if DESKTOP_ENV == 'cinnamon':
         C("RC-Space"):             [iEF2NT(),C("C-Esc")],           # Right click, configure Mint menu shortcut to Ctrl+Esc
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 # On Pop!_OS 22.04, System76 seems to have changed the name of the DE from 'cosmic' to 'pop'.
@@ -5371,7 +5385,7 @@ if DESKTOP_ENV in ['cosmic', 'pop']:
         C("Super-RC-F"):            C("Super-M"),                   # Maximize window toggle (overrides General GUI)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'dde':
@@ -5379,7 +5393,7 @@ if DESKTOP_ENV == 'dde':
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # Open Launcher menu (Deeping Desktop Environment)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'deepin':
@@ -5388,7 +5402,7 @@ if DESKTOP_ENV == 'deepin':
         C("Alt-RC-Space"):          C("Super-e"),                   # Open Finder - (deepin)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'enlightenment':
@@ -5398,7 +5412,7 @@ if DESKTOP_ENV == 'enlightenment':
         C("RC-Space"):             [iEF2NT(),C("C-Alt-Space")],     # enlightenment main menu (override in "User Apps" slice if necessary)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'gnome':
@@ -5408,7 +5422,7 @@ if DESKTOP_ENV == 'gnome':
             C("RC-Space"):             [iEF2NT(),C("Super-s")],         # Override GNOME 45+ Shift+Ctrl+Space remap
         }, when = lambda ctx:
             cnfg.screen_has_focus and
-            not ctx_in_remote
+            not ctx_app_is_remote
         )
     keymap("GenGUI overrides: GNOME", {
         C("RC-Space"):             [iEF2NT(),C("Shift-C-Space")],   # Show GNOME overview/app launcher
@@ -5421,7 +5435,7 @@ if DESKTOP_ENV == 'gnome':
         C("RC-Shift-Key_5"):        C("Print"),                     # Take a screenshot interactively (gnome)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'hyprland':
@@ -5430,7 +5444,7 @@ if DESKTOP_ENV == 'hyprland':
         C("RC-Space"):             [C("Super-d"), iEF2NT()],        # Open Launcher with Cmd+Space
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'icewm':
@@ -5438,7 +5452,7 @@ if DESKTOP_ENV == 'icewm':
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # IceWM: Win95Keys=1 (Meta shows menu)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'kde':
@@ -5473,7 +5487,7 @@ if DESKTOP_ENV == 'kde':
 
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'mate' and DISTRO_ID == 'mint':
@@ -5482,7 +5496,7 @@ if DESKTOP_ENV == 'mate' and DISTRO_ID == 'mint':
         C("RC-Space"):             [iEF2NT(), C("Alt-Space")],       # Open Mint app menu
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'mate' and DISTRO_ID == 'ubuntu':
@@ -5491,7 +5505,7 @@ if DESKTOP_ENV == 'mate' and DISTRO_ID == 'ubuntu':
         C("RC-Space"):             [iEF2NT(), Key.LEFT_META],       # Open Brisk Menu Launcher
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'miracle-wm':
@@ -5500,7 +5514,7 @@ if DESKTOP_ENV == 'miracle-wm':
         C("RC-Space"):             [C("Super-d"), iEF2NT()],        # Open Launcher with Cmd+Space
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'nebide':
@@ -5508,7 +5522,7 @@ if DESKTOP_ENV == 'nebide':
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # Open Launcher with Cmd+Space
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'pantheon':
@@ -5519,7 +5533,7 @@ if DESKTOP_ENV == 'pantheon':
         C("Super-RC-f"):            C("Super-Up"),                  # Maximize app elementary
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'sway':
@@ -5528,7 +5542,7 @@ if DESKTOP_ENV == 'sway':
         C("RC-Q"):                  C("C-Q"),                       # Override General GUI Alt+F4 remap
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'trinity':
@@ -5536,7 +5550,7 @@ if DESKTOP_ENV == 'trinity':
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # Trinity desktop (Q4OS)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'unity':
@@ -5544,7 +5558,7 @@ if DESKTOP_ENV == 'unity':
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # Trinity desktop (Q4OS)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'xfce' and DISTRO_ID == 'zorin':
@@ -5552,7 +5566,7 @@ if DESKTOP_ENV == 'xfce' and DISTRO_ID == 'zorin':
         C("RC-Space"):             [iEF2NT(),C("Alt-Pause")],     # "Launch and switch applications" (Xfce on Zorin)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 if DESKTOP_ENV == 'xfce':
@@ -5568,7 +5582,7 @@ if DESKTOP_ENV == 'xfce':
         C("RC-Shift-Key_5"):        C("Shift-Print"),               # Take a screenshot interactively (xfce4)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
-        not ctx_in_remote
+        not ctx_app_is_remote
     )
 
 
@@ -5645,7 +5659,7 @@ keymap("General GUI", {
 
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    not ctx_in_remote
+    not ctx_app_is_remote
 )
 
 
