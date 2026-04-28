@@ -1973,7 +1973,7 @@ multipurpose_modmap("Caps2Esc - not Chromebook kbd", {
 }, when = lambda ctx:
     cnfg.Caps2Esc_Cmd and
     cnfg.screen_has_focus and
-    not isKBtype('Chromebook')(ctx) and
+    not ctx_kbd_is_chromebook and
     not ctx_app_is_remote
 )
 
@@ -1982,7 +1982,7 @@ multipurpose_modmap("Caps2Esc - Chromebook kbd", {
 }, when = lambda ctx:
     cnfg.Caps2Esc_Cmd and
     cnfg.screen_has_focus and
-    isKBtype('Chromebook')(ctx) and
+    ctx_kbd_is_chromebook and
     not ctx_app_is_remote
 )
 
