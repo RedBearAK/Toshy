@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260425'
+__version__ = '20260427'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -1767,8 +1767,8 @@ def isMultiTap( tap_1_action: 'Callable | None' = None,
 
 # DO NOT REMOVE THIS MODMAP AND KEYMAP!
 # Special modmap to trigger the evaluation of the keyboard type when
-# any modifier key is pressed
-modmap("Trigger Modmap: Keyboard Type", {
+# any modifier key is pressed (UPDATE: And some common app class conditions).
+modmap("Trigger Modmap: Context Pre-Check", {
     # This modmap must have all modifier keys inside it, so they will
     # all trigger the re-evaluation of the keyboard type.
     # The accompanying keymap can be empty and still accomplish
@@ -1782,12 +1782,14 @@ modmap("Trigger Modmap: Keyboard Type", {
     Key.RIGHT_CTRL:             Key.RIGHT_CTRL,
     Key.LEFT_SHIFT:             Key.LEFT_SHIFT,
     Key.RIGHT_SHIFT:            Key.RIGHT_SHIFT,
-}, when = lambda ctx: getKBtype()(ctx) )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
+# }, when = lambda ctx: getKBtype()(ctx) )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
+}, when = lambda ctx: context_pre_check()(ctx) )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
 # Special keymap to trigger the evaluation of the keyboard type when
 # any non-modifier key is pressed
-keymap("Trigger Keymap: Keyboard Type", {
+keymap("Trigger Keymap: Context Pre-Check", {
     # Nothing needed here.
-}, when = lambda ctx: getKBtype()(ctx) )
+# }, when = lambda ctx: getKBtype()(ctx) )
+}, when = lambda ctx: context_pre_check()(ctx) )
 
 
 def get_iEF2_context():
