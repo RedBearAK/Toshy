@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260428'
+__version__ = '20260429'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -844,6 +844,23 @@ not_win_type_rgx    = re.compile("IBM|Chromebook|Apple", re.I)
 # Instantiate a useful notification object class instance, to make notifications easier
 ntfy = NotificationManager(icon_file_active, title='Toshy Alert (Config)')
 
+# Boolean variable to toggle Enter key state between F2 and Enter
+# True = Enter key sends F2, False = Enter key sends Enter
+_enter_is_F2 = True                 # DON'T CHANGE THIS! Must be set to True here.
+_enter_F2_last_app_class = None     # Track which app set the state to be False
+
+
+def _get_iEF2_context(ctx: KeyContext):
+    """Reset Enter-to-rename state variable to True, if the current
+        application does not match on the file manager app class string"""
+    global _enter_is_F2, _enter_F2_last_app_class
+    if not _enter_is_F2 and not hmp_is_filemanager(ctx):
+        debug("Resetting Enter-to-rename state variable to True.")
+        _enter_is_F2 = True
+        _enter_F2_last_app_class = None
+
+    return False
+
 
 def isKBtype(kbtype: str, map=None):
     # guard against failure to give valid type arg (we don't need to casefold anything with this)
@@ -859,7 +876,7 @@ def isKBtype(kbtype: str, map=None):
 kbtype_cache_dct = {}
 
 
-def getKBtype():
+def getKBtype(ctx: KeyContext):
     """
     ### Get the keyboard type string for the current device
 
@@ -879,66 +896,63 @@ def getKBtype():
 
     valid_kbtypes = ['IBM', 'Chromebook', 'Windows', 'Apple']
 
-    def _getKBtype(ctx: KeyContext):
-        # debug(f"Entering getKBtype with override value: '{cnfg.override_kbtype}'")
-        global KBTYPE
-        kbd_dev_name = ctx.device_name
+    # debug(f"Entering getKBtype with override value: '{cnfg.override_kbtype}'")
+    global KBTYPE
+    kbd_dev_name = ctx.device_name
 
-        def log_kbtype(msg, cache_dev):
-            debug(f"KBTYPE: '{KBTYPE}' | {msg}: '{kbd_dev_name}'")
-            if cache_dev:
-                kbtype_cache_dct[kbd_dev_name] = (KBTYPE, msg)
+    def log_kbtype(msg, cache_dev):
+        debug(f"KBTYPE: '{KBTYPE}' | {msg}: '{kbd_dev_name}'")
+        if cache_dev:
+            kbtype_cache_dct[kbd_dev_name] = (KBTYPE, msg)
 
-        # If user wants to override, apply override and return.
-        # Breaks per-device adaptatation capability while engaged!
-        if cnfg.override_kbtype in valid_kbtypes:
-            KBTYPE = cnfg.override_kbtype
-            log_kbtype(f"WARNING: Override applied! Dev", cache_dev=False)
-            return
+    # If user wants to override, apply override and return.
+    # Breaks per-device adaptatation capability while engaged!
+    if cnfg.override_kbtype in valid_kbtypes:
+        KBTYPE = cnfg.override_kbtype
+        log_kbtype(f"WARNING: Override applied! Dev", cache_dev=False)
+        return
 
-        # Check in the kbtype cache dict for the device
-        if kbd_dev_name in kbtype_cache_dct:
-            KBTYPE, cached_msg = kbtype_cache_dct[kbd_dev_name]
-            log_kbtype(f'(CACHED) {cached_msg}', cache_dev=False)
-            return
+    # Check in the kbtype cache dict for the device
+    if kbd_dev_name in kbtype_cache_dct:
+        KBTYPE, cached_msg = kbtype_cache_dct[kbd_dev_name]
+        log_kbtype(f'(CACHED) {cached_msg}', cache_dev=False)
+        return
 
-        kbd_dev_name_cf = ctx.device_name.casefold()
+    kbd_dev_name_cf = ctx.device_name.casefold()
 
-        # Check if there is a custom type for the device
-        custom_kbtype = kbds_UserCustom_dct_cf.get(kbd_dev_name_cf, '')
-        if custom_kbtype and custom_kbtype in valid_kbtypes:
-            KBTYPE = custom_kbtype
-            log_kbtype('Custom type for dev', cache_dev=True)
-            return
+    # Check if there is a custom type for the device
+    custom_kbtype = kbds_UserCustom_dct_cf.get(kbd_dev_name_cf, '')
+    if custom_kbtype and custom_kbtype in valid_kbtypes:
+        KBTYPE = custom_kbtype
+        log_kbtype('Custom type for dev', cache_dev=True)
+        return
 
-        # Check against the keyboard type lists
-        for kbtype, regex_lst in kbtype_lists_rgx.items():
-            for rgx in regex_lst:
-                if rgx.search(kbd_dev_name_cf):
-                    KBTYPE = kbtype
-                    log_kbtype('Rgx matched on dev', cache_dev=True)
-                    return
-
-        # Check if any keyboard type string is found in the device name
-        for kbtype in ['IBM', 'Chromebook', 'Windows', 'Apple']:
-            if kbtype.casefold() in kbd_dev_name_cf:
+    # Check against the keyboard type lists
+    for kbtype, regex_lst in kbtype_lists_rgx.items():
+        for rgx in regex_lst:
+            if rgx.search(kbd_dev_name_cf):
                 KBTYPE = kbtype
-                log_kbtype('Type in dev name', cache_dev=True)
+                log_kbtype('Rgx matched on dev', cache_dev=True)
                 return
 
-        # Check if the device name indicates a "Windows" keyboard
-        if ('windows' not in kbd_dev_name_cf
-            and not not_win_type_rgx.search(kbd_dev_name_cf)
-            and not all_kbds_rgx.search(kbd_dev_name_cf) ):
-            KBTYPE = 'Windows'
-            log_kbtype('Default type for dev', cache_dev=True)
+    # Check if any keyboard type string is found in the device name
+    for kbtype in ['IBM', 'Chromebook', 'Windows', 'Apple']:
+        if kbtype.casefold() in kbd_dev_name_cf:
+            KBTYPE = kbtype
+            log_kbtype('Type in dev name', cache_dev=True)
             return
 
-        # Default to None if no matching keyboard type is found
-        KBTYPE = 'unidentified'
-        error(f"KBTYPE: '{KBTYPE}' | Dev fell through all checks: '{kbd_dev_name}'")
+    # Check if the device name indicates a "Windows" keyboard
+    if ('windows' not in kbd_dev_name_cf
+        and not not_win_type_rgx.search(kbd_dev_name_cf)
+        and not all_kbds_rgx.search(kbd_dev_name_cf) ):
+        KBTYPE = 'Windows'
+        log_kbtype('Default type for dev', cache_dev=True)
+        return
 
-    return _getKBtype  # Return the inner function
+    # Default to None if no matching keyboard type is found
+    KBTYPE = 'unidentified'
+    error(f"KBTYPE: '{KBTYPE}' | Dev fell through all checks: '{kbd_dev_name}'")
 
 
 # Global variables to store per-event context, set by `_context_pre_check`.
@@ -951,40 +965,45 @@ ctx_kbd_is_ibm                  = False
 ctx_kbd_is_windows              = False
 
 
-def context_pre_check():
+def _context_pre_check(ctx: KeyContext):
     """Side-effect trigger: pre-computes per-event context once at the
     top of the event chain, so downstream keymaps and modmaps can read
     cached values instead of repeating the same checks dozens of times.
 
-    Updates:
-        - ctx_app_is_remote
-        - ctx_app_is_terminal
-        - keyboard type (via getKBtype())
+    Checks:
+        - App is a remote/VM? (Disables most remapping)
+        - App is a terminal?  (Enable terminal-specific remaps)
+        - Keyboard type (via getKBtype())
+        - State of "Is Enter F2" latch
+        - Future context checks...
     """
-    def _context_pre_check(ctx: KeyContext):
-        global ctx_app_is_remote
-        global ctx_app_is_terminal
-        global ctx_kbd_is_apple
-        global ctx_kbd_is_chromebook
-        global ctx_kbd_is_ibm
-        global ctx_kbd_is_windows
 
-        # Update the boolean global vars to minimize repeated (hoisted) matchProps calls
-        ctx_app_is_remote               = hmp_is_remote(ctx)
-        ctx_app_is_terminal             = hmp_is_terminal(ctx)
+    global ctx_app_is_remote
+    global ctx_app_is_terminal
 
-        # Establish the keyboard type during the context pre-check
-        getKBtype()(ctx)
+    global ctx_kbd_is_apple
+    global ctx_kbd_is_chromebook
+    global ctx_kbd_is_ibm
+    global ctx_kbd_is_windows
 
-        # Sync keyboard type bools from the (now-current) KBTYPE global
-        ctx_kbd_is_apple            = (KBTYPE == 'Apple')
-        ctx_kbd_is_chromebook       = (KBTYPE == 'Chromebook')
-        ctx_kbd_is_ibm              = (KBTYPE == 'IBM')
-        ctx_kbd_is_windows          = (KBTYPE == 'Windows')
+    # Update the boolean global vars to minimize repeated (hoisted) matchProps calls
+    ctx_app_is_remote           = hmp_is_remote(ctx)
+    ctx_app_is_terminal         = hmp_is_terminal(ctx)
 
-        # Always return false so the trigger modmap and keymap are never active
-        return False    # never matches; runs only for the side effect
-    return _context_pre_check
+    # Establish the keyboard type during the context pre-check
+    getKBtype(ctx)
+
+    # Sync keyboard type bools from the (now-current) KBTYPE global
+    ctx_kbd_is_apple            = (KBTYPE == 'Apple')
+    ctx_kbd_is_chromebook       = (KBTYPE == 'Chromebook')
+    ctx_kbd_is_ibm              = (KBTYPE == 'IBM')
+    ctx_kbd_is_windows          = (KBTYPE == 'Windows')
+
+    # Maintain the Enter-to-rename latch (resets when focus leaves a file manager)
+    _get_iEF2_context(ctx)
+
+    # Always return false so the trigger modmap and keymap are never active
+    return False    # never matches; runs only for the side effect
 
 
 def isDoubleTap(dt_combo):
@@ -1069,10 +1088,10 @@ hmp_is_dialog_escape            = lambda ctx: any(c(ctx) for c in _dialog_escape
 _dialog_closewin_closures       = [matchProps(**dct) for dct in dialogs_CloseWin_lod]
 hmp_is_dialog_closewin          = lambda ctx: any(c(ctx) for c in _dialog_closewin_closures)
 
-# Boolean variable to toggle Enter key state between F2 and Enter
-# True = Enter key sends F2, False = Enter key sends Enter
-_enter_is_F2 = True                 # DON'T CHANGE THIS! Must be set to True here.
-_enter_F2_last_app_class = None     # Track which app set the state to be False
+# # Boolean variable to toggle Enter key state between F2 and Enter
+# # True = Enter key sends F2, False = Enter key sends Enter
+# _enter_is_F2 = True                 # DON'T CHANGE THIS! Must be set to True here.
+# _enter_F2_last_app_class = None     # Track which app set the state to be False
 
 
 def iEF2(combo_if_true, latch_or_combo_if_false,
@@ -1797,53 +1816,13 @@ modmap("Trigger Modmap: Context Pre-Check", {
     Key.LEFT_SHIFT:             Key.LEFT_SHIFT,
     Key.RIGHT_SHIFT:            Key.RIGHT_SHIFT,
 # }, when = lambda ctx: getKBtype()(ctx) )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
-}, when = lambda ctx: context_pre_check()(ctx) )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
+}, when = _context_pre_check )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
 # Special keymap to trigger the evaluation of the keyboard type when
 # any non-modifier key is pressed
 keymap("Trigger Keymap: Context Pre-Check", {
     # Nothing needed here.
 # }, when = lambda ctx: getKBtype()(ctx) )
-}, when = lambda ctx: context_pre_check()(ctx) )
-
-
-def get_iEF2_context():
-    """Reset Enter-to-rename state variable to True, if the current
-        application does not match on the file manager app class string"""
-    def _get_iEF2_context(ctx: KeyContext):
-        global _enter_is_F2, _enter_F2_last_app_class
-        if not _enter_is_F2 and not hmp_is_filemanager(ctx):
-            debug("Resetting Enter-to-rename state variable to True.")
-            _enter_is_F2 = True
-            _enter_F2_last_app_class = None
-
-        return False
-
-    return _get_iEF2_context
-
-
-# DO NOT REMOVE THIS MODMAP AND KEYMAP!
-# Special modmap to trigger the evaluation of the window context when
-# any modifier key is pressed
-modmap("Trigger Modmap: Enter-to-Rename Context", {
-    # This modmap must have all modifier keys inside it, so they will
-    # all trigger the re-evaluation of the window context.
-    # The accompanying keymap can be empty and still accomplish
-    # the same purpose of triggering a re-evaluation of the
-    # window context when any non-modifier key is pressed.
-    Key.LEFT_META:              Key.LEFT_META,
-    Key.RIGHT_META:             Key.RIGHT_META,
-    Key.LEFT_ALT:               Key.LEFT_ALT,
-    Key.RIGHT_ALT:              Key.RIGHT_ALT,
-    Key.LEFT_CTRL:              Key.LEFT_CTRL,
-    Key.RIGHT_CTRL:             Key.RIGHT_CTRL,
-    Key.LEFT_SHIFT:             Key.LEFT_SHIFT,
-    Key.RIGHT_SHIFT:            Key.RIGHT_SHIFT,
-}, when = lambda ctx: get_iEF2_context()(ctx) )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
-# Special keymap to trigger the evaluation of the window context when
-# any non-modifier key is pressed
-keymap("Trigger Keymap: Enter-to-Rename Context", {
-    # Nothing needed here.
-}, when = lambda ctx: get_iEF2_context()(ctx) )
+}, when = _context_pre_check )
 
 
 modmap("Cond modmap - Media Arrows Fix",{
