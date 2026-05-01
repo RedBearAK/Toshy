@@ -111,6 +111,9 @@
             install -Dm755 scripts/tshysvc-config  "$out/libexec/toshy/tshysvc-config"
             install -Dm755 scripts/tshysvc-sessmon "$out/libexec/toshy/tshysvc-sessmon"
 
+            # Fix shebangs — upstream uses #!/usr/bin/bash which doesn't exist on NixOS
+            patchShebangs "$out/libexec/toshy/"
+
             # ────────────────────────────────────────────────────────
             # 2. Wrap tshysvc-config
             #    Replaces venv activation with Nix store PATH.
