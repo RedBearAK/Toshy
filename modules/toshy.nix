@@ -191,6 +191,23 @@ in {
       ln -sf "${pkg}/bin/toshy-gui" "$LOCAL_BIN/toshy-gui"
       ln -sf "${pkg}/bin/toshy-tray" "$LOCAL_BIN/toshy-tray"
       ln -sf "${pkg}/bin/toshy-layout-selector" "$LOCAL_BIN/toshy-layout-selector"
+
+      # Override config-start/stop/restart with systemctl-based versions
+      # (upstream scripts use venv activation which doesn't exist on NixOS)
+      cat > "$TOSHY_DIR/scripts/bin/toshy-config-start.sh" << 'NIXEOF'
+#!${pkgs.bash}/bin/bash
+systemctl --user start toshy-config.service
+NIXEOF
+      cat > "$TOSHY_DIR/scripts/bin/toshy-config-stop.sh" << 'NIXEOF'
+#!${pkgs.bash}/bin/bash
+systemctl --user stop toshy-config.service
+NIXEOF
+      cat > "$TOSHY_DIR/scripts/bin/toshy-config-restart.sh" << 'NIXEOF'
+#!${pkgs.bash}/bin/bash
+systemctl --user restart toshy-config.service
+NIXEOF
+      chmod +x "$TOSHY_DIR"/scripts/bin/toshy-config-{start,stop,restart}.sh
+
       chown -h ${cfg.user}: "$LOCAL_BIN"/toshy-* 2>/dev/null || true
     '';
 
