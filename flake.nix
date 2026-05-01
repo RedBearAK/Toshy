@@ -112,7 +112,10 @@
             install -Dm755 scripts/tshysvc-sessmon "$out/libexec/toshy/tshysvc-sessmon"
 
             # Fix shebangs — upstream uses #!/usr/bin/bash which doesn't exist on NixOS
-            patchShebangs "$out/libexec/toshy/"
+            substituteInPlace "$out/libexec/toshy/tshysvc-config" \
+              --replace-fail '#!/usr/bin/bash' '#!${pkgs.bash}/bin/bash'
+            substituteInPlace "$out/libexec/toshy/tshysvc-sessmon" \
+              --replace-fail '#!/usr/bin/bash' '#!${pkgs.bash}/bin/bash'
 
             # ────────────────────────────────────────────────────────
             # 2. Wrap tshysvc-config
