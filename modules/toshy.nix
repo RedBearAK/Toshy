@@ -293,5 +293,26 @@ in {
       };
     };
 
+    # ── Tray icon service (optional, when gui.enable is true) ─────
+    systemd.user.services.toshy-tray = lib.mkIf cfg.gui.enable {
+      description = "Toshy Tray Icon";
+
+      wantedBy = [ "default.target" ];
+      after    = [ "default.target" "toshy-config.service" ];
+
+      serviceConfig = {
+        Type             = "simple";
+        ExecStart        = "${pkg}/bin/toshy-tray";
+        Restart          = "on-failure";
+        RestartSec       = 5;
+        SyslogIdentifier = "toshy-tray";
+      };
+
+      environment = {
+        TERM              = "xterm";
+        TOSHY_CONFIG_DIR  = "/home/${cfg.user}/.config/toshy";
+      };
+    };
+
   };
 }
