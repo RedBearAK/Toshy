@@ -153,6 +153,8 @@ in {
           ${pkgs.gnused}/bin/sed -i 's|#!/usr/bin/env bash|#!${pkgs.bash}/bin/bash|g' "$f"
           ${pkgs.gnused}/bin/sed -i 's|#!/bin/bash|#!${pkgs.bash}/bin/bash|g' "$f"
           ${pkgs.gnused}/bin/sed -i 's|#!/usr/bin/bash|#!${pkgs.bash}/bin/bash|g' "$f"
+          # Also fix internal 'exec bash' calls that rely on bare 'bash' being on PATH
+          ${pkgs.gnused}/bin/sed -i 's|exec bash -c|exec ${pkgs.bash}/bin/bash -c|g' "$f"
         fi
       done
 
