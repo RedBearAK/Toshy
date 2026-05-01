@@ -94,6 +94,40 @@
           # Don't run the test suite (requires evdev/uinput access).
           doCheck = false;
 
+          # Add runtime tools to PATH for all wrapped binaries.
+          # wrapGAppsHook3 will include these when wrapping.
+          makeWrapperArgs = [
+            "--prefix" "PATH" ":" (lib.makeBinPath [
+              pkgs.procps        # pgrep, pkill (used by env_context.py)
+              pkgs.coreutils     # whoami, etc.
+              pkgs.systemd       # systemctl, loginctl
+              pkgs.gnugrep       # grep
+              pkgs.glib          # gdbus
+              pkgs.libnotify     # notify-send
+              pkgs.zenity        # zenity dialogs
+            ])
+            "--prefix" "PYTHONPATH" ":" (python.pkgs.makePythonPath [
+              xwaykeyz
+              python.pkgs.appdirs
+              python.pkgs.dbus-python
+              python.pkgs.evdev
+              python.pkgs.hyprpy
+              python.pkgs.i3ipc
+              python.pkgs.inotify-simple
+              python.pkgs.lockfile
+              python.pkgs.ordered-set
+              python.pkgs.pillow
+              python.pkgs.psutil
+              python.pkgs.pygobject3
+              python.pkgs.pywayland
+              python.pkgs.six
+              python.pkgs.systemd-python
+              python.pkgs.watchdog
+              python.pkgs.xlib
+              python.pkgs.xkbcommon
+            ])
+          ];
+
           # ── postInstall ───────────────────────────────────────────
           # Install shell scripts, D-Bus service wrappers, desktop
           # files, and icons that setuptools cannot handle (they live
