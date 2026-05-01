@@ -94,9 +94,6 @@
           # Don't run the test suite (requires evdev/uinput access).
           doCheck = false;
 
-          # Prevent wrapGAppsHook3 from double-wrapping console scripts.
-          dontWrapGApps = true;
-
           # ── postInstall ───────────────────────────────────────────
           # Install shell scripts, D-Bus service wrappers, desktop
           # files, and icons that setuptools cannot handle (they live
@@ -173,7 +170,6 @@
                 pkgs.glib
               ]}" \
               --prefix PYTHONPATH : "$FULL_PYTHONPATH" \
-              "''${gappsWrapperArgs[@]}"
 
             # Patch out the venv activation line — it is not needed in Nix.
             substituteInPlace "$out/libexec/toshy/tshysvc-config" \
@@ -207,36 +203,22 @@
             makeWrapper "${python}/bin/python" "$out/bin/toshy-kwin-dbus-service" \
               --add-flags "$SITE/kwin-dbus-service/toshy_kwin_dbus_service.py" \
               --prefix PYTHONPATH : "$FULL_PYTHONPATH:$SITE/kwin-dbus-service" \
-              --prefix PATH : "${lib.makeBinPath [ pkgs.procps ]}" \
-              "''${gappsWrapperArgs[@]}"
+              --prefix PATH : "${lib.makeBinPath [ pkgs.procps ]}"
 
             # -- Wlroots D-Bus service --
             makeWrapper "${python}/bin/python" "$out/bin/toshy-wlroots-dbus-service" \
               --add-flags "$SITE/wlroots-dbus-service/toshy_wlroots_dbus_service.py" \
               --prefix PYTHONPATH : "$FULL_PYTHONPATH:$SITE/wlroots-dbus-service" \
-              --prefix PATH : "${lib.makeBinPath [ pkgs.procps ]}" \
-              "''${gappsWrapperArgs[@]}"
+              --prefix PATH : "${lib.makeBinPath [ pkgs.procps ]}"
 
             # -- COSMIC D-Bus service --
             makeWrapper "${python}/bin/python" "$out/bin/toshy-cosmic-dbus-service" \
               --add-flags "$SITE/cosmic-dbus-service/toshy_cosmic_dbus_service.py" \
               --prefix PYTHONPATH : "$FULL_PYTHONPATH:$SITE/cosmic-dbus-service" \
-              --prefix PATH : "${lib.makeBinPath [ pkgs.procps ]}" \
-              "''${gappsWrapperArgs[@]}"
+              --prefix PATH : "${lib.makeBinPath [ pkgs.procps ]}"
 
             # ────────────────────────────────────────────────────────
-            # 5. Wrap the console-script entry points with GTK/GLib
-            #    environment (wrapGAppsHook3 was deferred above).
-            # ────────────────────────────────────────────────────────
-            for prog in toshy-tray toshy-gui toshy-layout-selector; do
-              if [ -f "$out/bin/.$prog-wrapped" ] || [ -f "$out/bin/$prog" ]; then
-                wrapProgram "$out/bin/$prog" \
-                  "''${gappsWrapperArgs[@]}"
-              fi
-            done
-
-            # ────────────────────────────────────────────────────────
-            # 6. Desktop files
+            # 5. Desktop files
             #    Install .desktop files and patch Exec= lines to use
             #    Nix store paths.
             # ────────────────────────────────────────────────────────
