@@ -132,6 +132,17 @@ in {
         source = defaultConfigPath;
       };
 
+    # Install scripts directory — always kept in sync with the package
+    xdg.configFile."toshy/scripts" = {
+      source = "${pkg}/lib/${pkg.python.libPrefix}/site-packages/scripts";
+      recursive = true;
+    };
+
+    # Install barebones config as a reference
+    xdg.configFile."toshy/toshy_config_barebones.py" = {
+      source = "${pkg}/lib/${pkg.python.libPrefix}/site-packages/default-toshy-config/toshy_config_barebones.py";
+    };
+
     # ── Systemd user services ─────────────────────────────────────
     # Same five services as the NixOS module, adapted to Home Manager's
     # systemd.user.services format (capitalized Unit/Service/Install).

@@ -151,6 +151,8 @@
             cp -r cosmic-dbus-service  "$SITE/cosmic-dbus-service"
             cp -r default-toshy-config "$SITE/default-toshy-config"
             cp -r kwin-script          "$SITE/kwin-script"
+            cp -r scripts              "$SITE/scripts"
+            cp -r systemd-user-service-units "$SITE/systemd-user-service-units" || true
 
             # ────────────────────────────────────────────────────────
             # 2. Wrap tshysvc-config
@@ -166,6 +168,9 @@
                 pkgs.xset
                 pkgs.bash
                 pkgs.gnugrep
+                pkgs.gnome-zenity
+                pkgs.libnotify
+                pkgs.glib
               ]}" \
               --prefix PYTHONPATH : "$FULL_PYTHONPATH" \
               "''${gappsWrapperArgs[@]}"

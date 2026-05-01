@@ -130,6 +130,40 @@ in {
       ++ lib.optional cfg.gui.enable guiDesktopFiles
       ++ lib.optional cfg.kwinScript.enable kwinScriptPkg;
 
+    # ── Seed ~/.config/toshy on activation ────────────────────────
+    # Toshy expects its config, scripts, and data files at
+    # ~/.config/toshy/. This activation script seeds the directory
+    # from the Nix store on every nixos-rebuild switch, keeping
+    # scripts and default config up to date. The user's custom
+    # toshy_config.py is NOT overwritten if it already exists.
+    system.activationScripts.toshy-seed-config = let
+      site = "${pkg}/lib/${pkg.python.libPrefix}/site-packages";
+    in ''
+      TOSHY_DIR="/home/${cfg.user}/.config/toshy"
+      mkdir -p "$TOSHY_DIR"
+
+      # Always update scripts from the package (they're not user-editable)
+      rm -rf "$TOSHY_DIR/scripts"
+      cp -r "${site}/scripts" "$TOSHY_DIR/scripts"
+      chmod -R u+w "$TOSHY_DIR/scripts"
+
+      # Seed the default config only if one doesn't exist yet
+      if [ ! -f "$TOSHY_DIR/toshy_config.py" ]; then
+        cp "${resolvedConfigPath}" "$TOSHY_DIR/toshy_config.py"
+        chmod u+w "$TOSHY_DIR/toshy_config.py"
+      fi
+
+      # Seed the barebones config as a reference
+      if [ -f "${site}/default-toshy-config/toshy_config_barebones.py" ]; then
+        cp "${site}/default-toshy-config/toshy_config_barebones.py" \
+           "$TOSHY_DIR/toshy_config_barebones.py"
+        chmod u+w "$TOSHY_DIR/toshy_config_barebones.py"
+      fi
+
+      # Fix ownership
+      chown -R ${cfg.user}: "$TOSHY_DIR"
+    '';
+
     # ── Udev rules (Task 7.3) ────────────────────────────────────
     # Grant input group access to evdev devices.
     services.udev.extraRules = ''
