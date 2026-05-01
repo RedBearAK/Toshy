@@ -137,6 +137,7 @@
               pkgs.libnotify     # notify-send
               pkgs.zenity        # zenity dialogs
               pkgs.foot          # terminal emulator for log viewing
+              pkgs.xdg-utils    # xdg-open for opening files/URLs
             ])
             "--prefix" "PYTHONPATH" ":" (python.pkgs.makePythonPath [
               xwaykeyz
