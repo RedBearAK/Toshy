@@ -36,18 +36,18 @@ final: prev: {
     };
   });
 
-  # Pin xkbcommon to 0.8 to avoid breaking API changes in 1.5+.
+  # Pin xkbcommon to <1.1 to avoid breaking API changes in 1.5+.
   #
   # The xkbcommon Python bindings introduced breaking API changes starting
   # in version 1.5 that are incompatible with how Toshy uses the library.
-  # Upstream's requirements.txt pins xkbcommon<1.1. Version 0.8 is the last
-  # release before the 1.x series that introduced these incompatibilities.
+  # Upstream's requirements.txt pins xkbcommon<1.1. Version 1.0.1 is the
+  # latest release that satisfies this constraint.
   xkbcommon = prev.xkbcommon.overridePythonAttrs (old: rec {
-    version = "0.8";
+    version = "1.0.1";
     src = prev.fetchPypi {
       pname = "xkbcommon";
       inherit version;
-      hash = "sha256-W+WXO/W3UlaHpN9shHibQhWQ1/fPkq5W8qqxd7eV1RY=";
+      hash = "sha256-npdJ1uy6UUFhZipGi6OGiatrbpYq9C4J+6Xuq8t3bJE=";
     };
   });
 
