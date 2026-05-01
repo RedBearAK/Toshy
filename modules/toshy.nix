@@ -195,13 +195,16 @@ in {
 
       wantedBy = [ "default.target" ];
 
+      unitConfig = {
+        StartLimitBurst       = 5;
+        StartLimitIntervalSec = 60;
+      };
+
       serviceConfig = {
         Type                  = "simple";
         ExecStart             = "${pkg}/bin/toshy-kwin-dbus-service";
         Restart               = "on-failure";
         RestartSec            = 5;
-        StartLimitBurst       = 5;
-        StartLimitIntervalSec = 60;
         SyslogIdentifier      = "toshy-kwin-dbus";
       };
 
@@ -215,13 +218,16 @@ in {
 
       wantedBy = [ "default.target" ];
 
+      unitConfig = {
+        StartLimitBurst       = 5;
+        StartLimitIntervalSec = 60;
+      };
+
       serviceConfig = {
         Type                  = "simple";
         ExecStart             = "${pkg}/bin/toshy-wlroots-dbus-service";
         Restart               = "on-failure";
         RestartSec            = 5;
-        StartLimitBurst       = 5;
-        StartLimitIntervalSec = 60;
         SyslogIdentifier      = "toshy-wlroots-dbus";
       };
 
@@ -235,13 +241,16 @@ in {
 
       wantedBy = [ "default.target" ];
 
+      unitConfig = {
+        StartLimitBurst       = 5;
+        StartLimitIntervalSec = 60;
+      };
+
       serviceConfig = {
         Type                  = "simple";
         ExecStart             = "${pkg}/bin/toshy-cosmic-dbus-service";
         Restart               = "on-failure";
         RestartSec            = 5;
-        StartLimitBurst       = 5;
-        StartLimitIntervalSec = 60;
         SyslogIdentifier      = "toshy-cosmic-dbus";
       };
 

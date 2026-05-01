@@ -184,6 +184,8 @@ in {
     systemd.user.services.toshy-kwin-dbus = {
       Unit = {
         Description = "Toshy KWin D-Bus Service";
+        StartLimitBurst = 5;
+        StartLimitIntervalSec = 60;
       };
 
       Service = {
@@ -191,8 +193,6 @@ in {
         ExecStart             = "${pkg}/bin/toshy-kwin-dbus-service";
         Restart               = "on-failure";
         RestartSec            = 5;
-        StartLimitBurst       = 5;
-        StartLimitIntervalSec = 60;
         SyslogIdentifier      = "toshy-kwin-dbus";
         Environment           = [ "TERM=xterm" ];
       };
@@ -205,6 +205,8 @@ in {
     systemd.user.services.toshy-wlroots-dbus = {
       Unit = {
         Description = "Toshy Wlroots D-Bus Service";
+        StartLimitBurst = 5;
+        StartLimitIntervalSec = 60;
       };
 
       Service = {
@@ -212,8 +214,6 @@ in {
         ExecStart             = "${pkg}/bin/toshy-wlroots-dbus-service";
         Restart               = "on-failure";
         RestartSec            = 5;
-        StartLimitBurst       = 5;
-        StartLimitIntervalSec = 60;
         SyslogIdentifier      = "toshy-wlroots-dbus";
         Environment           = [ "TERM=xterm" ];
       };
@@ -226,6 +226,8 @@ in {
     systemd.user.services.toshy-cosmic-dbus = {
       Unit = {
         Description = "Toshy COSMIC D-Bus Service";
+        StartLimitBurst = 5;
+        StartLimitIntervalSec = 60;
       };
 
       Service = {
@@ -233,8 +235,6 @@ in {
         ExecStart             = "${pkg}/bin/toshy-cosmic-dbus-service";
         Restart               = "on-failure";
         RestartSec            = 5;
-        StartLimitBurst       = 5;
-        StartLimitIntervalSec = 60;
         SyslogIdentifier      = "toshy-cosmic-dbus";
         Environment           = [ "TERM=xterm" ];
       };
