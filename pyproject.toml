@@ -4,15 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "toshy"
-version = "24.12.1"
-description = "Mac-style keybindings for Linux"
+version = "2025.04.16"
+description = "Mac-style keyboard remapping for Linux"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
 authors = [
-    {name = "RedBearAK", email = "redbearakgithub@gmail.com"},
-]
-maintainers = [
-    {name = "Celes Renata", email = "celes@celestium.life"},
+    {name = "RedBearAK"},
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -21,16 +18,16 @@ classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Desktop Environment",
     "Topic :: System :: Hardware :: Hardware Drivers",
     "Topic :: Utilities",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "appdirs",
     "dbus-python",
@@ -47,76 +44,70 @@ dependencies = [
     "six",
     "systemd-python",
     "watchdog",
+    # Pinned: python-xlib 0.32+ has BadRRModeError bug
+    # https://github.com/python-xlib/python-xlib/issues
     "python-xlib==0.31",
+    # Pinned: xkbcommon 1.1+ introduced breaking API changes
+    # https://github.com/sde1000/python-xkbcommon/issues/23
     "xkbcommon<1.1",
-    "xwaykeyz @ git+https://github.com/RedBearAK/xwaykeyz.git@main",
+    "xwaykeyz>=1.12.0",
 ]
 
 [project.optional-dependencies]
-gui = [
+gui-tk = [
     "sv-ttk",
-]
-dev = [
-    "pytest",
-    "pytest-cov",
-    "pytest-mock",
-    "black",
-    "flake8",
-    "mypy",
-]
-test = [
-    "pytest",
-    "pytest-cov",
-    "pytest-mock",
 ]
 
 [project.urls]
-Homepage = "https://github.com/celesrenata/toshy"
-Repository = "https://github.com/celesrenata/toshy.git"
-Issues = "https://github.com/celesrenata/toshy/issues"
-Documentation = "https://github.com/celesrenata/toshy/wiki"
+Homepage = "https://github.com/RedBearAK/toshy"
+Repository = "https://github.com/RedBearAK/toshy.git"
+Issues = "https://github.com/RedBearAK/toshy/issues"
 
 [project.scripts]
-toshy-tray = "toshy.tray:main"
-toshy-gui = "toshy.gui.__main__:main"
-toshy-layout-selector = "toshy.layout_selector:main"
-toshy-config = "toshy.config:main"
-toshy-daemon = "toshy.daemon:main"
-toshy-config-generator = "toshy.config_generator:main"
-toshy-platform = "toshy.platform_utils:main"
-toshy-debug = "toshy.debug_utils:main"
-toshy-performance = "toshy.performance_utils:main"
+toshy-tray = "toshy_tray:main"
+toshy-gui = "toshy_gui.__main__:main"
+toshy-layout-selector = "toshy_layout_selector:main"
 
+# ---------------------------------------------------------------------------
+# Python packages and modules
+# ---------------------------------------------------------------------------
 [tool.setuptools]
 py-modules = ["toshy_tray", "toshy_layout_selector"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["toshy*"]
+include = ["toshy_common*", "toshy_gui*"]
 
+# ---------------------------------------------------------------------------
+# Package data — non-Python files shipped inside Python packages.
+#
+# The glob patterns below cover files that live inside the discovered Python
+# packages (toshy_common, toshy_gui, and their sub-packages).  Any new files
+# added to these packages by the maintainer are picked up automatically.
+# ---------------------------------------------------------------------------
 [tool.setuptools.package-data]
-toshy = [
-    "assets/**/*",
-    "desktop/**/*",
-    "default-toshy-config/**/*",
-    "systemd-user-service-units/**/*",
+"toshy_gui" = [
+    "resources/**/*",
 ]
 
-[tool.black]
-line-length = 88
-target-version = ['py38']
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "--verbose",
-]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-]
+# ---------------------------------------------------------------------------
+# Non-package data directories
+#
+# The directories below live at the repository root and are NOT inside a
+# Python package.  setuptools package-data cannot install them because they
+# lack __init__.py.  They are listed here for documentation purposes and
+# are installed by:
+#   - The upstream installer script  (setup_toshy.py)  for venv installs
+#   - The Nix derivation postInstall phase              for Nix builds
+#
+# Directories and their contents:
+#   default-toshy-config/   — default toshy_config.py and barebones variant
+#   scripts/                — shell helper scripts (tshysvc-config, tshysvc-sessmon, bin/*)
+#   assets/                 — icons and Toshy-Icon-Theme
+#   desktop/                — .desktop launcher files
+#   systemd-user-service-units/ — reference systemd user service files
+#   kwin-dbus-service/      — KWin D-Bus service script and bus config
+#   wlroots-dbus-service/   — wlroots D-Bus service script and Wayland protocols
+#   cosmic-dbus-service/    — COSMIC D-Bus service script and Wayland protocols
+#   kwin-script/            — KWin window-notify scripts (KDE 5 / KDE 6)
+# ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20250710'
+__version__ = '20260419'
 
 # Reference for generating the protocol modules with pywayland scanner:
 # https://github.com/flacjacket/pywayland/issues/8#issuecomment-987040284
@@ -11,7 +11,7 @@ __version__ = '20250710'
 # but PR #64 was merged. 
 
 
-print("(--) Starting Toshy D-Bus service to monitor 'zwlr_foreign_toplevel_manager_v1'...")
+print("(--) Starting Toshy D-Bus service to monitor 'zwlr_foreign_toplevel_manager_v1'...", flush=True)
 
 import os
 import sys
@@ -28,7 +28,6 @@ from pywayland.client import Display
 from gi.repository import GLib
 from dbus.exceptions import DBusException
 from subprocess import DEVNULL
-from typing import Dict
 from xwaykeyz.lib.logger import debug, error
 
 xwaykeyz.lib.logger.VERBOSE = True
@@ -70,7 +69,7 @@ wl_client = None
 
 def signal_handler(sig, frame):
     """handle signals like Ctrl+C"""
-    if sig in (signal.SIGINT, signal.SIGQUIT):
+    if sig in (signal.SIGINT, signal.SIGQUIT, signal.SIGTERM):
         # Perform any cleanup code here before exiting
         # traceback.print_stack(frame)
         debug(f'\nSIGINT or SIGQUIT received. Exiting.\n')
@@ -89,6 +88,7 @@ def clean_shutdown():
 if platform.system() != 'Windows':
     signal.signal(signal.SIGINT,    signal_handler)
     signal.signal(signal.SIGQUIT,   signal_handler)
+    signal.signal(signal.SIGTERM,   signal_handler)
 else:
     error(f'This is only meant to run on Linux. Exiting...')
     sys.exit(1)
@@ -173,7 +173,7 @@ def countdown_callback():
 def check_interface_availability():
     global interface_is_available
     if not wl_client.toplevel_manager:  # Check if the interface is still available
-        debug(f"{LOG_PFX}: The Wayland interface is not available. Exiting.")
+        debug(f"{LOG_PFX}: Probably not a wlroots environment. Exiting.")
         interface_is_available = False
         clean_shutdown()  # Perform cleanup and shutdown
     if not wl_client.check_connection():  # Check if the connection to the Wayland server is still available
@@ -282,7 +282,10 @@ class WaylandClient:
 
     def check_connection(self):
         try:
-            self.display.roundtrip()
+            ret = self.display.flush()
+            if ret == -1:
+                error("Wayland connection check: flush failed")
+                return False
         except Exception as e:
             error(f"Wayland connection lost: {e}")
             return False
@@ -319,11 +322,11 @@ def wayland_event_callback(fd, condition, display: Display):
         clean_shutdown()  # Perform cleanup and shutdown
         return False  # Stop calling this function
     if condition & GLib.IO_IN:
-        # display.dispatch()    # dispatch() fails to prompt new events to appear
-        # dispatch() also seems to trigger the callback to get called many times in a loop,
-        # but without any new useful events appearing, while roundtrip() just shows
-        # the new events that I need to see, as they happen.
-        display.roundtrip()     # gets new events to appear immediately
+        # Use read() + dispatch() instead of roundtrip() to avoid blocking loop
+        # read() reads events from the FD into the queue
+        # dispatch() processes queued events and returns immediately
+        display.read()
+        display.dispatch()
     return True
 
 

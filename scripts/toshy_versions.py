@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20250710'
+__version__ = '20260330'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -48,6 +48,11 @@ sys.path.insert(0, toshy_common_dir_path)
 # ~/.config/toshy/toshy_common/service_manager.py
 # ~/.config/toshy/toshy_common/settings_class.py
 # ~/.config/toshy/toshy_common/shared_device_context.py
+# ~/.config/toshy/toshy_common/xkb_check.py
+
+# These two are shell scripts, not Python scrips
+# ~/.config/toshy/scripts/tshysvc-config
+# ~/.config/toshy/scripts/tshysvc-sessmon
 
 # ~/.config/toshy/cosmic-dbus-service/toshy_cosmic_dbus_service.py
 # ~/.config/toshy/kwin-dbus-service/toshy_kwin_dbus_service.py
@@ -88,6 +93,12 @@ shared_device_path      = os.path.join(toshy_dir_path,
                             'toshy_common', 'shared_device_context.py')
 terminal_utils_path     = os.path.join(toshy_dir_path,
                             'toshy_common', 'terminal_utils.py')
+xkb_check_path          = os.path.join(toshy_dir_path,
+                            'toshy_common', 'xkb_check.py')
+
+# These two files are shell scripts, not Python scripts:
+config_svc_path         = os.path.join(toshy_dir_path,'scripts', 'tshysvc-config')
+sessmon_svc_path        = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-sessmon')
 
 cosmic_dbus_path        = os.path.join(toshy_dir_path,
                             'cosmic-dbus-service', 'toshy_cosmic_dbus_service.py')
@@ -118,6 +129,10 @@ components = [
     ("Settings Manager",            settings_mgr_path),
     ("Shared Device Context",       shared_device_path),
     ("Terminal Utils",              terminal_utils_path),
+    ("XKB Options Check",           xkb_check_path),
+    (None, None),  # Spacing
+    ("Keymapper Config Service",    config_svc_path),
+    ("Session Monitor Service",     sessmon_svc_path),
     (None, None),  # Spacing
     ("D-Bus Service: COSMIC",       cosmic_dbus_path),
     ("D-Bus Service: KWin",         kwin_dbus_path),
@@ -134,7 +149,8 @@ def extract_version(file_path: str):
     try:
         with open(file_path, 'r') as file:
             for line in file:
-                if line.startswith('__version__'):
+                # Extract from both the Python style variable, and shell script style variable
+                if line.startswith('__version__') or line.startswith('SCRIPT_VERSION'):
                     version_raw = line.split('=')[1].strip().strip('"').strip("'")
                     # Check if the version is all digits, has no dots, 
                     # and starts with a year in a rational range

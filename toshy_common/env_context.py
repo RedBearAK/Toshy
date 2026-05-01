@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-__version__ = '20250713'
+__version__ = '20260313'
 
 import os
 import re
 import time
 import shutil
 import subprocess
-
-from typing import Dict
 
 from toshy_common import logger
 from toshy_common.logger import *
@@ -35,6 +33,7 @@ logger.FLUSH = True
 
 class EnvironmentInfo:
     def __init__(self):
+        self.DISTRO_NAME                    = None
         self.DISTRO_ID                      = None
         self.DISTRO_VER                     = None
         self.VARIANT_ID                     = None
@@ -50,14 +49,15 @@ class EnvironmentInfo:
         # self.de_major_ver                   = None        # Just in case we need it later
         # self.de_minor_ver                   = None        # Just in case we need it later
 
-        self.env_info_dct: Dict[str, str]   = {}
-        self.release_files: Dict[str, str]  = self.read_release_files()
+        self.env_info_dct: "dict[str, str]"   = {}
+        self.release_files: "dict[str, str]"  = self.read_release_files()
 
     def get_env_info(self):
         """Primary method to get complete environment info"""
 
         # Call methods to harvest environment info and populate the instance variables.
-        # As of 2024-09-04 there are seven different bits of primary info to generate.
+        # As of 2026-03-11 there are eight different bits of primary info to generate.
+        self._get_distro_name()
         self._get_distro_id()
         self._get_distro_version()
         self._get_variant_id()
@@ -69,6 +69,7 @@ class EnvironmentInfo:
 
         # Collect all info into a dictionary
         self.env_info_dct = {
+            'DISTRO_NAME':      self.DISTRO_NAME,
             'DISTRO_ID':        self.DISTRO_ID,
             'DISTRO_VER':       self.DISTRO_VER,
             'VARIANT_ID':       self.VARIANT_ID,
@@ -89,7 +90,7 @@ class EnvironmentInfo:
 
         return self.env_info_dct
 
-    def read_release_files(self) -> Dict[str, str]:
+    def read_release_files(self) -> "dict[str, str]":
         paths = [
             '/etc/os-release', '/etc/lsb-release', '/etc/arch-release'
         ]
@@ -104,7 +105,13 @@ class EnvironmentInfo:
         """
         Utility function to check if a process with a specific name is running.
         For names >15 chars, uses pgrep -f with careful pattern matching to avoid false positives.
+
+        On NixOS, binaries are wrapped (e.g., gnome-shell → .gnome-shell-wrapped),
+        and process names are truncated to 15 chars by the kernel (.gnome-shell-wr).
+        This function handles both standard and NixOS wrapped process names using
+        exact matching to avoid false positives.
         """
+        KERNEL_COMM_LEN = 15  # Linux kernel TASK_COMM_LEN is 16, but includes null terminator
         use_pgrep_i = True
 
         distros_without_pgrep_i = [
@@ -118,22 +125,116 @@ class EnvironmentInfo:
                 use_pgrep_i = False
                 break
 
-        if len(process_name) <= 15:
+        def _get_nixos_wrapped_name(name):
+            """
+            Generate the NixOS-wrapped process name as it would appear in the kernel's
+            process table (truncated to 15 characters).
+
+            NixOS uses wrapProgram which creates: .{basename}-wrapped
+            The kernel then truncates to TASK_COMM_LEN (15 chars).
+
+            Args:
+                process_name: Original process name (e.g., 'gnome-shell')
+
+            Returns:
+                The wrapped name truncated to 15 chars (e.g., '.gnome-shell-wr')
+            """
+            wrapped = f'.{name}-wrapped'
+            return wrapped[:KERNEL_COMM_LEN]
+
+        def _build_pgrep_cmd(name, use_full_match=False):
+            """Build pgrep command with appropriate flags."""
+            if use_full_match:
+                # For long names, use -f with careful pattern matching
+                pattern = f'(/|^){name}($| )'
+                return ['pgrep', '-f', pattern]
             # Standard exact match for short names
             cmd = ['pgrep', '-x']
             if use_pgrep_i:
                 cmd.append('-i')
-            cmd.append(process_name)
-        else:
-            # For long names, use -f with careful pattern matching
-            pattern = f"(/|^){process_name}($| )"
-            cmd = ['pgrep', '-f', pattern]
+            cmd.append(name)
+            return cmd
 
-        try:
-            result = subprocess.check_output(cmd)
-            return bool(result.strip())
-        except subprocess.CalledProcessError:
+        def _run_pgrep(cmd):
+            """Execute pgrep command and return True if process found."""
+            try:
+                result = subprocess.check_output(cmd)
+                return bool(result.strip())
+            except subprocess.CalledProcessError:
+                return False
+
+        if len(process_name) <= KERNEL_COMM_LEN:
+            # Standard exact match for short names
+            cmd = _build_pgrep_cmd(process_name)
+            if _run_pgrep(cmd):
+                return True
+
+            # On NixOS, try the wrapped binary pattern with exact matching
+            if self.DISTRO_ID == 'nixos':
+                wrapped_name = _get_nixos_wrapped_name(process_name)
+                cmd = _build_pgrep_cmd(wrapped_name)
+                if _run_pgrep(cmd):
+                    return True
+
             return False
+
+        # For long names (>15 chars), use -f with careful pattern matching
+        cmd = _build_pgrep_cmd(process_name, use_full_match=True)
+        return _run_pgrep(cmd)
+
+    def _safe_cmd_output(self, command_list, context="command"):
+        """Run a command and return decoded stripped output, or None on failure.
+        Catches missing commands and process errors with a calm log message."""
+        cmd_name = command_list[0] if command_list else "<empty>"
+        try:
+            output = subprocess.check_output(command_list)
+            return output.decode().strip()
+        except FileNotFoundError as file_err:
+            error(f"Command '{cmd_name}' not found while checking {context}:\n\t{file_err}")
+            return None
+        except subprocess.CalledProcessError as proc_err:
+            error(f"Error obtaining {context}: {proc_err}")
+            return None
+
+####################################################################################################
+##                                                                                                ##
+##     ██████  ██ ███████ ████████ ██████   ██████      ███    ██  █████  ███    ███ ███████      ##
+##     ██   ██ ██ ██         ██    ██   ██ ██    ██     ████   ██ ██   ██ ████  ████ ██           ##
+##     ██   ██ ██ ███████    ██    ██████  ██    ██     ██ ██  ██ ███████ ██ ████ ██ █████        ##
+##     ██   ██ ██      ██    ██    ██   ██ ██    ██     ██  ██ ██ ██   ██ ██  ██  ██ ██           ##
+##     ██████  ██ ███████    ██    ██   ██  ██████      ██   ████ ██   ██ ██      ██ ███████      ##
+##                                                                                                ##
+####################################################################################################
+
+# Distro name is not that useful for installing, since installer decisions are usually
+# based on the distro ID, a more standardized label for the distro like "fedora".
+# But this may be useful for some distro variants that require some special behavior
+# from the config but don't adequately identify themselves in the "ID=" field any
+# differently from the base distro. Example: NebiOS 10.2, still shows "ubuntu" as
+# its ID, but shows "10.2" as the distro version, which makes no sense. 
+
+    def _get_distro_name(self):
+        """Get the distro display name from os-release NAME= field.
+        Stored casefolded for easy comparison and use in config file.
+        Available before _get_distro_id() for distro ID correction."""
+
+        if self.release_files.get('/etc/os-release'):
+            for line in self.release_files['/etc/os-release']:
+                if line.startswith('NAME='):
+                    self.DISTRO_NAME = line.split('=')[1].strip().strip('"')
+                    break
+
+        if not self.DISTRO_NAME and self.release_files.get('/etc/lsb-release'):
+            for line in self.release_files['/etc/lsb-release']:
+                if line.startswith('DISTRIB_ID='):
+                    self.DISTRO_NAME = line.split('=')[1].strip().strip('"')
+                    break
+
+        if not self.DISTRO_NAME:
+            self.DISTRO_NAME = 'notfound'
+
+        if isinstance(self.DISTRO_NAME, str):
+            self.DISTRO_NAME = self.DISTRO_NAME.casefold()
 
 ####################################################################################################
 ##                                                                                                ##
@@ -149,7 +250,7 @@ class EnvironmentInfo:
         """logic to set self.DISTRO_ID"""
         _distro_id          = ""
 
-        if _distro_id == "" and self.release_files['/etc/os-release']:
+        if _distro_id == "" and self.release_files.get('/etc/os-release'):
             for prefix in ['ID=', 'NAME=', 'PRETTY_NAME=']:
                 for line in self.release_files['/etc/os-release']:
                     if line.startswith(prefix):
@@ -158,7 +259,7 @@ class EnvironmentInfo:
                 if _distro_id != "":
                     break
 
-        if _distro_id == "" and self.release_files['/etc/lsb-release']:
+        if _distro_id == "" and self.release_files.get('/etc/lsb-release'):
             for prefix in ['DISTRIB_ID=', 'DISTRIB_DESCRIPTION=']:
                 for line in self.release_files['/etc/lsb-release']:
                     if line.startswith(prefix):
@@ -167,7 +268,7 @@ class EnvironmentInfo:
                 if _distro_id != "":
                     break
 
-        if _distro_id == "" and self.release_files['/etc/arch-release']:
+        if _distro_id == "" and self.release_files.get('/etc/arch-release'):
             _distro_id = 'arch'
 
         distro_names = {            # simplify distro names to an ID, if necessary
@@ -178,6 +279,7 @@ class EnvironmentInfo:
             'Manjaro':              'manjaro',
             'KDE.*Neon':            'neon',
             'Linux.*Mint':          'mint',
+            'NebiOS':               'nebios',
             'openSUSE.*Tumbleweed': 'opensuse-tumbleweed',
             'Peppermint.*':         'peppermint',
             'Pop!_OS':              'pop',
@@ -204,6 +306,15 @@ class EnvironmentInfo:
         if isinstance(self.DISTRO_ID, str):
             self.DISTRO_ID = self.DISTRO_ID.casefold()
 
+        # Correct DISTRO_ID when os-release ID= is too generic.
+        # Some derivatives (e.g., NebiOS) use 'ubuntu' as their ID
+        # but have a distinct NAME= that better identifies the distro.
+        # Add more 'elif' branches as needed to catch other distros.
+        if self.DISTRO_ID == 'ubuntu' and 'nebios' in self.DISTRO_NAME:
+            debug(f"DISTRO_ID is '{self.DISTRO_ID}' but DISTRO_NAME "
+                    f"contains 'nebios'. Overriding DISTRO_ID to 'nebios'.")
+            self.DISTRO_ID = 'nebios'
+
 ####################################################################################################
 ##                                                                                                ##
 ##           ██████  ██ ███████ ████████ ██████   ██████      ██    ██ ███████ ██████             ##
@@ -217,13 +328,13 @@ class EnvironmentInfo:
     def _get_distro_version(self):
         """logic to set self.DISTRO_VER"""
 
-        if self.release_files['/etc/os-release']:
+        if self.release_files.get('/etc/os-release'):
             for line in self.release_files['/etc/os-release']:
                 line: str
                 if line.startswith('VERSION_ID='):
                     self.DISTRO_VER = line.split('=')[1].strip().strip('"')
                     break
-        elif self.release_files['/etc/lsb-release']:
+        elif self.release_files.get('/etc/lsb-release'):
             for line in self.release_files['/etc/lsb-release']:
                 line: str
                 if line.startswith('DISTRIB_RELEASE='):
@@ -263,13 +374,13 @@ class EnvironmentInfo:
     def _get_variant_id(self):
         """logic to set self.VARIANT_ID, if variant info available"""
 
-        if self.release_files['/etc/os-release']:
+        if self.release_files.get('/etc/os-release'):
             for line in self.release_files['/etc/os-release']:
                 line: str
                 if line.startswith('VARIANT_ID='):
                     self.VARIANT_ID = line.split('=')[1].strip().strip('"')
                     break
-        elif self.release_files['/etc/lsb-release']:
+        elif self.release_files.get('/etc/lsb-release'):
             for line in self.release_files['/etc/lsb-release']:
                 line: str
                 if line.startswith('DISTRIB_DESCRIPTION='):
@@ -413,6 +524,7 @@ class EnvironmentInfo:
             'Miracle-WM':               'miracle-wm',
             'miracle-wm:mir':           'miracle-wm',
             'Miriway':                  'miriway',
+            'NebiDE':                   'nebide',   # NebiOS Wayfire-based DE
             'Niri':                     'niri',
             'Pantheon':                 'pantheon',
             'Plasma':                   'kde',
@@ -443,7 +555,24 @@ class EnvironmentInfo:
                 if self.DESKTOP_ENV:
                     break
 
-        # say DE should be added to list only if it it isn't None
+        # Correct misidentified DE when Wayfire socket is present.
+        # Some distros (e.g., NebiOS) set XDG_CURRENT_DESKTOP to "GNOME"
+        # despite using Wayfire as the compositor.
+        if os.environ.get('WAYFIRE_SOCKET') and self.DESKTOP_ENV not in ['wayfire', 'nebide']:
+            prev_de = self.DESKTOP_ENV or _desktop_env or '<unset>'
+            debug(f"WAYFIRE_SOCKET is set but DE was identified as '{prev_de}'. "
+                    f"Overriding to 'wayfire'.")
+            self.DESKTOP_ENV = 'wayfire'
+
+        # Detect NebiDE when Wayfire config file path indicates it.
+        # NebiDE is a Wayfire-based DE that may not identify itself
+        # in the standard XDG desktop environment variables, in NebiOS.
+        if self.DESKTOP_ENV == 'wayfire':
+            wayfire_config = os.environ.get('WAYFIRE_CONFIG_FILE', '')
+            if 'nebide' in wayfire_config.casefold():
+                self.DESKTOP_ENV = 'nebide'
+
+        # say DE should be added to list only if it isn't None
         if not self.DESKTOP_ENV and _desktop_env is not None:
             error(f'DE or window manager not in desktop_env_names list! Should fix this.'
                     f'\n\t{_desktop_env}')
@@ -517,6 +646,7 @@ class EnvironmentInfo:
         # Desktop environments for which we need the major version:
         # - GNOME
         # - KDE Plasma
+        # - LXQt
 
         if self.DESKTOP_ENV == 'gnome':
             self.DE_MAJ_VER = self.get_gnome_version()
@@ -529,16 +659,15 @@ class EnvironmentInfo:
             self.DE_MAJ_VER = 'no_logic_for_DE'
 
     def get_gnome_version(self):
-            try:
-                # Run the gnome-shell command to get the version
-                output = subprocess.check_output(["gnome-shell", "--version"]).decode().strip()
-                # Use regular expression to extract the major version number
-                match = re.search(r"GNOME Shell (\d+)\.", output)
-                if match:
-                    return match.group(1)
-            except subprocess.CalledProcessError as proc_err:
-                error(f"Error obtaining GNOME version: {proc_err}")
-                return 'gnome_ver_check_err'
+        cmd_lst = ["gnome-shell", "--version"]
+        output = self._safe_cmd_output(cmd_lst, context="GNOME version")
+        if output is None:
+            return 'gnome_ver_check_err'
+        # Use regular expression to extract the major version number
+        match = re.search(r"GNOME Shell (\d+)\.", output)
+        if match:
+            return match.group(1)
+        return 'gnome_ver_check_err'
 
     def get_kde_version(self):
         KDE_session_ver = os.environ.get('KDE_SESSION_VERSION')
@@ -560,14 +689,14 @@ class EnvironmentInfo:
         return 'kde_ver_check_err'
 
     def get_lxqt_version(self):
-        try:
-            output = subprocess.check_output(["lxqt-session", "--version"]).decode().strip()
-            match = re.search(r"lxqt-session (\d+\.\d+\.\d+)", output)
-            if match:
-                major_version = match.group(1).split('.')[0]
-                return major_version
-        except subprocess.CalledProcessError:
+        cmd_lst = ["lxqt-session", "--version"]
+        output = self._safe_cmd_output(cmd_lst, context="LXQt version")
+        if output is None:
             return 'lxqt_ver_check_err'
+        match = re.search(r"lxqt-session (\d+\.\d+\.\d+)", output)
+        if match:
+            return match.group(1).split('.')[0]
+        return 'lxqt_ver_check_err'
 
 ####################################################################################################
 ##                                                                                                ##
@@ -596,6 +725,7 @@ class EnvironmentInfo:
             ],
 
             # Older GNOME may have 'mutter' integrated into 'gnome-shell' process
+            # On NixOS, 'mutter' observed as window manager process in Wayland session, 2026-02-02
             'gnome': [
                 'mutter',
                 'gnome-shell',
@@ -639,6 +769,7 @@ class EnvironmentInfo:
             'lxde':             ['openbox'],
             'mate':             ['marco'],
             'miracle-wm':       ['miracle-wm'],
+            'nebide':           ['wayfire'],
             'openbox':          ['openbox'],
             'pantheon':         ['gala'],
             'pop':              ['gnome-shell'],
@@ -725,6 +856,7 @@ if __name__ == "__main__":
     _env_info = env_info_getter.get_env_info()
     print('')
     debug(  f'Toshy env_context module sees this environment:'
+            f'\n\t\t DISTRO_NAME     = \'{_env_info["DISTRO_NAME"]}\''
             f'\n\t\t DISTRO_ID       = \'{_env_info["DISTRO_ID"]}\''
             f'\n\t\t DISTRO_VER      = \'{_env_info["DISTRO_VER"]}\''
             f'\n\t\t VARIANT_ID      = \'{_env_info["VARIANT_ID"]}\''

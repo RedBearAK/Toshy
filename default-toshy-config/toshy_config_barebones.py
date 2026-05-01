@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20250710'
+__version__ = '20260404'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -26,8 +26,11 @@ import asyncio
 import inspect
 import subprocess
 
+# Removing problematic types before they get deprecated:
+# from typing import Any, Callable, Optional, Union, List, Dict, Tuple
+from typing import Any
 from subprocess import DEVNULL
-from typing import Any, Callable, List, Dict, Optional, Tuple, Union
+from collections.abc import Callable
 
 from xwaykeyz.config_api import *
 from xwaykeyz.lib.key_context import KeyContext
@@ -49,28 +52,61 @@ timeouts(
 
 # Delays often needed for Wayland and/or virtual machines or slow systems
 throttle_delays(
-    key_pre_delay_ms    = 12,      # default: 0 ms, range: 0-150 ms, suggested: 1-50 ms
-    key_post_delay_ms   = 18,      # default: 0 ms, range: 0-150 ms, suggested: 1-100 ms
+    key_pre_delay_ms    = 8,      # default: 0 ms, range: 0-150 ms, suggested: 1-50 ms
+    key_post_delay_ms   = 12,      # default: 0 ms, range: 0-150 ms, suggested: 1-100 ms
 )
+
+
+# ─── Devices API Reference ───────────────────────────────────────────────────
+#
+# Use `devices_api()` to control which input devices the keymapper grabs.
+# Run `toshy-devices` to see all available identifiers for connected devices.
+#
+# Both `only_devices` and `ignore_devices` accept lists of strings.
+# Each string can be any of the following match types:
+#
+#   'AT Translated Set 2 keyboard'                          # device name
+#   '/dev/input/event3'                                     # device path (volatile across reboots)
+#   '/dev/input/by-id/usb-Example_Keyboard-event-kbd'       # by-id symlink (stable, USB/BT only)
+#   'b0003:v1234:p5678:e0001:nab12cd34'                     # synthetic ID (stable, any device)
+#   'b0003:v1234:p5678:e0001:nab12cd34@usb-0000:00:14.0'    # synthetic ID with bus path (stable)
+#   'AA:BB:CC:DD:EE:FF'                                     # device uniq (stable, rarely populated)
+#
+# NOTE: Device paths like /dev/input/eventN can change across reboots or
+# when devices are unplugged and reconnected. Prefer device name, by-id
+# path, or synthetic ID for entries that should survive across reboots.
 
 devices_api(
-    # Only the specified devices will be "grabbed" and watched for during
-    # device connections/disconnections.
+
+    # Only the specified devices will be "grabbed" and watched for
+    # during device connections/disconnections. When empty or omitted,
+    # the keymapper autodetects all keyboard-like devices.
     only_devices = [
-        # 'Example Disconnected Keyboard',
-        # 'Example Connected Keyboard',
-    ]
+        # 'Example Keyboard Name',
+    ],
+
+    # Devices to never grab, even if they match autodetection or the
+    # allowlist above. Useful for combo keyboard/mouse devices that
+    # cause pointer stutter when grabbed, or media control devices
+    # that do not need remapping.
+    ignore_devices = [
+        # 'Example Wireless Receiver Mouse',
+    ],
 )
 
+
 ###########################################################
-# If you need to use something like the wordwise 'emacs'
-# style shortcuts, and want them to be repeatable, use
-# the API call below to stop the keymapper from ignoring
-# "repeat" key events. This will use a bit more CPU while
-# holding any key down, especially while holding a key combo
-# that is getting remapped onto something else in the config.
+# Use this ONLY if you want near zero CPU usage for held,
+# repeating keys. This will bypass the new repeating keys
+# cache mechanism that reduces CPU usage for repeats to
+# very low levels (but not zero), in xwaykeyz>=1.11.0.
+#
+# This override will BREAK shortcuts like Emacs-style
+# cursor movement, which will not be able to repeat.
+#
+# A warning will appear in verbose debug logging.
 ###########################################################
-# ignore_repeating_keys(False)
+# ignore_repeating_keys(True)
 
 
 ###  SLICE_MARK_END: keymapper_api  ###  EDITS OUTSIDE THESE MARKS WILL BE LOST ON UPGRADE
@@ -91,7 +127,9 @@ sys.path.insert(0, current_folder_path)
 from toshy_common.env_context import EnvironmentInfo
 from toshy_common.machine_context import get_machine_id_hash
 from toshy_common.notification_manager import NotificationManager
+from toshy_common.runtime_utils import sanitize_text
 from toshy_common.settings_class import Settings
+from toshy_common.terminal_utils import print_pango_text
 
 assets_path         = os.path.join(current_folder_path, 'assets')
 icon_file_active    = os.path.join(assets_path, "toshy_app_icon_rainbow.svg")
@@ -160,7 +198,7 @@ DE_MAJ_VER                      = None
 WINDOW_MGR                      = None
 
 env_ctxt_getter = EnvironmentInfo()
-env_ctxt: Dict[str, str] = env_ctxt_getter.get_env_info()
+env_ctxt: 'dict[str, str]' = env_ctxt_getter.get_env_info()
 
 DISTRO_ID       = locals().get('OVERRIDE_DISTRO_ID')    or env_ctxt.get('DISTRO_ID',    'keymissing')
 DISTRO_VER      = locals().get('OVERRIDE_DISTRO_VER')   or env_ctxt.get('DISTRO_VER',   'keymissing')
@@ -368,11 +406,13 @@ keyboards_Windows = [
 ]
 keyboards_Apple = [
     # Add specific Apple/Mac keyboard device names to this list
-    'Mitsumi Electric Apple Extended USB Keyboard',
+    'HP TouchPad Wireless Keyboard',    # Missing some keys, but Apple type probably best default
     'Magic Keyboard with Numeric Keypad',
     'Magic Keyboard',
+    'Mitsumi Electric Apple Extended USB Keyboard',
     'MX Keys Mac Keyboard',
-    'HP TouchPad Wireless Keyboard',    # Missing some keys, but Apple type probably best default
+    'Griffin Technology, Inc. iMate, USB To ADB Adaptor',
+    '.*USB to ADB Adapt.*'  # ADB device is pretty much guaranteed to be an Apple (or NeXT) keyboard
 ]
 
 kbtype_lists = {
@@ -592,255 +632,6 @@ def isDoubleTap(dt_combo):
     return _isDoubleTap
 
 
-total_matchProps_iterations = 0
-MAX_MATCHPROPS_ITERATIONS = 1000
-MAX_MATCHPROPS_ITERATIONS_REACHED = False
-
-
-# Correct syntax to reject all positional parameters: put `*,` at beginning
-def matchProps(*,
-    # string parameters (positive matching)
-    clas: str = None, name: str = None, devn: str = None,
-    # string parameters (negative matching)
-    not_clas: str = None, not_name: str = None, not_devn: str = None,
-    # bool parameters
-    numlk: bool = None, capslk: bool = None, cse: bool = None,
-    # list of dicts of parameters (positive)
-    lst: List[Dict[str, Union[str, bool]]] = None,
-    # list of dicts of parameters (negative)
-    not_lst: List[Dict[str, Union[str, bool]]] = None,
-    dbg: str = None,    # debugging info (such as: which modmap/keymap?)
-) -> Callable[[KeyContext], bool]:
-    """
-    ### Match all given properties to current window context.       \n
-    - Parameters must be _named_, no positional arguments.          \n
-    - All parameters optional, but at least one must be given.      \n
-    - Defaults to case insensitive matching of:                     \n
-        - WM_CLASS, WM_NAME, device_name                            \n
-    - To negate/invert regex pattern match use:                     \n
-        - `not_clas` `not_name` `not_devn` params or...             \n
-        - "^(?:(?!^pattern$).)*$"                                   \n
-    - To force case insensitive pattern match use:                  \n
-        - "^(?i:pattern)$" or...                                    \n
-        - "^(?i)pattern$"                                           \n
-
-    ### Accepted Parameters:                                        \n
-    `clas` = WM_CLASS    (regex/string) [xprop WM_CLASS]            \n
-    `name` = WM_NAME     (regex/string) [xprop _NET_WM_NAME]        \n
-    `devn` = Device Name (regex/string) [xwaykeyz --list-devices]   \n
-    `not_clas` = `clas` but inverted, matches when "not"            \n
-    `not_name` = `name` but inverted, matches when "not"            \n
-    `not_devn` = `devn` but inverted, matches when "not"            \n
-    `numlk`    = Num Lock LED state         (bool)                  \n
-    `capslk`   = Caps Lock LED state        (bool)                  \n
-    `cse`      = Case Sensitive matching    (bool)                  \n
-    `lst`      = List of dicts of the above arguments               \n
-    `not_lst`  = `lst` but inverted, matches when "not"             \n
-    `dbg`      = Debugging info             (string)                \n
-
-    ### Negative match parameters:
-    - `not_clas`|`not_name`|`not_devn`                              \n
-    Parameters take same regex patterns as `clas`|`name`|`devn`     \n
-    but result in a True condition only if pattern is NOT found.    \n
-    Negative parameters cannot be used together with the normal     \n
-    positive matching equivalent parameter in same instance.        \n
-
-    ### List of Dicts parameter: `lst`|`not_lst`
-    A [list] of {dicts} with each dict containing 1 to 6 of the     \n
-    named parameters above, to be processed recursively as args.    \n
-    A dict can also contain a single `lst` or `not_lst` argument.   \n
-
-    ### Debugging info parameter: `dbg`
-    A string that will print as part of logging output. Use to      \n
-    help identify origin of logging output.                         \n
-    -                                                               \n
-    """
-    # Reference for successful negative lookahead pattern, and
-    # explanation of why it works:
-    # https://stackoverflow.com/questions/406230/\
-        # regular-expression-to-match-a-line-that-doesnt-contain-a-word
-
-    global MAX_MATCHPROPS_ITERATIONS_REACHED
-    global total_matchProps_iterations
-
-    # Return `False` immediately if screen does not have focus (e.g. Synergy),
-    # but only after the guard clauses have had a chance to evaluate on
-    # all possible uses of the function that may exist in the config.
-    if MAX_MATCHPROPS_ITERATIONS_REACHED and not cnfg.screen_has_focus:
-        # return False    # Returning a boolean here causes as exception. Must return a callable!
-        return lambda _: False
-
-    if total_matchProps_iterations >= MAX_MATCHPROPS_ITERATIONS:
-        MAX_MATCHPROPS_ITERATIONS_REACHED = True
-        bypass_guard_clauses = True
-    else:
-        total_matchProps_iterations += 1
-        current_timestamp = time.time()
-
-        # 'STARTUP_TIMESTAMP' is a global variable, set when config is executed
-        time_elapsed = current_timestamp - STARTUP_TIMESTAMP
-
-        # Bypass all guard clauses if more than a few seconds have passed since keymapper
-        # started and loaded the config file. Inputs never change until keymapper
-        # restarts and reloads the config file, so we don't need to keep checking.
-        bypass_guard_clauses = time_elapsed > 6
-
-    logging_enabled = False
-
-    allowed_params  = (clas, name, devn, not_clas, not_name, not_devn,
-                        numlk, capslk, cse, lst, not_lst, dbg)
-    lst_dct_params  = (clas, name, devn, not_clas, not_name, not_devn,
-                        numlk, capslk, cse)
-    string_params   = (clas, name, devn, not_clas, not_name, not_devn, dbg)
-
-    # This was using up a lot of CPU time, actually. Bad idea.
-    # dct_param_strs  = list(inspect.signature(matchProps).parameters.keys())
-
-    # Static list of parameter names. Using this instead of `inspect` cuts CPU
-    # usage considerably, for reasons I don't yet understand. Apparently the
-    # keymapper is actually running the entire function again on each key
-    # press and release, rather than just re-evaluating the inner closure.
-    dct_param_strs = [
-        'clas', 'name', 'devn', 'not_clas', 'not_name', 'not_devn',
-        'numlk', 'capslk', 'cse', 'lst', 'not_lst', 'dbg'
-    ]
-
-    if not MAX_MATCHPROPS_ITERATIONS_REACHED or not bypass_guard_clauses:
-        if all([x is None for x in allowed_params]):
-            raise ValueError(f"\n\n(EE) matchProps(): Received no valid argument\n")
-        if any([x not in (True, False, None) for x in (numlk, capslk, cse)]):
-            raise TypeError(f"\n\n(EE) matchProps(): Params 'numlk|capslk|cse' are bools\n")
-        if any([x is not None and not isinstance(x, str) for x in string_params]):
-            raise TypeError(    f"\n\n(EE) matchProps(): These parameters must be strings:"
-                                f"\n\t'clas|name|devn|not_clas|not_name|not_devn|dbg'\n")
-        if clas and not_clas or name and not_name or devn and not_devn or lst and not_lst:
-            raise ValueError(   f"\n\n(EE) matchProps(): Do not mix positive and "
-                                f"negative match params for same property\n")
-
-    # consolidate positive and negative matching params into new vars
-    # only one should be in use at a time (checked above)
-    _lst = not_lst if lst is None else lst
-    _clas = not_clas if clas is None else clas
-    _name = not_name if name is None else name
-    _devn = not_devn if devn is None else devn
-
-    # process lists of conditions
-    if _lst is not None:
-
-        if not MAX_MATCHPROPS_ITERATIONS_REACHED or not bypass_guard_clauses:
-            if any([x is not None for x in lst_dct_params]):
-                raise TypeError(f"\n\n(EE) matchProps(): Param 'lst|not_lst' must be used alone\n")
-            if not isinstance(_lst, list) or not all(isinstance(item, dict) for item in _lst):
-                raise TypeError(
-                    f"\n\n(EE) matchProps(): Param 'lst|not_lst' wants a [list] of {{dicts}}\n")
-            # verify that every {dict} in [list of dicts] only contains valid parameter names
-            for dct in _lst:
-                for param in list(dct.keys()):
-                    if param not in dct_param_strs:
-                        error(f"matchProps(): Invalid parameter: '{param}'")
-                        error(f"Invalid parameter is in this dict: \n\t{dct}")
-                        error(f"Dict is in this list:")
-                        for item in _lst:
-                            print(f"\t{item}")
-                        raise ValueError(
-                            f"\n(EE) matchProps(): Invalid parameter found in dict in list. "
-                            f"See log output before traceback.\n")
-
-        def _matchProps_Lst(ctx: KeyContext):
-            if not cnfg.screen_has_focus:
-                return False
-            if not_lst is not None:
-                if logging_enabled: print(f"## _matchProps_Lst()[not_lst] ## {dbg=}")
-                return not any(matchProps(**dct)(ctx) for dct in not_lst)
-            else:
-                if logging_enabled: print(f"## _matchProps_Lst()[lst] ## {dbg=}")
-                return any(matchProps(**dct)(ctx) for dct in lst)
-
-        return _matchProps_Lst      # outer function returning inner function
-
-    # compile case insensitive regex object for given params, unless cse=True
-    if _clas is not None: clas_rgx = re.compile(_clas, 0 if cse else re.I)
-    if _name is not None: name_rgx = re.compile(_name, 0 if cse else re.I)
-    if _devn is not None: devn_rgx = re.compile(_devn, 0 if cse else re.I)
-
-    def _matchProps(ctx: KeyContext):
-        if not cnfg.screen_has_focus:
-            return False
-        cond_list       = []
-        nt_err          = 'ERR: matchProps: NoneType in ctx.'
-        if _clas is not None:
-            clas_match = re.search(clas_rgx, ctx.wm_class or nt_err + 'wm_class')
-            cond_list.append(not clas_match if not_clas is not None else clas_match)
-        if _name is not None:
-            name_match = re.search(name_rgx, ctx.wm_name or nt_err + 'wm_name')
-            cond_list.append(not name_match if not_name is not None else name_match)
-        if _devn is not None:
-            devn_match = re.search(devn_rgx, ctx.device_name or nt_err + 'device_name')
-            cond_list.append(not devn_match if not_devn is not None else devn_match)
-        # these two MUST check explicitly for "is not None" because external input is True/False,
-        # and we want to be able to match the LED_on state of either "True" or "False"
-        if numlk is not None: cond_list.append( numlk is ctx.numlock_on  )
-        if capslk is not None: cond_list.append( capslk is ctx.capslock_on )
-        if logging_enabled: # and all(cnd_lst): # << add this to show only "True" condition lists
-            print(f'####  CND_LST ({all(cond_list)})  ####  {dbg=}')
-            for elem in cond_list:
-                print('##', re.sub(r'^.*span=.*\), ', '', str(elem)).replace('>',''))
-            print('-------------------------------------------------------------------')
-        return all(cond_list)
-
-    return _matchProps      # outer function returning inner function
-
-
-# Boolean variable to toggle Enter key state between F2 and Enter
-# True = Enter key sends F2, False = Enter key sends Enter
-_enter_is_F2 = True     # DON'T CHANGE THIS! Must be set to True here.
-
-
-def iEF2(combo_if_true, latch_or_combo_if_false,
-                keep_value_if_true=False, keep_value_if_false=False):
-    """
-    Formerly 'is_Enter_F2'
-    Send a different combo for the Enter key based on the state of the _enter_is_F2 variable,
-    or latch the variable to True or False to control the Enter key output on the next use.
-
-    Args:
-        combo_if_true:              The combo to send if _enter_is_F2 is True.
-        latch_or_combo_if_false:    The combo to send if _enter_is_F2 is False, or
-                                    a Boolean to latch _enter_is_F2 to a specific value.
-        keep_value_if_true (opt.):  If True, _enter_is_F2 will be kept True if it is currently True.
-                                    If False, _enter_is_F2 will be set to False if it is currently True.
-        keep_value_if_false (opt.): If True, _enter_is_F2 will be kept False if it is currently False.
-                                    If False, _enter_is_F2 will be set to True if it is currently False.
-
-    Returns:
-        A function that, when called, returns the appropriate combo based on the current
-        state of _enter_is_F2 and the provided parameters, and updates _enter_is_F2
-        based on the provided parameters.
-
-    This enables a simulation of the Finder "Enter to rename" capability, allowing
-    for complex control over the Enter key's behavior in various scenarios.
-    """
-    def _is_Enter_F2():
-        global _enter_is_F2
-        combo_list = [combo_if_true]
-        if latch_or_combo_if_false in (True, False):    # Latch variable to given bool value
-            _enter_is_F2 = latch_or_combo_if_false
-        elif _enter_is_F2:                              # If Enter is F2 now, set to be Enter next
-            if keep_value_if_true is False:
-                _enter_is_F2 = False
-        else:                                           # If Enter is Enter now, set to be F2 next
-            combo_list = [latch_or_combo_if_false]
-            if keep_value_if_false is False:
-                _enter_is_F2 = True
-        debug(f"_is_Enter_F2:  {combo_list      = }")
-        debug(f"_is_Enter_F2:  {_enter_is_F2    = }")
-        return combo_list
-    return _is_Enter_F2
-
-
-def iEF2NT():
-    """Feed `is_Enter_F2` function `None` and `True` as arguments, with short name"""
-    return iEF2(None, True)
 
 
 def macro_tester():
@@ -952,15 +743,18 @@ def notify_context():
             f"</tt>"
         )
 
+        # Sanitize Unicode characters in dialog text if locale does not support
+        sane_message = sanitize_text(message)
+
         zenity_cmd_lst = [  zenity_cmd, '--info', '--no-wrap',
                             '--title=Toshy Context Info',
-                            '--text=' + message ]
+                            '--text=' + sane_message ]
 
         # insert the icon argument if it's supported
         if zenity_icon_option is not None:
             zenity_cmd_lst.insert(3, zenity_icon_option)
 
-        kdialog_cmd_lst = [kdialog_cmd, '--msgbox', message, '--title', 'Toshy Context Info']
+        kdialog_cmd_lst = [kdialog_cmd, '--msgbox', sane_message, '--title', 'Toshy Context Info']
         # Add icon if needed: kdialog_cmd_lst += ['--icon', '/path/to/icon']
         # Figure out why icon argument doesn't work. Need a proper icon theme folder?
         # DONE: Figured out that Kdialog does not support custom icons at all!
@@ -970,6 +764,15 @@ def notify_context():
             subprocess.Popen(kdialog_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
         elif dialog_cmd == zenity_cmd:
             subprocess.Popen(zenity_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
+
+        # Also print out the diagnostics to the terminal, in case the dialog doesn't work.
+        # Trim the last 4 lines (dialog-only hints) for terminal output
+        term_message = nwln_str.join(message.split(nwln_str)[:-4])
+        print(f"\n{'=' * 50}")
+        print(f"  Toshy Context Info (diagnostic dialog content)")
+        print(f"{'=' * 50}")
+        print_pango_text(term_message, nwln_str)
+        print()     # separate from following lines
 
         # Optionally, also send a system notification:
         # ntfy.send_notification(message)
@@ -1077,12 +880,12 @@ def process_multitap_command(command, ctx):
 
 
 # Per-combo state tracking using action tuple as key
-tap_states: Dict[tuple, Dict[str, Any]] = {}
+tap_states: 'dict[tuple, dict[str, Any]]' = {}
 
-event_loop: Optional[asyncio.AbstractEventLoop] = None
+event_loop: 'asyncio.AbstractEventLoop | None' = None
 
 
-def get_loop() -> Optional[asyncio.AbstractEventLoop]:
+def get_loop() -> 'asyncio.AbstractEventLoop | None':
     global event_loop
     if event_loop is None or event_loop.is_closed():
         try:
@@ -1130,13 +933,13 @@ def multitap_config(tap_interval=None, min_tap_delay=None):
                 f"adjusted to {_MULTITAP_CONFIG['min_tap_delay']:.3f}s")
 
 
-def isMultiTap( tap_1_action: Optional[Callable] = None,
-                tap_2_action: Optional[Callable] = None,
-                tap_3_action: Optional[Callable] = None,
-                tap_4_action: Optional[Callable] = None,
-                tap_5_action: Optional[Callable] = None,
+def isMultiTap( tap_1_action: 'Callable | None' = None,
+                tap_2_action: 'Callable | None' = None,
+                tap_3_action: 'Callable | None' = None,
+                tap_4_action: 'Callable | None' = None,
+                tap_5_action: 'Callable | None' = None,
                 tap_interval: float = None,
-                min_tap_delay: float = None) -> Callable:
+                min_tap_delay: float = None):    # returns Callable
     """
     Multi-tap handler that supports 1-5 taps with asyncio.
 
@@ -1280,7 +1083,7 @@ def isMultiTap( tap_1_action: Optional[Callable] = None,
             state = tap_states[action_key]
 
         # Cancel any pending finalization
-        finalize_handle: Optional[asyncio.Handle] = state['finalize_handle']
+        finalize_handle: 'asyncio.Handle | None' = state['finalize_handle']
         if finalize_handle is not None:
             finalize_handle.cancel()
             state['finalize_handle'] = None
@@ -1357,11 +1160,12 @@ keymap("Diagnostics (isMultiTap)", {
                                 C("Enter"), C("Enter")],
                         ),
 
-}, when = lambda ctx: ctx is ctx)
+}, when = lambda _: True is True)
 
 
 # keymap("Diagnostics (isDoubleTap)", {
 #     C("Shift-Alt-RC-i"):        isDoubleTap(notify_context),    # Diagnostic dialog (primary)
 #     C("Shift-Alt-RC-h"):        isDoubleTap(notify_context),    # Diagnostic dialog (alternate)
 #     C("Shift-Alt-RC-t"):        isDoubleTap(macro_tester),      # Type out test macro
-# }, when = lambda ctx: ctx is ctx )
+# }, when = lambda _: True is True)
+

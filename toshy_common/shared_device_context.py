@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20250710'
+__version__ = '20260318'
 
 # NOTE: This new context module for monitoring keyboard-mouse sharing software was
 # originally produced by Claude 3.7 Sonnet, based on the window_context module in
@@ -9,14 +9,17 @@ import os
 import re
 import abc
 import time
-import socket
-import platform
 import subprocess
 
-from typing import Dict, List, Optional, Set, Callable, Tuple
+from typing import List, Optional, Set, Callable, Tuple
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
+
 from toshy_common.logger import debug, error, warn
+from toshy_common.deskflow_pgrep_patterns import (
+    deskflow_core_server_rgx,
+    deskflow_core_client_rgx,
+)
 
 
 class SharedDeviceMonitorInterface(abc.ABC):
@@ -178,16 +181,42 @@ class SharedDeviceMonitorInterface(abc.ABC):
 
 
 class DeskflowMonitor(SharedDeviceMonitorInterface):
-    """Monitor for Deskflow software (upstream project of Synergy)"""
+    """Monitor for Deskflow software (upstream project of Synergy)
+
+    Supports three eras of Deskflow binary naming:
+        v1.24.0+:     deskflow-core server|client       (unified binary, positional arg)
+        Pre-v1.24.0:  deskflow-server, deskflow-client  (separate binaries)
+        All versions: deskflow                           (GUI process)
+    """
 
     def __init__(self):
-        self.process_names = ['deskflow', 'deskflows', 'deskflowc']
-        self.server_process_names = ['deskflows', 'deskflow']  # 'deskflow' might be both
-        self.client_process_names = ['deskflowc', 'deskflow']  # 'deskflow' might be both
+        # Presence detection: any of these means Deskflow is installed and running.
+        # The GUI binary 'deskflow' exists in all versions.
+        # 'deskflow-server'/'deskflow-client' are pre-v1.24.0 only.
+        # 'deskflow-core' is v1.24.0+ only (takes 'server' or 'client' positional arg).
+        self.process_names = [
+            'deskflow-core',            # v1.24.0+ unified binary
+            'deskflow-server',          # Pre-v1.24.0 server binary
+            'deskflow-client',          # Pre-v1.24.0 client binary
+            'deskflow',                 # GUI (all versions)
+        ]
+
+        # Server role detection (used by is_server)
+        self.server_process_names = [
+            'deskflow-core',            # v1.24.0+: needs command-line inspection
+            'deskflow-server',          # Pre-v1.24.0: binary name IS the role
+        ]
+
+        # Client role detection (used by is_server to rule out server)
+        self.client_process_names = [
+            'deskflow-core',            # v1.24.0+: needs command-line inspection
+            'deskflow-client',          # Pre-v1.24.0: binary name IS the role
+        ]
+
         self.log_paths = [
             # Observed in the wild
             os.path.expanduser("~/deskflow.log"),
-            # Additional guesses
+            # Additional known paths
             os.path.expanduser("~/.local/state/Deskflow/deskflow.log"),
             os.path.expanduser("~/.local/share/Deskflow/deskflow.log"),
             os.path.expanduser("~/.config/Deskflow/deskflow.log"),
@@ -200,11 +229,18 @@ class DeskflowMonitor(SharedDeviceMonitorInterface):
         return ['deskflow']
 
     def is_running(self):
-        """Check if any Deskflow process is running"""
+        """Check if any Deskflow process is running.
+
+        All process names can use exact match (pgrep -x) since even
+        deskflow-core appears as 'deskflow-core' in the kernel comm field
+        regardless of its positional arguments.
+        """
         for process_name in self.process_names:
             try:
-                result = subprocess.run(['pgrep', '-x', process_name], 
-                                        capture_output=True, text=True)
+                result = subprocess.run(
+                    ['pgrep', '-x', process_name],
+                    capture_output=True, text=True,
+                )
                 if result.returncode == 0:
                     return True
             except subprocess.SubprocessError:
@@ -221,7 +257,7 @@ class DeskflowMonitor(SharedDeviceMonitorInterface):
             return path
         return None
 
-    def parse_log_line(self, line: str) -> Optional[bool]:
+    def parse_log_line(self, line: str) -> 'bool | None':
         """Parse Deskflow log line for focus events"""
         if "leaving screen" in line.lower():
             return False
@@ -230,26 +266,33 @@ class DeskflowMonitor(SharedDeviceMonitorInterface):
         return None
 
     def is_server(self) -> bool:
-        """
-        Determine if this system is running Deskflow as a server.
+        """Determine if this system is running Deskflow as a server.
 
-        Checks:
-        1. If 'deskflows' process is running
-        2. If log file contains server initialization messages
-        3. If 'deskflow' is running with server arguments
+        Checks (in order):
+        1. Process detection for server-specific binaries/arguments
+        2. Process detection for client-specific binaries/arguments
+        3. Guard: only proceed to log scanning if a core process is running
+        4. Log file head scan for server initialization messages
+        5. Log file tail scan for server-only 'switch from' events
 
         Returns True if any check suggests this is a server, False otherwise.
         """
         if self._server_status is not None:
             return self._server_status
 
-        # Check if server process is running
+        # --- Check for server process ---
         for process_name in self.server_process_names:
             try:
-                # Use -f flag to match full command line arguments for 'deskflow'
-                cmd = 'pgrep' 
-                args = ['-x', process_name] if process_name == 'deskflows' else ['-f', f'(^|/){process_name}.*--server']
-                result = subprocess.run([cmd] + args, capture_output=True, text=True)
+                if process_name == 'deskflow-core':
+                    # v1.24.0+: must inspect command line for positional 'server' arg
+                    args = ['pgrep', '-f', deskflow_core_server_rgx]
+                elif process_name == 'deskflow-server':
+                    # Pre-v1.24.0: binary name alone confirms server role
+                    args = ['pgrep', '-x', process_name]
+                else:
+                    continue
+
+                result = subprocess.run(args, capture_output=True, text=True)
                 if result.returncode == 0:
                     self._server_status = True
                     debug("Deskflow server process detected")
@@ -257,13 +300,20 @@ class DeskflowMonitor(SharedDeviceMonitorInterface):
             except subprocess.SubprocessError:
                 pass
 
-        # Check if only client process is running (definitively a client)
+        # --- Check for client process (rules out server) ---
         client_only = False
         for process_name in self.client_process_names:
             try:
-                cmd = 'pgrep'
-                args = ['-x', process_name] if process_name == 'deskflowc' else ['-f', f'(^|/){process_name}.*--client']
-                result = subprocess.run([cmd] + args, capture_output=True, text=True)
+                if process_name == 'deskflow-core':
+                    # v1.24.0+: must inspect command line for positional 'client' arg
+                    args = ['pgrep', '-f', deskflow_core_client_rgx]
+                elif process_name == 'deskflow-client':
+                    # Pre-v1.24.0: binary name alone confirms client role
+                    args = ['pgrep', '-x', process_name]
+                else:
+                    continue
+
+                result = subprocess.run(args, capture_output=True, text=True)
                 if result.returncode == 0:
                     client_only = True
                     break
@@ -275,29 +325,66 @@ class DeskflowMonitor(SharedDeviceMonitorInterface):
             debug("Deskflow client process detected")
             return False
 
-        # Check log file for server messages
-        log_path = self.get_log_file_path()
-        if log_path and os.path.exists(log_path):
+        # --- Only fall back to log scanning if a core process is actually running ---
+        # If only the GUI binary 'deskflow' was found by is_running(), the core
+        # process may not have started yet, or the log may be stale from a
+        # previous session in a different role. Scanning it could produce a
+        # false server detection (e.g., old "switch from" events from when this
+        # machine was last used as a server, but is now running as a client).
+        core_process_found = False
+        for core_name in ('deskflow-core', 'deskflow-server', 'deskflow-client'):
             try:
-                file_size = os.path.getsize(log_path)
-                if file_size < 50:  # Less than 50 bytes
-                    warn(f"Found empty/minimal log file: {log_path}. Server detection may be unreliable.")
+                result = subprocess.run(
+                    ['pgrep', '-x', core_name],
+                    capture_output=True, text=True,
+                )
+                if result.returncode == 0:
+                    core_process_found = True
+                    break
+            except subprocess.SubprocessError:
+                pass
 
-                # Only check the first 50 lines for server initialization messages
-                with open(log_path, 'r') as f:
-                    lines = [f.readline() for _ in range(50)]
-                    for line in lines:
-                        if ("server started" in line.lower() or 
-                            "started server" in line.lower() or
-                            "accepted client connection" in line.lower() or
-                            "waiting for clients" in line.lower()):
-                            self._server_status = True
-                            debug("Deskflow server detected from log file")
-                            return True
-            except Exception as e:
-                error(f"Error reading Deskflow log file: {e}")
+        if core_process_found:
+            log_path = self.get_log_file_path()
+            if log_path and os.path.exists(log_path):
+                try:
+                    file_size = os.path.getsize(log_path)
+                    if file_size < 50:
+                        warn(
+                            f"Found empty/minimal log file: {log_path}. "
+                            f"Server detection may be unreliable."
+                        )
 
-        # Default assumption: if Deskflow is running but we couldn't determine, assume client
+                    # Scan the first 50 lines for server initialization messages
+                    with open(log_path, 'r') as f:
+                        lines = [f.readline() for _ in range(50)]
+                        for line in lines:
+                            line_lower = line.lower()
+                            if ("server started" in line_lower or
+                                    "started server" in line_lower or
+                                    "accepted client connection" in line_lower or
+                                    "waiting for clients" in line_lower):
+                                self._server_status = True
+                                debug("Deskflow server detected from log file (init message)")
+                                return True
+
+                    # Scan the tail of the log for server-only events.
+                    # "switch from" is only emitted by the server process when
+                    # focus moves between screens.
+                    if file_size > 0:
+                        read_size = min(8192, file_size)
+                        with open(log_path, 'r') as f:
+                            f.seek(file_size - read_size)
+                            tail = f.read(read_size)
+                        for line in tail.splitlines()[-100:]:
+                            if "switch from" in line.lower():
+                                self._server_status = True
+                                debug("Deskflow server detected from log file (switch-from event)")
+                                return True
+                except Exception as e:
+                    error(f"Error reading Deskflow log file: {e}")
+
+        # Default: if Deskflow is running but role undetermined, assume client
         self._server_status = False
         return False
 
@@ -329,7 +416,7 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
         """Check if any Synergy process is running"""
         for process_name in self.process_names:
             try:
-                result = subprocess.run(['pgrep', '-x', process_name], 
+                result = subprocess.run(['pgrep', '-x', process_name],
                                         capture_output=True, text=True)
                 if result.returncode == 0:
                     return True
@@ -373,7 +460,7 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
         for process_name in self.server_process_names:
             try:
                 # Use -f flag to match full command line arguments
-                result = subprocess.run(['pgrep', '-f', f'(^|/){process_name}.*server'], 
+                result = subprocess.run(['pgrep', '-f', f'(^|/){process_name}.*server'],
                                         capture_output=True, text=True)
                 if result.returncode == 0:
                     self._server_status = True
@@ -386,7 +473,7 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
         client_only = False
         for process_name in self.client_process_names:
             try:
-                result = subprocess.run(['pgrep', '-f', f'(^|/){process_name}.*client'], 
+                result = subprocess.run(['pgrep', '-f', f'(^|/){process_name}.*client'],
                                         capture_output=True, text=True)
                 if result.returncode == 0:
                     client_only = True
@@ -411,7 +498,7 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
                 with open(log_path, 'r') as f:
                     lines = [f.readline() for _ in range(50)]
                     for line in lines:
-                        if ("server started" in line.lower() or 
+                        if ("server started" in line.lower() or
                             "started server" in line.lower() or
                             "accepted client connection" in line.lower() or
                             "waiting for clients" in line.lower()):
@@ -452,7 +539,7 @@ class InputLeapMonitor(SharedDeviceMonitorInterface):
         """Check if any Input Leap process is running"""
         for process_name in self.process_names:
             try:
-                result = subprocess.run(['pgrep', '-x', process_name], 
+                result = subprocess.run(['pgrep', '-x', process_name],
                                         capture_output=True, text=True)
                 if result.returncode == 0:
                     return True
@@ -496,7 +583,7 @@ class InputLeapMonitor(SharedDeviceMonitorInterface):
         for process_name in self.server_process_names:
             try:
                 # Use -f flag to match full command line arguments for 'input-leap'
-                cmd = 'pgrep' 
+                cmd = 'pgrep'
                 args = ['-x', process_name] if process_name == 'input-leaps' else ['-f', f'(^|/){process_name}.*--server']
                 result = subprocess.run([cmd] + args, capture_output=True, text=True)
                 if result.returncode == 0:
@@ -536,7 +623,7 @@ class InputLeapMonitor(SharedDeviceMonitorInterface):
                 with open(log_path, 'r') as f:
                     lines = [f.readline() for _ in range(50)]
                     for line in lines:
-                        if ("server started" in line.lower() or 
+                        if ("server started" in line.lower() or
                             "started server" in line.lower() or
                             "accepted client connection" in line.lower() or
                             "waiting for clients" in line.lower()):
@@ -590,7 +677,7 @@ class BarrierMonitor(SharedDeviceMonitorInterface):
         """Check if any Barrier process is running"""
         for process_name in self.process_names:
             try:
-                result = subprocess.run(['pgrep', '-x', process_name], 
+                result = subprocess.run(['pgrep', '-x', process_name],
                                       capture_output=True, text=True)
                 if result.returncode == 0:
                     return True
@@ -639,7 +726,7 @@ class BarrierMonitor(SharedDeviceMonitorInterface):
         for process_name in self.server_process_names:
             try:
                 # Use -f flag to match full command line arguments for 'barrier'
-                cmd = 'pgrep' 
+                cmd = 'pgrep'
                 args = ['-x', process_name] if process_name == 'barriers' else ['-f', f'(^|/){process_name}.*--server']
                 result = subprocess.run([cmd] + args, capture_output=True, text=True)
                 if result.returncode == 0:
@@ -679,7 +766,7 @@ class BarrierMonitor(SharedDeviceMonitorInterface):
                 with open(log_path, 'r') as f:
                     lines = [f.readline() for _ in range(50)]
                     for line in lines:
-                        if ("server started" in line.lower() or 
+                        if ("server started" in line.lower() or
                             "started server" in line.lower() or
                             "accepted client connection" in line.lower() or
                             "waiting for clients" in line.lower()):
@@ -697,7 +784,7 @@ class BarrierMonitor(SharedDeviceMonitorInterface):
 class LogWatcherHandler(FileSystemEventHandler):
     """Handler for log file changes"""
 
-    def __init__(self, log_path: str, parse_func: Callable[[str], Optional[bool]], 
+    def __init__(self, log_path: str, parse_func: Callable[[str], Optional[bool]],
                     on_focus_change: Callable[[bool], None]):
         super().__init__()
         self.log_path = log_path
@@ -823,7 +910,7 @@ class SharedDeviceContext:
             self.monitors.append(monitor_class())
 
         # Log which monitors are available
-        software_list = [software for monitor in self.monitors 
+        software_list = [software for monitor in self.monitors
                         for software in monitor.get_supported_software()]
         debug(f"SharedDeviceContext initialized with support for: {', '.join(software_list)}")
 
@@ -1056,3 +1143,5 @@ if __name__ == "__main__":
         print("Shutting down...")
     finally:
         context.stop_monitoring()
+
+# End of file #

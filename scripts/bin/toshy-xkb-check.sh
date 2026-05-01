@@ -1,8 +1,8 @@
 #!/usr/bin/bash
 
 
-# Start Toshy Wlroots D-Bus service, after terminating existing
-# processes and activating Python virtual environment
+# Run the Toshy XKB options check module to show any
+# XKB configuration issues that may affect Toshy
 
 # Check if the script is being run as root
 if [[ $EUID -eq 0 ]]; then
@@ -16,16 +16,9 @@ if [[ -z $USER ]] || [[ -z $HOME ]]; then
     exit 1
 fi
 
-TOSHY_CFG="${HOME}/.config/toshy"
-TOSHY_WLROOTS="${TOSHY_CFG}/wlroots-dbus-service"
-FILE_NAME="toshy_wlroots_dbus_service"
-
-pkill -f "${FILE_NAME}"
-
-sleep 0.5
 
 # Absolute path to the venv
-VENV_PATH="$HOME/.config/toshy/.venv"
+VENV_PATH="${HOME}/.config/toshy/.venv"
 
 # Verify the venv directory exists
 if [ ! -d "$VENV_PATH" ]; then
@@ -37,6 +30,7 @@ fi
 # shellcheck disable=SC1091
 source "${VENV_PATH}/bin/activate"
 
-# start the script that will create the D-Bus object/interface
-# use "-u" option on Python to enable unbuffered output mode
-exec "${VENV_PATH}/bin/python" -u "${TOSHY_WLROOTS}/${FILE_NAME}.py"
+# Need PYTHONPATH update to allow absolute imports from "toshy_common" package
+export PYTHONPATH="${HOME}/.config/toshy:${PYTHONPATH}"
+
+exec "${VENV_PATH}/bin/python" "${HOME}/.config/toshy/toshy_common/xkb_check.py"

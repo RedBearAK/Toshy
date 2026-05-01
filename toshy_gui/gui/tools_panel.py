@@ -484,39 +484,15 @@ class ToolsPanel(Gtk.Box):
             
     def on_show_services_log(self, button):
         """Handle show services log button click"""
-        print("DEBUG: Show Services Log button clicked!")
-        
         if not self.runtime.is_systemd:
             debug("Services log requested but systemd not available")
             return
             
         try:
-            # Get terminal from environment or use foot as default
-            import os
-            terminal_name = os.environ.get('TOSHY_TERMINAL', 'foot')
-            terminal_path = f"/run/current-system/sw/bin/{terminal_name}"
-            
-            # Build the journalctl command to show Toshy services logs
-            journalctl_cmd = [
-                "journalctl", "--user", "-f", "-n", "200", "-b",
-                "--user-unit", "toshy.service",
-                "--user-unit", "toshy-gui.service", 
-                "--user-unit", "toshy-tray.service"
-            ]
-            
-            # Launch terminal with the journalctl command
-            import subprocess
-            subprocess.Popen(
-                [terminal_path, "--", "bash", "-c", 
-                 f"trap 'exit 0' SIGINT SIGTERM; {' '.join(journalctl_cmd)}"],
-                start_new_session=True
-            )
-            print(f"DEBUG: {terminal_name} terminal launched successfully")
-            
-        except Exception as e:
-            debug(f"Error launching services log: {e}")
-            print(f"DEBUG: Error launching services log: {e}")
-            self.ntfy.send_notification(f"Error opening services log: {e}")
+            term_utils.run_cmd_lst_in_terminal(['toshy-services-log'], desktop_env=self.desktop_env)
+        except term_utils.TerminalNotFoundError as e:
+            debug(f"Terminal error: {e}")
+            self.ntfy.send_notification(str(e))
             
     def load_settings(self):
         """Load settings from config and update controls (called by external monitoring)"""
