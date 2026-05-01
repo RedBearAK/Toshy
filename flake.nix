@@ -139,8 +139,8 @@
               pkgs.foot          # terminal emulator for log viewing
               pkgs.xdg-utils    # xdg-open for opening files/URLs
             ])
-            # Append system PATH so xdg-open can find file managers, browsers, etc.
-            "--suffix" "PATH" ":" "/run/current-system/sw/bin:/run/wrappers/bin"
+            # Append system PATH at runtime so xdg-open can find file managers, etc.
+            "--run" "export PATH=\"$PATH:/run/current-system/sw/bin:/run/wrappers/bin:$HOME/.nix-profile/bin:/etc/profiles/per-user/$USER/bin\""
             "--prefix" "PYTHONPATH" ":" (python.pkgs.makePythonPath [
               xwaykeyz
               python.pkgs.appdirs

@@ -194,19 +194,40 @@ in {
 
       # Override config-start/stop/restart with systemctl-based versions
       # (upstream scripts use venv activation which doesn't exist on NixOS)
-      cat > "$TOSHY_DIR/scripts/bin/toshy-config-start.sh" << 'NIXEOF'
+      cat > "$TOSHY_DIR/scripts/bin/toshy-config-start.sh" << EOF
 #!${pkgs.bash}/bin/bash
+export PATH="${pkgs.systemd}/bin:\$PATH"
 systemctl --user start toshy-config.service
-NIXEOF
-      cat > "$TOSHY_DIR/scripts/bin/toshy-config-stop.sh" << 'NIXEOF'
+EOF
+      cat > "$TOSHY_DIR/scripts/bin/toshy-config-stop.sh" << EOF
 #!${pkgs.bash}/bin/bash
+export PATH="${pkgs.systemd}/bin:\$PATH"
 systemctl --user stop toshy-config.service
-NIXEOF
-      cat > "$TOSHY_DIR/scripts/bin/toshy-config-restart.sh" << 'NIXEOF'
+EOF
+      cat > "$TOSHY_DIR/scripts/bin/toshy-config-restart.sh" << EOF
 #!${pkgs.bash}/bin/bash
+export PATH="${pkgs.systemd}/bin:\$PATH"
 systemctl --user restart toshy-config.service
-NIXEOF
+EOF
+
+      # Override services log viewer — needs journalctl on PATH and must
+      # keep the terminal open with -f (follow)
+      cat > "$TOSHY_DIR/scripts/bin/toshy-services-log.sh" << EOF
+#!${pkgs.bash}/bin/bash
+export PATH="${pkgs.systemd}/bin:${pkgs.coreutils}/bin:${pkgs.procps}/bin:${pkgs.gnugrep}/bin:\$PATH"
+echo "Showing Toshy service logs (Ctrl+C to exit)..."
+echo
+exec journalctl --user -b -f \\
+  --user-unit toshy-config.service \\
+  --user-unit toshy-session-monitor.service \\
+  --user-unit toshy-kwin-dbus.service \\
+  --user-unit toshy-wlroots-dbus.service \\
+  --user-unit toshy-cosmic-dbus.service \\
+  --user-unit toshy-tray.service
+EOF
+
       chmod +x "$TOSHY_DIR"/scripts/bin/toshy-config-{start,stop,restart}.sh
+      chmod +x "$TOSHY_DIR"/scripts/bin/toshy-services-log.sh
 
       chown -h ${cfg.user}: "$LOCAL_BIN"/toshy-* 2>/dev/null || true
     '';
