@@ -36,7 +36,7 @@ final: prev: {
     };
   });
 
-  # Pin xkbcommon to <1.1 to avoid breaking API changes in 1.5+.
+  # Pin xkbcommon to 1.0.1 (latest satisfying <1.1 constraint).
   #
   # The xkbcommon Python bindings introduced breaking API changes starting
   # in version 1.5 that are incompatible with how Toshy uses the library.

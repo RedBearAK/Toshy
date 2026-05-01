@@ -4,7 +4,7 @@ let
   cfg = config.services.toshy;
   pkg = cfg.package;
 
-  # ── Config file resolution (Task 7.4) ───────────────────────────
+  # ── Config file resolution ──────────────────────────────────────
   # Priority:
   #   1. configFile (user-provided path)        → use that file directly
   #   2. extraConfig non-empty                  → default config + appended code
@@ -27,24 +27,54 @@ NIXOS_EXTRA_CONFIG
     else if cfg.extraConfig != "" then mergedConfig
     else defaultConfigPath;
 
-  # ── GUI desktop files derivation (Task 7.5) ─────────────────────
+  # ── GUI desktop files derivation ────────────────────────────────
   guiDesktopFiles = pkgs.runCommand "toshy-desktop-files" { } ''
     mkdir -p $out/share/applications
     cp ${pkg}/share/applications/Toshy_Tray.desktop            $out/share/applications/
     cp ${pkg}/share/applications/app.toshy.preferences.desktop $out/share/applications/
   '';
 
-  # ── KWin script derivation (Task 7.5) ───────────────────────────
+  # ── KWin script derivation ─────────────────────────────────────
   kwinScriptPkg = pkgs.runCommand "toshy-kwin-script" { } ''
     mkdir -p $out/share/kwin/scripts
     cp -r ${pkg}/lib/${pkg.python.libPrefix}/site-packages/kwin-script/kde6/toshy-dbus-notifyactivewindow \
       $out/share/kwin/scripts/toshy-dbus-notifyactivewindow
   '';
 
+  # ── D-Bus service helper ────────────────────────────────────────
+  # The three D-Bus services (kwin, wlroots, cosmic) share identical
+  # structure — only the name and binary differ.
+  mkDbusService = { name, description, execStart, syslogId }:
+    {
+      inherit description;
+
+      wantedBy = [ "default.target" ];
+
+      unitConfig = {
+        StartLimitBurst       = 5;
+        StartLimitIntervalSec = 60;
+      };
+
+      serviceConfig = {
+        Type             = "simple";
+        ExecStart        = execStart;
+        Restart          = "on-failure";
+        RestartSec       = 5;
+        SyslogIdentifier = syslogId;
+      };
+
+      environment = {
+        TERM = "xterm";
+      };
+    };
+
+  # ── Site-packages path (used by activation script) ──────────────
+  site = "${pkg}/lib/${pkg.python.libPrefix}/site-packages";
+
 in {
 
   # ════════════════════════════════════════════════════════════════
-  # Options — exactly 7 options (Task 7.1)
+  # Options
   # ════════════════════════════════════════════════════════════════
 
   options.services.toshy = {
@@ -54,8 +84,6 @@ in {
     package = lib.mkOption {
       type = lib.types.package;
       description = "The Toshy package to use.";
-      # No default — must be set by the flake or the user.
-      # mkPackageOption would look for pkgs.toshy which doesn't exist in nixpkgs.
     };
 
     user = lib.mkOption {
@@ -114,7 +142,6 @@ in {
 
   config = lib.mkIf cfg.enable {
 
-    # ── Assertions (Task 7.1) ─────────────────────────────────────
     assertions = [
       {
         assertion = cfg.user != "";
@@ -122,9 +149,7 @@ in {
       }
     ];
 
-    # ── System packages (Tasks 7.1, 7.5) ──────────────────────────
-    # Always install the main Toshy package.
-    # Conditionally add GUI desktop files and KWin script.
+    # ── System packages ───────────────────────────────────────────
     environment.systemPackages =
       [ pkg ]
       ++ lib.optional cfg.gui.enable guiDesktopFiles
@@ -134,27 +159,25 @@ in {
     # Toshy expects its config, scripts, and data files at
     # ~/.config/toshy/. This activation script seeds the directory
     # from the Nix store on every nixos-rebuild switch, keeping
-    # scripts and default config up to date. The user's custom
-    # toshy_config.py is NOT overwritten if it already exists.
-    system.activationScripts.toshy-seed-config = let
-      site = "${pkg}/lib/${pkg.python.libPrefix}/site-packages";
-    in ''
+    # scripts and default config up to date.
+    system.activationScripts.toshy-seed-config = ''
       TOSHY_DIR="/home/${cfg.user}/.config/toshy"
       mkdir -p "$TOSHY_DIR"
 
-      # Always update scripts from the package (they're not user-editable)
+      # Always update scripts from the package (not user-editable)
       rm -rf "$TOSHY_DIR/scripts"
       cp -r "${site}/scripts" "$TOSHY_DIR/scripts"
       chmod -R u+w "$TOSHY_DIR/scripts"
 
-      # Fix shebangs — NixOS doesn't have /usr/bin/env
+      # Fix shebangs — NixOS doesn't have /usr/bin/env or /usr/bin/bash
       for f in "$TOSHY_DIR"/scripts/*.sh "$TOSHY_DIR"/scripts/bin/*.sh; do
         if [ -f "$f" ]; then
-          ${pkgs.gnused}/bin/sed -i 's|#!/usr/bin/env bash|#!${pkgs.bash}/bin/bash|g' "$f"
-          ${pkgs.gnused}/bin/sed -i 's|#!/bin/bash|#!${pkgs.bash}/bin/bash|g' "$f"
-          ${pkgs.gnused}/bin/sed -i 's|#!/usr/bin/bash|#!${pkgs.bash}/bin/bash|g' "$f"
-          # Also fix internal 'exec bash' calls that rely on bare 'bash' being on PATH
-          ${pkgs.gnused}/bin/sed -i 's|exec bash -c|exec ${pkgs.bash}/bin/bash -c|g' "$f"
+          ${pkgs.gnused}/bin/sed -i \
+            -e 's|#!/usr/bin/env bash|#!${pkgs.bash}/bin/bash|g' \
+            -e 's|#!/bin/bash|#!${pkgs.bash}/bin/bash|g' \
+            -e 's|#!/usr/bin/bash|#!${pkgs.bash}/bin/bash|g' \
+            -e 's|exec bash -c|exec ${pkgs.bash}/bin/bash -c|g' \
+            "$f"
         fi
       done
 
@@ -171,7 +194,6 @@ in {
         chmod u+w "$TOSHY_DIR/toshy_config_barebones.py"
       fi
 
-      # Fix ownership
       chown -R ${cfg.user}: "$TOSHY_DIR"
 
       # Symlink scripts/bin/* into ~/.local/bin/ so the GUI preferences
@@ -182,18 +204,17 @@ in {
         name="$(basename "$script" .sh)"
         ln -sf "$script" "$LOCAL_BIN/$name"
       done
-      # Also link the full .sh names for scripts that call them directly
       for script in "$TOSHY_DIR"/scripts/bin/toshy-*.sh; do
         ln -sf "$script" "$LOCAL_BIN/$(basename "$script")"
       done
+
       # Override: point toshy-gui and toshy-tray to the Nix-wrapped binaries
-      # (the shell scripts expect a venv which doesn't exist on NixOS)
+      # (upstream shell scripts expect a venv which doesn't exist on NixOS)
       ln -sf "${pkg}/bin/toshy-gui" "$LOCAL_BIN/toshy-gui"
       ln -sf "${pkg}/bin/toshy-tray" "$LOCAL_BIN/toshy-tray"
       ln -sf "${pkg}/bin/toshy-layout-selector" "$LOCAL_BIN/toshy-layout-selector"
 
       # Override config-start/stop/restart with systemctl-based versions
-      # (upstream scripts use venv activation which doesn't exist on NixOS)
       cat > "$TOSHY_DIR/scripts/bin/toshy-config-start.sh" << EOF
 #!${pkgs.bash}/bin/bash
 export PATH="${pkgs.systemd}/bin:\$PATH"
@@ -210,8 +231,7 @@ export PATH="${pkgs.systemd}/bin:\$PATH"
 systemctl --user restart toshy-config.service
 EOF
 
-      # Override services log viewer — needs journalctl on PATH and must
-      # keep the terminal open with -f (follow)
+      # Override services log viewer
       cat > "$TOSHY_DIR/scripts/bin/toshy-services-log.sh" << EOF
 #!${pkgs.bash}/bin/bash
 export PATH="${pkgs.systemd}/bin:${pkgs.coreutils}/bin:${pkgs.procps}/bin:${pkgs.gnugrep}/bin:\$PATH"
@@ -232,25 +252,19 @@ EOF
       chown -h ${cfg.user}: "$LOCAL_BIN"/toshy-* 2>/dev/null || true
     '';
 
-    # ── Udev rules (Task 7.3) ────────────────────────────────────
+    # ── Udev rules ────────────────────────────────────────────────
     # Grant input group access to evdev devices.
     services.udev.extraRules = ''
       KERNEL=="event*", GROUP="input", MODE="0660"
     '';
 
-    # ── Ensure the input group exists (Task 7.3) ──────────────────
     users.groups.input = { };
 
-    # ── Add the configured user to the input group (Task 7.3) ─────
     users.users.${cfg.user} = {
       extraGroups = [ "input" ];
     };
 
-    # ── Systemd user services (Task 7.2) ──────────────────────────
-    # All five services use systemd.user.services (user-level units
-    # managed system-wide). They match upstream's WantedBy=default.target
-    # and do NOT hardcode DISPLAY, WAYLAND_DISPLAY, XDG_RUNTIME_DIR,
-    # or UIDs. Environment variables are inherited from the user session.
+    # ── Systemd user services ─────────────────────────────────────
 
     systemd.user.services.toshy-config = {
       description = "Toshy Config Service";
@@ -266,7 +280,6 @@ EOF
         SyslogIdentifier = "toshy-config";
       };
 
-      # Task 7.4: pass resolved config path via environment variable
       environment = {
         TERM              = "xterm";
         TOSHY_CONFIG_FILE = toString resolvedConfigPath;
@@ -292,73 +305,26 @@ EOF
       };
     };
 
-    systemd.user.services.toshy-kwin-dbus = {
+    # D-Bus services — generated from shared helper
+    systemd.user.services.toshy-kwin-dbus = mkDbusService {
+      name        = "kwin";
       description = "Toshy KWin D-Bus Service";
-
-      wantedBy = [ "default.target" ];
-
-      unitConfig = {
-        StartLimitBurst       = 5;
-        StartLimitIntervalSec = 60;
-      };
-
-      serviceConfig = {
-        Type                  = "simple";
-        ExecStart             = "${pkg}/bin/toshy-kwin-dbus-service";
-        Restart               = "on-failure";
-        RestartSec            = 5;
-        SyslogIdentifier      = "toshy-kwin-dbus";
-      };
-
-      environment = {
-        TERM = "xterm";
-      };
+      execStart   = "${pkg}/bin/toshy-kwin-dbus-service";
+      syslogId    = "toshy-kwin-dbus";
     };
 
-    systemd.user.services.toshy-wlroots-dbus = {
+    systemd.user.services.toshy-wlroots-dbus = mkDbusService {
+      name        = "wlroots";
       description = "Toshy Wlroots D-Bus Service";
-
-      wantedBy = [ "default.target" ];
-
-      unitConfig = {
-        StartLimitBurst       = 5;
-        StartLimitIntervalSec = 60;
-      };
-
-      serviceConfig = {
-        Type                  = "simple";
-        ExecStart             = "${pkg}/bin/toshy-wlroots-dbus-service";
-        Restart               = "on-failure";
-        RestartSec            = 5;
-        SyslogIdentifier      = "toshy-wlroots-dbus";
-      };
-
-      environment = {
-        TERM = "xterm";
-      };
+      execStart   = "${pkg}/bin/toshy-wlroots-dbus-service";
+      syslogId    = "toshy-wlroots-dbus";
     };
 
-    systemd.user.services.toshy-cosmic-dbus = {
+    systemd.user.services.toshy-cosmic-dbus = mkDbusService {
+      name        = "cosmic";
       description = "Toshy COSMIC D-Bus Service";
-
-      wantedBy = [ "default.target" ];
-
-      unitConfig = {
-        StartLimitBurst       = 5;
-        StartLimitIntervalSec = 60;
-      };
-
-      serviceConfig = {
-        Type                  = "simple";
-        ExecStart             = "${pkg}/bin/toshy-cosmic-dbus-service";
-        Restart               = "on-failure";
-        RestartSec            = 5;
-        SyslogIdentifier      = "toshy-cosmic-dbus";
-      };
-
-      environment = {
-        TERM = "xterm";
-      };
+      execStart   = "${pkg}/bin/toshy-cosmic-dbus-service";
+      syslogId    = "toshy-cosmic-dbus";
     };
 
     # ── Tray icon service (optional, when gui.enable is true) ─────
@@ -374,8 +340,6 @@ EOF
 
       serviceConfig = {
         Type             = "simple";
-        # Delay startup so services are fully registered on D-Bus
-        # before the monitoring thread queries them
         ExecStartPre     = "${pkgs.coreutils}/bin/sleep 3";
         ExecStart        = "${pkg}/bin/toshy-tray";
         Restart          = "on-failure";

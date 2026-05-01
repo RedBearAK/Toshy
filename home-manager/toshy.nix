@@ -22,10 +22,6 @@ ${cfg.extraConfig}
 HM_EXTRA_CONFIG
   '';
 
-  # The path used by the config service's environment variable.
-  # For xdg.configFile-managed configs, this points to the XDG location
-  # that Home Manager will populate. For custom configFile, it points
-  # directly to the user-specified path.
   resolvedConfigPath =
     if cfg.configFile != null then cfg.configFile
     else if cfg.extraConfig != "" then mergedConfig
@@ -45,10 +41,34 @@ HM_EXTRA_CONFIG
       $out/share/kwin/scripts/toshy-dbus-notifyactivewindow
   '';
 
+  # ── D-Bus service helper ────────────────────────────────────────
+  # Home Manager uses capitalized Unit/Service/Install attrset format.
+  mkDbusService = { description, execStart, syslogId }:
+    {
+      Unit = {
+        Description           = description;
+        StartLimitBurst       = 5;
+        StartLimitIntervalSec = 60;
+      };
+
+      Service = {
+        Type             = "simple";
+        ExecStart        = execStart;
+        Restart          = "on-failure";
+        RestartSec       = 5;
+        SyslogIdentifier = syslogId;
+        Environment      = [ "TERM=xterm" ];
+      };
+
+      Install = {
+        WantedBy = [ "default.target" ];
+      };
+    };
+
 in {
 
   # ════════════════════════════════════════════════════════════════
-  # Options — NixOS module options minus `user` and udev rules
+  # Options
   # ════════════════════════════════════════════════════════════════
 
   options.services.toshy = {
@@ -117,10 +137,6 @@ in {
       ++ lib.optional cfg.kwinScript.enable kwinScriptPkg;
 
     # ── Config file management ────────────────────────────────────
-    # Install toshy_config.py into ~/.config/toshy/ via xdg.configFile.
-    #   - configFile set       → symlink the user-provided file
-    #   - extraConfig non-empty → merged default + extra config
-    #   - neither              → copy the upstream default config
     xdg.configFile."toshy/toshy_config.py" =
       if cfg.configFile != null then {
         source = cfg.configFile;
@@ -132,22 +148,16 @@ in {
         source = defaultConfigPath;
       };
 
-    # Install scripts directory — always kept in sync with the package
     xdg.configFile."toshy/scripts" = {
       source = "${pkg}/lib/${pkg.python.libPrefix}/site-packages/scripts";
       recursive = true;
     };
 
-    # Install barebones config as a reference
     xdg.configFile."toshy/toshy_config_barebones.py" = {
       source = "${pkg}/lib/${pkg.python.libPrefix}/site-packages/default-toshy-config/toshy_config_barebones.py";
     };
 
     # ── Systemd user services ─────────────────────────────────────
-    # Same five services as the NixOS module, adapted to Home Manager's
-    # systemd.user.services format (capitalized Unit/Service/Install).
-    # All use WantedBy = default.target matching upstream.
-    # No hardcoded DISPLAY, WAYLAND_DISPLAY, XDG_RUNTIME_DIR, or UIDs.
 
     systemd.user.services.toshy-config = {
       Unit = {
@@ -192,67 +202,23 @@ in {
       };
     };
 
-    systemd.user.services.toshy-kwin-dbus = {
-      Unit = {
-        Description = "Toshy KWin D-Bus Service";
-        StartLimitBurst = 5;
-        StartLimitIntervalSec = 60;
-      };
-
-      Service = {
-        Type                  = "simple";
-        ExecStart             = "${pkg}/bin/toshy-kwin-dbus-service";
-        Restart               = "on-failure";
-        RestartSec            = 5;
-        SyslogIdentifier      = "toshy-kwin-dbus";
-        Environment           = [ "TERM=xterm" ];
-      };
-
-      Install = {
-        WantedBy = [ "default.target" ];
-      };
+    # D-Bus services — generated from shared helper
+    systemd.user.services.toshy-kwin-dbus = mkDbusService {
+      description = "Toshy KWin D-Bus Service";
+      execStart   = "${pkg}/bin/toshy-kwin-dbus-service";
+      syslogId    = "toshy-kwin-dbus";
     };
 
-    systemd.user.services.toshy-wlroots-dbus = {
-      Unit = {
-        Description = "Toshy Wlroots D-Bus Service";
-        StartLimitBurst = 5;
-        StartLimitIntervalSec = 60;
-      };
-
-      Service = {
-        Type                  = "simple";
-        ExecStart             = "${pkg}/bin/toshy-wlroots-dbus-service";
-        Restart               = "on-failure";
-        RestartSec            = 5;
-        SyslogIdentifier      = "toshy-wlroots-dbus";
-        Environment           = [ "TERM=xterm" ];
-      };
-
-      Install = {
-        WantedBy = [ "default.target" ];
-      };
+    systemd.user.services.toshy-wlroots-dbus = mkDbusService {
+      description = "Toshy Wlroots D-Bus Service";
+      execStart   = "${pkg}/bin/toshy-wlroots-dbus-service";
+      syslogId    = "toshy-wlroots-dbus";
     };
 
-    systemd.user.services.toshy-cosmic-dbus = {
-      Unit = {
-        Description = "Toshy COSMIC D-Bus Service";
-        StartLimitBurst = 5;
-        StartLimitIntervalSec = 60;
-      };
-
-      Service = {
-        Type                  = "simple";
-        ExecStart             = "${pkg}/bin/toshy-cosmic-dbus-service";
-        Restart               = "on-failure";
-        RestartSec            = 5;
-        SyslogIdentifier      = "toshy-cosmic-dbus";
-        Environment           = [ "TERM=xterm" ];
-      };
-
-      Install = {
-        WantedBy = [ "default.target" ];
-      };
+    systemd.user.services.toshy-cosmic-dbus = mkDbusService {
+      description = "Toshy COSMIC D-Bus Service";
+      execStart   = "${pkg}/bin/toshy-cosmic-dbus-service";
+      syslogId    = "toshy-cosmic-dbus";
     };
 
   };
