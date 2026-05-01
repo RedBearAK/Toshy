@@ -85,7 +85,7 @@
             pygobject3
             pywayland
             six
-            systemd
+            systemd-python
             watchdog
             xlib        # pinned to 0.31 by overlay
             xkbcommon   # pinned to 0.8 by overlay
@@ -121,8 +121,8 @@
                 xwaykeyz
                 pkgs.coreutils
                 pkgs.procps
-                pkgs.xorg.xhost
-                pkgs.xorg.xset
+                pkgs.xhost
+                pkgs.xset
                 pkgs.bash
                 pkgs.gnugrep
               ]}" \
