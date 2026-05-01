@@ -49,7 +49,8 @@ buildPythonPackage rec {
   postPatch = ''
     substituteInPlace pyproject.toml \
       --replace-fail '"dbus-python ~= 1.3.2"' '"dbus-python >= 1.3.2"' \
-      --replace-fail '"hyprpy ~= 0.1.5"' '"hyprpy >= 0.1.5"'
+      --replace-fail '"hyprpy ~= 0.1.5"' '"hyprpy >= 0.1.5"' \
+      --replace-fail '"inotify-simple ~= 1.3"' '"inotify-simple >= 1.3"'
   '';
 
   propagatedBuildInputs = [
