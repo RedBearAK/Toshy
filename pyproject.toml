@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "toshy"
-version = "2025.04.16"
+version = "26.03.0"
 description = "Mac-style keyboard remapping for Linux"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}

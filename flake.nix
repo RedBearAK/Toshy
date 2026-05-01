@@ -47,8 +47,8 @@
         toshySrc = pkgs.fetchFromGitHub {
           owner = "RedBearAK";
           repo = "toshy";
-          rev = "9cf1772f517d4834dce3088431e928766bba1396";
-          hash = "sha256-cGQmBmIzPU2EUX2u5lhl2nIF791KG5I1ssPymM1ubTw=";
+          rev = "Toshy_v26.03.0";
+          hash = "sha256-doY9BBwKQ7/XLjOPW54AtREXIAx6l1G/X/jyF3X7Ktw=";
         };
 
         # Overlay our pyproject.toml onto the upstream source
@@ -61,7 +61,7 @@
         # ── Toshy package ────────────────────────────────────────────
         toshy = python.pkgs.buildPythonApplication rec {
           pname   = "toshy";
-          version = "2025.04.16";
+          version = "26.03.0";
           format  = "pyproject";
 
           src = toshySrcWithPyproject;
