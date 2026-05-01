@@ -132,7 +132,8 @@
                 pkgs.bash
                 pkgs.gnugrep
               ]}" \
-              --set PYTHONPATH "$SITE" \
+              --prefix PYTHONPATH : "$SITE" \
+              --set NIX_PYTHONPATH "$SITE" \
               "''${gappsWrapperArgs[@]}"
 
             # Patch out the venv activation line — it is not needed in Nix.
