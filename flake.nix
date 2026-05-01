@@ -49,9 +49,9 @@
             setuptools
             wheel
           ] ++ (with pkgs; [
-            wrapGAppsHook
+            wrapGAppsHook3
             gobject-introspection
-            # makeWrapper is provided implicitly by wrapGAppsHook
+            # makeWrapper is provided implicitly by wrapGAppsHook3
           ]);
 
           # ── Native libraries (C/GTK) ─────────────────────────────
@@ -94,7 +94,7 @@
           # Don't run the test suite (requires evdev/uinput access).
           doCheck = false;
 
-          # Prevent wrapGAppsHook from double-wrapping console scripts.
+          # Prevent wrapGAppsHook3 from double-wrapping console scripts.
           dontWrapGApps = true;
 
           # ── postInstall ───────────────────────────────────────────
@@ -180,7 +180,7 @@
 
             # ────────────────────────────────────────────────────────
             # 5. Wrap the console-script entry points with GTK/GLib
-            #    environment (wrapGAppsHook was deferred above).
+            #    environment (wrapGAppsHook3 was deferred above).
             # ────────────────────────────────────────────────────────
             for prog in toshy-tray toshy-gui toshy-layout-selector; do
               if [ -f "$out/bin/.$prog-wrapped" ] || [ -f "$out/bin/$prog" ]; then
