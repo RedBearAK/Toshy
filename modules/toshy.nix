@@ -147,6 +147,15 @@ in {
       cp -r "${site}/scripts" "$TOSHY_DIR/scripts"
       chmod -R u+w "$TOSHY_DIR/scripts"
 
+      # Fix shebangs — NixOS doesn't have /usr/bin/env
+      for f in "$TOSHY_DIR"/scripts/*.sh "$TOSHY_DIR"/scripts/bin/*.sh; do
+        if [ -f "$f" ]; then
+          sed -i 's|#!/usr/bin/env bash|#!${pkgs.bash}/bin/bash|g' "$f"
+          sed -i 's|#!/bin/bash|#!${pkgs.bash}/bin/bash|g' "$f"
+          sed -i 's|#!/usr/bin/bash|#!${pkgs.bash}/bin/bash|g' "$f"
+        fi
+      done
+
       # Seed the default config only if one doesn't exist yet
       if [ ! -f "$TOSHY_DIR/toshy_config.py" ]; then
         cp "${resolvedConfigPath}" "$TOSHY_DIR/toshy_config.py"
