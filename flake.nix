@@ -101,9 +101,33 @@
           # Install shell scripts, D-Bus service wrappers, desktop
           # files, and icons that setuptools cannot handle (they live
           # outside Python packages).
-          postInstall = ''
+          postInstall = let
+            # All Python runtime deps needed on PYTHONPATH for child processes
+            # (xwaykeyz loading toshy_config.py which imports toshy_common).
+            runtimePythonPath = python.pkgs.makePythonPath [
+              xwaykeyz
+              python.pkgs.appdirs
+              python.pkgs.dbus-python
+              python.pkgs.evdev
+              python.pkgs.hyprpy
+              python.pkgs.i3ipc
+              python.pkgs.inotify-simple
+              python.pkgs.lockfile
+              python.pkgs.ordered-set
+              python.pkgs.pillow
+              python.pkgs.psutil
+              python.pkgs.pygobject3
+              python.pkgs.pywayland
+              python.pkgs.six
+              python.pkgs.systemd-python
+              python.pkgs.watchdog
+              python.pkgs.xlib
+              python.pkgs.xkbcommon
+            ];
+          in ''
             # ── Helper: site-packages directory ─────────────────────
             SITE="$out/lib/${python.libPrefix}/site-packages"
+            FULL_PYTHONPATH="$SITE:${runtimePythonPath}"
 
             # ────────────────────────────────────────────────────────
             # 1. Install upstream shell scripts
@@ -132,8 +156,7 @@
                 pkgs.bash
                 pkgs.gnugrep
               ]}" \
-              --prefix PYTHONPATH : "$SITE" \
-              --set NIX_PYTHONPATH "$SITE" \
+              --prefix PYTHONPATH : "$FULL_PYTHONPATH" \
               "''${gappsWrapperArgs[@]}"
 
             # Patch out the venv activation line — it is not needed in Nix.
@@ -167,21 +190,21 @@
             # -- KWin D-Bus service --
             makeWrapper "${python}/bin/python" "$out/bin/toshy-kwin-dbus-service" \
               --add-flags "$SITE/kwin-dbus-service/toshy_kwin_dbus_service.py" \
-              --prefix PYTHONPATH : "$SITE:$SITE/kwin-dbus-service" \
+              --prefix PYTHONPATH : "$FULL_PYTHONPATH:$SITE/kwin-dbus-service" \
               --prefix PATH : "${lib.makeBinPath [ pkgs.procps ]}" \
               "''${gappsWrapperArgs[@]}"
 
             # -- Wlroots D-Bus service --
             makeWrapper "${python}/bin/python" "$out/bin/toshy-wlroots-dbus-service" \
               --add-flags "$SITE/wlroots-dbus-service/toshy_wlroots_dbus_service.py" \
-              --prefix PYTHONPATH : "$SITE:$SITE/wlroots-dbus-service" \
+              --prefix PYTHONPATH : "$FULL_PYTHONPATH:$SITE/wlroots-dbus-service" \
               --prefix PATH : "${lib.makeBinPath [ pkgs.procps ]}" \
               "''${gappsWrapperArgs[@]}"
 
             # -- COSMIC D-Bus service --
             makeWrapper "${python}/bin/python" "$out/bin/toshy-cosmic-dbus-service" \
               --add-flags "$SITE/cosmic-dbus-service/toshy_cosmic_dbus_service.py" \
-              --prefix PYTHONPATH : "$SITE:$SITE/cosmic-dbus-service" \
+              --prefix PYTHONPATH : "$FULL_PYTHONPATH:$SITE/cosmic-dbus-service" \
               --prefix PATH : "${lib.makeBinPath [ pkgs.procps ]}" \
               "''${gappsWrapperArgs[@]}"
 
