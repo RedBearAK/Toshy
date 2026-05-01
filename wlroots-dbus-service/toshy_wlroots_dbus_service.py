@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260419'
+__version__ = '20251220'
 
 # Reference for generating the protocol modules with pywayland scanner:
 # https://github.com/flacjacket/pywayland/issues/8#issuecomment-987040284
@@ -173,7 +173,7 @@ def countdown_callback():
 def check_interface_availability():
     global interface_is_available
     if not wl_client.toplevel_manager:  # Check if the interface is still available
-        debug(f"{LOG_PFX}: Probably not a wlroots environment. Exiting.")
+        debug(f"{LOG_PFX}: The Wayland interface is not available. Exiting.")
         interface_is_available = False
         clean_shutdown()  # Perform cleanup and shutdown
     if not wl_client.check_connection():  # Check if the connection to the Wayland server is still available

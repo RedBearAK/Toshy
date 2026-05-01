@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260330'
+__version__ = '20250822'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -48,7 +48,6 @@ sys.path.insert(0, toshy_common_dir_path)
 # ~/.config/toshy/toshy_common/service_manager.py
 # ~/.config/toshy/toshy_common/settings_class.py
 # ~/.config/toshy/toshy_common/shared_device_context.py
-# ~/.config/toshy/toshy_common/xkb_check.py
 
 # These two are shell scripts, not Python scrips
 # ~/.config/toshy/scripts/tshysvc-config
@@ -93,8 +92,6 @@ shared_device_path      = os.path.join(toshy_dir_path,
                             'toshy_common', 'shared_device_context.py')
 terminal_utils_path     = os.path.join(toshy_dir_path,
                             'toshy_common', 'terminal_utils.py')
-xkb_check_path          = os.path.join(toshy_dir_path,
-                            'toshy_common', 'xkb_check.py')
 
 # These two files are shell scripts, not Python scripts:
 config_svc_path         = os.path.join(toshy_dir_path,'scripts', 'tshysvc-config')
@@ -129,7 +126,6 @@ components = [
     ("Settings Manager",            settings_mgr_path),
     ("Shared Device Context",       shared_device_path),
     ("Terminal Utils",              terminal_utils_path),
-    ("XKB Options Check",           xkb_check_path),
     (None, None),  # Spacing
     ("Keymapper Config Service",    config_svc_path),
     ("Session Monitor Service",     sessmon_svc_path),
