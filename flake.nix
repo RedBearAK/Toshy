@@ -56,6 +56,16 @@
           cp -r ${toshySrc} $out
           chmod -R u+w $out
           cp ${./pyproject.toml} $out/pyproject.toml
+
+          # Patch tray to start with active icon (on NixOS, services are
+          # already running when the tray starts) and force a periodic
+          # icon refresh to work around quickshell caching.
+          ${pkgs.gnused}/bin/sed -i 's|icon_name=icon_file_grayscale,|icon_name=icon_file_active,|' \
+            $out/toshy_tray.py
+
+          # Patch terminal_utils to include foot (common on Wayland/Hyprland)
+          ${pkgs.gnused}/bin/sed -i "/('kitty',/i\\    ('foot',                    ['-e'],     []                                 )," \
+            $out/toshy_common/terminal_utils.py
         '';
 
         # ── Toshy package ────────────────────────────────────────────
@@ -126,6 +136,7 @@
               pkgs.glib          # gdbus
               pkgs.libnotify     # notify-send
               pkgs.zenity        # zenity dialogs
+              pkgs.foot          # terminal emulator for log viewing
             ])
             "--prefix" "PYTHONPATH" ":" (python.pkgs.makePythonPath [
               xwaykeyz
