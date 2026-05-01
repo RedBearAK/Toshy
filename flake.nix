@@ -159,15 +159,21 @@
             cp -r systemd-user-service-units "$SITE/systemd-user-service-units" || true
 
             # ── 3. Wrap tshysvc-config ──────────────────────────────
-            # makeWrapperArgs already provides procps, coreutils, systemd,
-            # gnugrep, etc. to all wrapped binaries. This wrapper only adds
-            # tools specific to tshysvc-config: xwaykeyz, xhost, xset.
+            # This is a shell script wrapped with makeWrapper (not wrapGAppsHook3),
+            # so it needs ALL runtime tools on PATH explicitly.
             makeWrapper "$out/libexec/toshy/tshysvc-config" "$out/bin/tshysvc-config" \
               --prefix PATH : "${lib.makeBinPath [
                 xwaykeyz
                 xhostPkg
                 xsetPkg
                 pkgs.bash
+                pkgs.coreutils
+                pkgs.procps
+                pkgs.gnugrep
+                pkgs.systemd
+                pkgs.zenity
+                pkgs.libnotify
+                pkgs.glib
               ]}" \
               --prefix PYTHONPATH : "$FULL_PYTHONPATH"
 
