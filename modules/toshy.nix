@@ -150,9 +150,9 @@ in {
       # Fix shebangs — NixOS doesn't have /usr/bin/env
       for f in "$TOSHY_DIR"/scripts/*.sh "$TOSHY_DIR"/scripts/bin/*.sh; do
         if [ -f "$f" ]; then
-          sed -i 's|#!/usr/bin/env bash|#!${pkgs.bash}/bin/bash|g' "$f"
-          sed -i 's|#!/bin/bash|#!${pkgs.bash}/bin/bash|g' "$f"
-          sed -i 's|#!/usr/bin/bash|#!${pkgs.bash}/bin/bash|g' "$f"
+          ${pkgs.gnused}/bin/sed -i 's|#!/usr/bin/env bash|#!${pkgs.bash}/bin/bash|g' "$f"
+          ${pkgs.gnused}/bin/sed -i 's|#!/bin/bash|#!${pkgs.bash}/bin/bash|g' "$f"
+          ${pkgs.gnused}/bin/sed -i 's|#!/usr/bin/bash|#!${pkgs.bash}/bin/bash|g' "$f"
         fi
       done
 
