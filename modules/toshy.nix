@@ -184,6 +184,11 @@ in {
       for script in "$TOSHY_DIR"/scripts/bin/toshy-*.sh; do
         ln -sf "$script" "$LOCAL_BIN/$(basename "$script")"
       done
+      # Override: point toshy-gui and toshy-tray to the Nix-wrapped binaries
+      # (the shell scripts expect a venv which doesn't exist on NixOS)
+      ln -sf "${pkg}/bin/toshy-gui" "$LOCAL_BIN/toshy-gui"
+      ln -sf "${pkg}/bin/toshy-tray" "$LOCAL_BIN/toshy-tray"
+      ln -sf "${pkg}/bin/toshy-layout-selector" "$LOCAL_BIN/toshy-layout-selector"
       chown -h ${cfg.user}: "$LOCAL_BIN"/toshy-* 2>/dev/null || true
     '';
 
