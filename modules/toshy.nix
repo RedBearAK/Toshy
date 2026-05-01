@@ -366,10 +366,17 @@ EOF
       description = "Toshy Tray Icon";
 
       wantedBy = [ "default.target" ];
-      after    = [ "default.target" "toshy-config.service" ];
+      after    = [
+        "default.target"
+        "toshy-config.service"
+        "toshy-session-monitor.service"
+      ];
 
       serviceConfig = {
         Type             = "simple";
+        # Delay startup so services are fully registered on D-Bus
+        # before the monitoring thread queries them
+        ExecStartPre     = "${pkgs.coreutils}/bin/sleep 3";
         ExecStart        = "${pkg}/bin/toshy-tray";
         Restart          = "on-failure";
         RestartSec       = 5;
