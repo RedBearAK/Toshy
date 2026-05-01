@@ -253,6 +253,10 @@
             "toshy_gui"
           ];
 
+          passthru = {
+            inherit python;
+          };
+
           meta = {
             description     = "Mac-style keyboard remapping for Linux";
             homepage        = "https://github.com/RedBearAK/toshy";
