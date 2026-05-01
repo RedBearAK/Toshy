@@ -141,6 +141,8 @@
             ])
             # Append system PATH so xdg-open can find file managers, browsers, etc.
             "--suffix" "PATH" ":" "/run/current-system/sw/bin:/run/wrappers/bin"
+            # Include the package's share/ dir so AppIndicator3 can find Toshy icons
+            "--suffix" "XDG_DATA_DIRS" ":" "/run/current-system/sw/share"
             "--prefix" "PYTHONPATH" ":" (python.pkgs.makePythonPath [
               xwaykeyz
               python.pkgs.appdirs
