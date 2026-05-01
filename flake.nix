@@ -142,6 +142,17 @@
               --replace-fail '#!/usr/bin/bash' '#!${pkgs.bash}/bin/bash'
 
             # ────────────────────────────────────────────────────────
+            # 1b. Install D-Bus service scripts and data directories
+            #     into site-packages (setuptools can't install these
+            #     because they're not Python packages).
+            # ────────────────────────────────────────────────────────
+            cp -r kwin-dbus-service    "$SITE/kwin-dbus-service"
+            cp -r wlroots-dbus-service "$SITE/wlroots-dbus-service"
+            cp -r cosmic-dbus-service  "$SITE/cosmic-dbus-service"
+            cp -r default-toshy-config "$SITE/default-toshy-config"
+            cp -r kwin-script          "$SITE/kwin-script"
+
+            # ────────────────────────────────────────────────────────
             # 2. Wrap tshysvc-config
             #    Replaces venv activation with Nix store PATH.
             #    Needs: xwaykeyz, pkill, xhost, xset, bash, coreutils
