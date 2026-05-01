@@ -26,6 +26,12 @@
           self = python;
         };
 
+        # Handle nixpkgs renames for compatibility across versions
+        systemdPython    = python.pkgs.systemd-python or python.pkgs.systemd;
+        xhostPkg         = pkgs.xhost or pkgs.xorg.xhost;
+        xsetPkg          = pkgs.xset or pkgs.xorg.xset;
+        wrapGAppsHookPkg = pkgs.wrapGAppsHook3 or pkgs.wrapGAppsHook;
+
         # ── xwaykeyz ─────────────────────────────────────────────────
         # Built from the overlaid Python package set so it picks up the
         # pinned python-xlib and hyprpy automatically.
@@ -35,21 +41,37 @@
         # Used by D-Bus service wrappers to set PYTHONPATH.
         pythonSitePackages = "${python.sitePackages}";
 
+        # ── Upstream Toshy source ────────────────────────────────────
+        # Fetch directly from RedBearAK/toshy upstream. The pyproject.toml
+        # is overlaid from this flake since upstream doesn't have one yet.
+        toshySrc = pkgs.fetchFromGitHub {
+          owner = "RedBearAK";
+          repo = "toshy";
+          rev = "9cf1772f517d4834dce3088431e928766bba1396";
+          hash = "sha256-cGQmBmIzPU2EUX2u5lhl2nIF791KG5I1ssPymM1ubTw=";
+        };
+
+        # Overlay our pyproject.toml onto the upstream source
+        toshySrcWithPyproject = pkgs.runCommand "toshy-src" {} ''
+          cp -r ${toshySrc} $out
+          chmod -R u+w $out
+          cp ${./pyproject.toml} $out/pyproject.toml
+        '';
+
         # ── Toshy package ────────────────────────────────────────────
         toshy = python.pkgs.buildPythonApplication rec {
           pname   = "toshy";
           version = "2025.04.16";
           format  = "pyproject";
 
-          # Use the flake source tree (contains pyproject.toml).
-          src = lib.cleanSource ./.;
+          src = toshySrcWithPyproject;
 
           # ── Build-time tools ──────────────────────────────────────
           nativeBuildInputs = with python.pkgs; [
             setuptools
             wheel
           ] ++ (with pkgs; [
-            wrapGAppsHook3
+            wrapGAppsHookPkg
             gobject-introspection
             # makeWrapper is provided implicitly by wrapGAppsHook3
           ]);
@@ -85,11 +107,10 @@
             pygobject3
             pywayland
             six
-            systemd-python
             watchdog
             xlib        # pinned to 0.31 by overlay
             xkbcommon   # pinned to 0.8 by overlay
-          ]);
+          ]) ++ [ systemdPython ];
 
           # Don't run the test suite (requires evdev/uinput access).
           doCheck = false;
@@ -121,7 +142,7 @@
               python.pkgs.pygobject3
               python.pkgs.pywayland
               python.pkgs.six
-              python.pkgs.systemd-python
+              systemdPython
               python.pkgs.watchdog
               python.pkgs.xlib
               python.pkgs.xkbcommon
@@ -150,7 +171,7 @@
               python.pkgs.pygobject3
               python.pkgs.pywayland
               python.pkgs.six
-              python.pkgs.systemd-python
+              systemdPython
               python.pkgs.watchdog
               python.pkgs.xlib
               python.pkgs.xkbcommon
@@ -195,8 +216,8 @@
                 xwaykeyz
                 pkgs.coreutils
                 pkgs.procps
-                pkgs.xhost
-                pkgs.xset
+                xhostPkg
+                xsetPkg
                 pkgs.bash
                 pkgs.gnugrep
                 pkgs.zenity
