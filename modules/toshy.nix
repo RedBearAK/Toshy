@@ -162,6 +162,20 @@ in {
 
       # Fix ownership
       chown -R ${cfg.user}: "$TOSHY_DIR"
+
+      # Symlink scripts/bin/* into ~/.local/bin/ so the GUI preferences
+      # app and tray can find them (service_manager.py looks there).
+      LOCAL_BIN="/home/${cfg.user}/.local/bin"
+      mkdir -p "$LOCAL_BIN"
+      for script in "$TOSHY_DIR"/scripts/bin/toshy-*; do
+        name="$(basename "$script" .sh)"
+        ln -sf "$script" "$LOCAL_BIN/$name"
+      done
+      # Also link the full .sh names for scripts that call them directly
+      for script in "$TOSHY_DIR"/scripts/bin/toshy-*.sh; do
+        ln -sf "$script" "$LOCAL_BIN/$(basename "$script")"
+      done
+      chown -h ${cfg.user}: "$LOCAL_BIN"/toshy-* 2>/dev/null || true
     '';
 
     # ── Udev rules (Task 7.3) ────────────────────────────────────
