@@ -168,7 +168,7 @@
                 pkgs.xset
                 pkgs.bash
                 pkgs.gnugrep
-                pkgs.gnome-zenity
+                pkgs.zenity
                 pkgs.libnotify
                 pkgs.glib
               ]}" \
