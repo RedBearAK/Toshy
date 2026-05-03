@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260416'                        # CLI option "--version" will print this out.
+__version__ = '20260502'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1042,51 +1042,57 @@ def elevate_privileges():
 
 distro_groups_map = {
 
-    # separate references for RHEL types versus Fedora types
-    'fedora-based':             ["fedora", "fedoralinux", "nobara", "ultramarine"],
-    'rhel-based':               ["almalinux", "centos", "eurolinux", "oreon", "rhel", "rocky"],
+    # NOTE:
+    # Attempted to add and test KaOS Linux. This was a waste of time.
+    # KaOS is NOT compatible with this project, because:
+    # - The KaOS repos are highly restricted to only Qt/KDE related packages.
+    # - No packages provide "evtest", "libappindicator", "zenity".
 
-    # separate references for Fedora immutables using rpm-ostree
-    'fedora-immutables':        ["bazzite", "kinoite", "silverblue"],
+    'aerynos-based':            ["aerynos"],
 
-    # separate references for Tumbleweed types, Leap types, MicroOS types
-    'tumbleweed-based':         ["opensuse-tumbleweed", "tumbleweed"],
-    'leap-based':               ["leap", "opensuse-leap"],
-    'microos-based':            ["opensuse-aeon", "opensuse-kalpa", "opensuse-microos"],
+    'alt-based':                ["altlinux"],
 
-    'mandriva-based':           ["openmandriva"],
+    'arch-based':               ["arch", "archarm", "arcolinux", "cachyos", "endeavouros",
+                                    "garuda", "manjaro"],
 
-    'mageia-based':             ["mageia"],
-
-    'ubuntu-based':             ["elementary", "mint", "nebios", "neon", "pop",
-                                    "tuxedo", "ubuntu", "zorin"],
+    'chimera-based':            ["chimera"],
 
     # The 'linuxmint' distro ID will not be shown by `toshy-env`, environment module
     # normalizes to 'mint' for matching in the config file.
     'debian-based':             ["debian", "deepin", "kali", "linuxmint", "lmde",
                                     "peppermint", "q4os"],
 
-    'arch-based':               ["arch", "archarm", "arcolinux", "cachyos", "endeavouros",
-                                    "garuda", "manjaro"],
+    # NOTE: RHEL and Fedora immutables have separate distro ID lists
+    'fedora-based':             ["fedora", "fedoralinux", "nobara", "ultramarine"],
 
-    'solus-based':              ["solus"],
-
-    'void-based':               ["void"],
-
-    'chimera-based':            ["chimera"],
-
-    'alt-based':                ["altlinux"],
-
-    'aerynos-based':            ["aerynos"],
+    # Fedora immutables using rpm-ostree, not standard Fedora
+    'fedora-immutables':        ["bazzite", "kinoite", "silverblue"],
 
     'gentoo-based':             ["calculate", "gentoo", "redcore"],
 
-    # Attempted to add and test KaOS Linux. Result:
-    # KaOS is NOT compatible with this project.
-    # No packages provide "evtest", "libappindicator", "zenity".
-    # The KaOS repos seem highly restricted to only Qt/KDE related packages.
+    # Use "tumbleweed-based" entry for Tumbleweed, "microos-based" for Aeon/Kalpa distro types
+    'leap-based':               ["leap", "opensuse-leap"],
 
-    # Add more as needed...
+    'mageia-based':             ["mageia"],
+
+    'mandriva-based':           ["openmandriva"],
+
+    # Use "leap-based" entry for Leap, "tumbleweed-based" for Tumbleweed
+    'microos-based':            ["opensuse-aeon", "opensuse-kalpa", "opensuse-microos"],
+
+    # RHELs-only: Fedora standard and Fedora immutables have their own distro ID lists
+    'rhel-based':               ["almalinux", "centos", "eurolinux", "oreon", "rhel", "rocky"],
+
+    'solus-based':              ["solus"],
+
+    # Use "leap-based" entry for Leap, "microos-based" for Aeon/Kalpa distro types
+    'tumbleweed-based':         ["opensuse-tumbleweed", "tumbleweed"],
+
+    'ubuntu-based':             ["elementary", "mint", "nebios", "neon", "pop",
+                                    "tuxedo", "ubuntu", "zorin"],
+
+    'void-based':               ["void"],
+
 }
 
 
@@ -1108,6 +1114,64 @@ distro_groups_map = {
 
 pkg_groups_map = {
 
+    # TODO: Verify the correct package for libinput quirks support
+    'aerynos-based':       ["cairo-gobject-devel", "clang", "curl",
+                            "git", "glib2-devel",
+                            "evtest",
+                            "libayatana-appindicator", "libxkbcommon-devel",
+                            "python-cairo-devel", "python-dbus-devel", "python-devel",
+                                "python-evdev", "python-pip", "python-pkgconfig",
+                                "python-pygobject-devel", "python-setuptools", "python-virtualenv",
+                            "zenity"],
+
+    'alt-based':           ["evtest",
+                            "gcc", "git", "gobject-introspection-devel",
+                            "libappindicator-gtk3", "libcairo-devel", "libcairo-gobject-devel",
+                                "libdbus-devel", "libinput-tools", "libnotify", "libxkbcommon-devel",
+                            "python3-dev", "python3-module-dbus", "python3-module-pip",
+                                "python3-modules-tkinter",
+                            "systemd-devel",
+                            "xset",
+                            "zenity"],
+
+    'arch-based':          ["cairo",
+                            "dbus",
+                            "evtest",
+                            "gcc", "git", "gobject-introspection",
+                            "libappindicator-gtk3", "libinput-tools", "libnotify", "libxkbcommon",
+                            "pkg-config", "python", "python-dbus", "python-pip",
+                            "systemd",
+                            "tk",
+                            "zenity"],
+
+    'chimera-based':       ["cairo-devel", "clang", "cmake",
+                            "dbus-devel",
+                            "git", "gobject-introspection-devel",
+                            "libayatana-appindicator-devel", "libinput-tools", "libnotify",
+                                "libxkbcommon-devel",
+                            "pkgconf", "python-dbus", "python-devel", "python-evdev", "python-pip",
+                            "zenity"],
+
+    # Need the KWin addons package for "Large Icons" task switcher UI on stock Debian.
+    # Handled with a distro quirks handler for Debian-KDE systems.
+    #   "kwin-addons",
+    # Some GTK packages separately handled with distro quirks handlers for Debian and
+    # Ubuntu systems, due to needing to assess availability on the system:
+    #   'gir1.2-adw-1', 'gir1.2-gtk-4.0',
+    #   'libgirepository1.0-dev', 'libgirepository-2.0-dev',
+    'debian-based':        ["curl",
+                            "git", "gir1.2-ayatanaappindicator3-0.1",
+                            # New Ayatana appindicator glib package will be needed at some point:
+                            # Ref: https://github.com/AyatanaIndicators/libayatana-appindicator-glib
+                            # "gir1.2-ayatanaappindicatorglib-2.0",
+                            "input-utils",
+                            "libcairo2-dev", "libdbus-1-dev", "libinput-tools", "libjpeg-dev",
+                                "libnotify-bin", "libsystemd-dev", "libwayland-dev",
+                                "libxkbcommon-dev",
+                            "python3-dbus", "python3-dev", "python3-pip", "python3-tk",
+                                "python3-venv",
+                            "zenity"],
+
     # NOTE: Do not add 'gnome-shell-extension-appindicator' to Fedora/RHELs.
     #       This will install extension but requires logging out of GNOME to activate.
     #       Also, installing DE-specific packages is probably a bad idea.
@@ -1115,28 +1179,12 @@ pkg_groups_map = {
                             "dbus-daemon", "dbus-devel",
                             "evtest",
                             "gcc", "git", "gobject-introspection-devel",
-                            "libappindicator-gtk3", "libjpeg-turbo-devel", "libnotify",
-                                "libxkbcommon-devel",
+                            "libappindicator-gtk3", "libinput-utils", "libjpeg-turbo-devel",
+                                "libnotify", "libxkbcommon-devel",
                             "python3-dbus", "python3-devel", "python3-pip", "python3-tkinter",
                             "systemd-devel",
                             "wayland-devel",
                             "xset",
-                            "zenity"],
-
-    # NOTE: Do not add 'gnome-shell-extension-appindicator' to Fedora/RHELs.
-    #       This will install extension but requires logging out of GNOME to activate.
-    #       Also, installing DE-specific packages is probably a bad idea.
-    'rhel-based':          ["cairo-devel", "cairo-gobject-devel",
-                            "dbus-daemon", "dbus-devel",
-                            "gcc", "git", "gobject-introspection-devel",
-                            "libappindicator-gtk3", "libjpeg-turbo-devel", "libnotify",
-                                "libxkbcommon-devel",
-                            "python3-dbus", "python3-devel", "python3-pip", "python3-tkinter",
-                            "systemd-devel",
-                            "wayland-devel",
-                            # The 'xdg-open' and 'xdg-mime' utils were missing on CentOS Stream 10,
-                            # necessitating adding 'xdg-utils' as dependency. Very unusual.
-                            "xdg-utils", "xset",
                             "zenity"],
 
     # NOTE: Do not add 'gnome-shell-extension-appindicator' to Fedora/RHELs.
@@ -1146,38 +1194,29 @@ pkg_groups_map = {
                             "dbus-daemon", "dbus-devel",
                             "evtest",
                             "gcc", "git", "gobject-introspection-devel",
-                            "libappindicator-gtk3", "libjpeg-turbo-devel", "libnotify",
-                                "libxkbcommon-devel",
+                            "libappindicator-gtk3", "libinput-utils", "libjpeg-turbo-devel",
+                                "libnotify", "libxkbcommon-devel",
                             "python3-dbus", "python3-devel", "python3-pip", "python3-tkinter",
                             "systemd-devel",
                             "wayland-devel",
                             "xset",
                             "zenity"],
 
-    # NOTE: for openSUSE (Tumbleweed, not applicable to Leap):
-    # How to get rid of the need to use specific version numbers in packages:
-    # pkgconfig(packagename)>=N.nn (version symbols optional)
-    # How to query a package to see what the equivalent pkgconfig(packagename) syntax would be:
-    # rpm -q --provides packagename | grep -i pkgconfig
-    'tumbleweed-based':    ["cairo-devel",
-                            "dbus-1-daemon", "dbus-1-devel",
-                            "gcc", "git", "gobject-introspection-devel",
-                            "libappindicator3-devel", "libnotify-tools", "libxkbcommon-devel",
-                            # f"python{py_pkg_ver_str}-dbus-python-devel",
-                            "python3-dbus-python-devel",
-                            # f"python{py_pkg_ver_str}-devel",
-                            "python3-devel",
-                            # f"python{py_pkg_ver_str}-tk",
-                            "python3-tk",
-                            "systemd-devel",
-                            "tk", "typelib-1_0-AyatanaAppIndicator3-0_1",
-                            "zenity"],
+    # Leaving out Python tkinter because it's only needed for obsolete GUI app version.
+    'gentoo-based':        ["app-misc/evtest",
+                            "dev-libs/gobject-introspection", "dev-libs/libayatana-appindicator",
+                                "dev-libs/libinput", "dev-libs/wayland",
+                                "dev-libs/wayland-protocols", "dev-vcs/git",
+                            "gnome-extra/zenity", "gui-libs/gtk", "gui-libs/libadwaita",
+                            "x11-apps/xset", "x11-libs/gtk+", "x11-libs/libnotify",
+                                "x11-libs/libxkbcommon", "x11-misc/xdg-utils"],
 
     # TODO: update Leap Python package versions as it makes newer Python available
     'leap-based':          ["cairo-devel",
                             "dbus-1-devel",
                             "gcc", "git", "gobject-introspection-devel",
-                            "libappindicator3-devel", "libnotify-tools", "libxkbcommon-devel",
+                            "libappindicator3-devel", "libinput-tools", "libnotify-tools",
+                                "libxkbcommon-devel",
                             "python311",
                             "python311-dbus-python-devel",
                             "python311-devel",
@@ -1186,22 +1225,20 @@ pkg_groups_map = {
                             "tk", "typelib-1_0-AyatanaAppIndicator3-0_1",
                             "zenity"],
 
-    # NOTE: This is a copy of Tumbleweed-based package list! For use with 'transactional-update'.
-    # But this needs to use the versioned package names because we are checking with 'rpm -q'.
-    'microos-based':       ["cairo-devel",
-                            "dbus-1-daemon", "dbus-1-devel",
+    'mageia-based':        ["cairo-devel",
+                            "dbus-devel",
+                            "evtest",
                             "gcc", "git", "gobject-introspection-devel",
-                            "libappindicator3-devel", "libnotify-tools", "libxkbcommon-devel",
-                            f"python{py_pkg_ver_str}-dbus-python-devel",
-                            # "python3-dbus-python-devel",
-                            f"python{py_pkg_ver_str}-devel",
-                            # "python3-devel",
-                            f"python{py_pkg_ver_str}-tk",
-                            # "python3-tk",
+                            "libappindicator-gtk3", "lib64ayatanaappindicator3-gir0.1",
+                                "lib64cairo-gir1.0", "libinput-tools", "libnotify",
+                                "libxkbcommon-devel",
+                            "python3-dbus", "python3-devel", "python3-pip", "python3-tkinter",
                             "systemd-devel",
-                            "tk", "typelib-1_0-AyatanaAppIndicator3-0_1",
+                            "wayland-devel",
+                            "xset",
                             "zenity"],
 
+    # TODO: Verify the correct package for libinput quirks support
     'mandriva-based':      ["cairo-devel",
                             "dbus-daemon", "dbus-devel",
                             "git", "gobject-introspection-devel", "gtk4-devel",
@@ -1214,16 +1251,68 @@ pkg_groups_map = {
                             "xset",
                             "zenity"],
 
-    'mageia-based':        ["cairo-devel",
-                            "dbus-devel",
-                            "evtest",
+    # NOTE: This is a copy of Tumbleweed-based package list! For use with 'transactional-update'.
+    # But this needs to use the versioned package names because we are checking with 'rpm -q'.
+    'microos-based':       ["cairo-devel",
+                            "dbus-1-daemon", "dbus-1-devel",
                             "gcc", "git", "gobject-introspection-devel",
-                            "libappindicator-gtk3", "lib64ayatanaappindicator3-gir0.1",
-                                "lib64cairo-gir1.0", "libnotify", "libxkbcommon-devel",
+                            "libappindicator3-devel", "libinput-tools", "libnotify-tools",
+                                "libxkbcommon-devel",
+                            f"python{py_pkg_ver_str}-dbus-python-devel",
+                            # "python3-dbus-python-devel",
+                            f"python{py_pkg_ver_str}-devel",
+                            # "python3-devel",
+                            f"python{py_pkg_ver_str}-tk",
+                            # "python3-tk",
+                            "systemd-devel",
+                            "tk", "typelib-1_0-AyatanaAppIndicator3-0_1",
+                            "zenity"],
+
+    # NOTE: Do not add 'gnome-shell-extension-appindicator' to Fedora/RHELs.
+    #       This will install extension but requires logging out of GNOME to activate.
+    #       Also, installing DE-specific packages is probably a bad idea.
+    'rhel-based':          ["cairo-devel", "cairo-gobject-devel",
+                            "dbus-daemon", "dbus-devel",
+                            "gcc", "git", "gobject-introspection-devel",
+                            "libappindicator-gtk3", "libinput-utils", "libjpeg-turbo-devel",
+                                "libnotify", "libxkbcommon-devel",
                             "python3-dbus", "python3-devel", "python3-pip", "python3-tkinter",
                             "systemd-devel",
                             "wayland-devel",
-                            "xset",
+                            # The 'xdg-open' and 'xdg-mime' utils were missing on CentOS Stream 10,
+                            # necessitating adding 'xdg-utils' as dependency. Very unusual.
+                            "xdg-utils", "xset",
+                            "zenity"],
+
+    'solus-based':         ["gcc", "git",
+                            "libayatana-appindicator", "libcairo-devel", "libinput", "libnotify",
+                                "libxkbcommon-devel",
+                            "pip", "python3-dbus", "python3-devel", "python3-tkinter",
+                            # Solus 4.8 suddenly switched to "Polaris" repo, changed
+                            # package name from 'python-dbus-devel' to 'python3-dbus-devel'.
+                            # Solus distro quirks handler will check for available packages.
+                                "python3-dbus-devel", "python-gobject-devel",
+                            "systemd-devel",
+                            "zenity"],
+
+    # NOTE: for openSUSE (Tumbleweed, not applicable to Leap):
+    # How to get rid of the need to use specific version numbers in packages:
+    # pkgconfig(packagename)>=N.nn (version symbols optional)
+    # How to query a package to see what the equivalent pkgconfig(packagename) syntax would be:
+    # rpm -q --provides packagename | grep -i pkgconfig
+    'tumbleweed-based':    ["cairo-devel",
+                            "dbus-1-daemon", "dbus-1-devel",
+                            "gcc", "git", "gobject-introspection-devel",
+                            "libappindicator3-devel", "libinput-tools", "libnotify-tools",
+                                "libxkbcommon-devel",
+                            # f"python{py_pkg_ver_str}-dbus-python-devel",
+                            "python3-dbus-python-devel",
+                            # f"python{py_pkg_ver_str}-devel",
+                            "python3-devel",
+                            # f"python{py_pkg_ver_str}-tk",
+                            "python3-tk",
+                            "systemd-devel",
+                            "tk", "typelib-1_0-AyatanaAppIndicator3-0_1",
                             "zenity"],
 
     # Separately handled with distro quirks handlers for Debian and Ubuntu systems, due
@@ -1243,92 +1332,17 @@ pkg_groups_map = {
                                 "python3-venv",
                             "zenity"],
 
-    # Need this KWin package for "Large Icons" task switcher UI on stock Debian.
-    # Handled with a distro quirks handler for Debian-KDE systems.
-    # "kwin-addons",
-    # Separately handled with distro quirks handlers for Debian and Ubuntu systems, due
-    # to needing to assess availability on the system:
-    # 'gir1.2-adw-1', 'gir1.2-gtk-4.0',
-    # 'libgirepository1.0-dev', 'libgirepository-2.0-dev',
-    'debian-based':        ["curl",
-                            "git", "gir1.2-ayatanaappindicator3-0.1",
-                            # New Ayatana appindicator glib package will be needed at some point:
-                            # Ref: https://github.com/AyatanaIndicators/libayatana-appindicator-glib
-                            # "gir1.2-ayatanaappindicatorglib-2.0",
-                            "input-utils",
-                            "libcairo2-dev", "libdbus-1-dev", "libinput-tools", "libjpeg-dev",
-                                "libnotify-bin", "libsystemd-dev", "libwayland-dev",
-                                "libxkbcommon-dev",
-                            "python3-dbus", "python3-dev", "python3-pip", "python3-tk",
-                                "python3-venv",
-                            "zenity"],
-
-    'arch-based':          ["cairo",
-                            "dbus",
-                            "evtest",
-                            "gcc", "git", "gobject-introspection",
-                            "libappindicator-gtk3", "libnotify", "libxkbcommon",
-                            "pkg-config", "python", "python-dbus", "python-pip",
-                            "systemd",
-                            "tk",
-                            "zenity"],
-
-    'solus-based':         ["gcc", "git",
-                            "libayatana-appindicator", "libcairo-devel", "libnotify",
-                                "libxkbcommon-devel",
-                            "pip", "python3-dbus", "python3-devel", "python3-tkinter",
-                            # Solus 4.8 suddenly switched to "Polaris" repo, changed
-                            # package name from 'python-dbus-devel' to 'python3-dbus-devel'.
-                            # Solus distro quirks handler will check for available packages.
-                                "python3-dbus-devel", "python-gobject-devel",
-                            "systemd-devel",
-                            "zenity"],
-
     'void-based':          ["cairo-devel", "curl",
                             "dbus-devel",
                             "evtest",
                             "gcc", "git",
-                            "libayatana-appindicator-devel", "libgirepository-devel", "libnotify",
-                                "libxkbcommon-devel",
+                            "libayatana-appindicator-devel", "libgirepository-devel", "libinput",
+                                "libnotify", "libxkbcommon-devel",
                             "pkg-config", "python3-dbus", "python3-devel", "python3-pip",
                                 "python3-pkgconfig", "python3-tkinter",
                             "wayland-devel", "wget",
                             "xset",
                             "zenity"],
-
-    'chimera-based':       ["cairo-devel", "clang", "cmake",
-                            "dbus-devel",
-                            "git", "gobject-introspection-devel",
-                            "libayatana-appindicator-devel", "libnotify", "libxkbcommon-devel",
-                            "pkgconf", "python-dbus", "python-devel", "python-evdev", "python-pip",
-                            "zenity"],
-
-    'alt-based':           ["evtest",
-                            "gcc", "git", "gobject-introspection-devel",
-                            "libappindicator-gtk3", "libcairo-devel", "libcairo-gobject-devel",
-                                "libdbus-devel", "libnotify", "libxkbcommon-devel",
-                            "python3-dev", "python3-module-dbus", "python3-module-pip",
-                                "python3-modules-tkinter",
-                            "systemd-devel",
-                            "xset",
-                            "zenity"],
-
-    'aerynos-based':       ["cairo-gobject-devel", "clang", "curl",
-                            "git", "glib2-devel",
-                            "evtest",
-                            "libayatana-appindicator", "libxkbcommon-devel",
-                            "python-cairo-devel", "python-dbus-devel", "python-devel",
-                                "python-evdev", "python-pip", "python-pkgconfig",
-                                "python-pygobject-devel", "python-setuptools", "python-virtualenv",
-                            "zenity"],
-
-    # Leaving out Python tkinter because it's only needed for obsolete GUI app version.
-    'gentoo-based':        ["app-misc/evtest",
-                            "dev-libs/gobject-introspection", "dev-libs/libayatana-appindicator",
-                                "dev-libs/wayland", "dev-libs/wayland-protocols", "dev-vcs/git",
-                            "gnome-extra/zenity", "gui-libs/gtk", "gui-libs/libadwaita",
-                            "x11-apps/xset", "x11-libs/gtk+", "x11-libs/libnotify",
-                                "x11-libs/libxkbcommon", "x11-misc/xdg-utils"],
 
 }
 
@@ -1346,10 +1360,10 @@ remove_pkgs_map = {
     # then a list (in brackets) of packages to be removed as the dict value...
     # ('distro_id', '22'): ["pkg1", "pkg2", ...],
     # ('distro_id', None): ["pkg1", "pkg2", ...],
-    ('centos', '7'):            ['dbus-daemon', 'gnome-shell-extension-appindicator'],
+    ('centos', '7'):            ['dbus-daemon', 'gnome-shell-extension-appindicator',
+                                    'libinput-utils'],
     ('deepin', None):           ['input-utils'],
 }
-
 
 pip_pkgs   = [
 
