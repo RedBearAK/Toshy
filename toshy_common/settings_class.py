@@ -1,10 +1,10 @@
-__version__ = '20250714'
+__version__ = '20260501'
 
 import os
 import inspect
 import sqlite3
+import textwrap
 
-from pprint import pprint
 from typing import Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
@@ -12,8 +12,13 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 import xwaykeyz.lib.logger
 from xwaykeyz.lib.logger import debug, error
 
-# Import the SharedDeviceContext class
 from toshy_common.shared_device_context import SharedDeviceContext
+from toshy_common.overlay_context import (
+    OverlayFlag,
+    DEFAULT_OVERLAY_MASK,
+    apply_dependencies,
+    active_flags,
+)
 
 
 class Settings:
@@ -29,12 +34,18 @@ class Settings:
         calling_file_path           = calling_frame.filename
         calling_module              = os.path.split(calling_file_path)[1]
         self.calling_module         = calling_module
+
         # settings defaults
-        self.autoload_tray_icon    = True              # Default: True
+        self.autoload_tray_icon     = True              # Default: True
         self.gui_dark_theme         = True              # Default: True     # Older tkinter GUI
         self.gui_theme_mode         = 'auto'            # Default: True     # Newer GTK-4 GUI
         self.override_kbtype        = 'Auto-Adapt'      # Default: 'Auto-Adapt'
-            ###  Disable optspec_layout by default for performance, and international keyboard users
+
+        # Overlay system — bitmask of OverlayFlag values controlling which
+        # groups of keymaps and modmaps are active. See toshy_common/overlay_context.py.
+        self._overlay_mask          = DEFAULT_OVERLAY_MASK
+
+        ###  Disable optspec_layout by default for performance, and international keyboard users
         self.optspec_layout         = 'Disabled'        # Default: 'Disabled'
         self.mru_layout             = ('us', 'default') # Default: ('us', 'default')
         self.forced_numpad          = True              # Default: True
@@ -53,6 +64,23 @@ class Settings:
         self.ensure_database_setup()
         # Load user's custom settings from database (defaults will be saved if no DB)
         self.load_settings()
+
+    @property
+    def overlay_mask(self):
+        """Current overlay flag bitmask. Returns OverlayFlag value."""
+        return self._overlay_mask
+
+    @overlay_mask.setter
+    def overlay_mask(self, value):
+        """Set overlay mask, automatically enforcing flag dependencies.
+
+        Accepts OverlayFlag values or plain ints. Converts to OverlayFlag
+        and applies dependency rules (e.g. clearing ENTER_TO_RENAME if
+        FINDER_MODS is not set) before storing.
+        """
+        if not isinstance(value, OverlayFlag):
+            value = OverlayFlag(int(value))
+        self._overlay_mask = apply_dependencies(value)
 
     def ensure_database_setup(self):
         # This will create the database file if it doesn't exist yet
@@ -135,6 +163,8 @@ class Settings:
             ('gui_dark_theme',          str(self.gui_dark_theme)),
             ('gui_theme_mode',          str(self.gui_theme_mode)),
             ('override_kbtype',         str(self.override_kbtype)),
+            # int() wrapper on overlay_mask makes sure we store simple number string from enum
+            ('overlay_mask',            str(int(self.overlay_mask))),
             ('optspec_layout',          str(self.optspec_layout)),
             ('forced_numpad',           str(self.forced_numpad)),
             ('media_arrows_fix',        str(self.media_arrows_fix)),
@@ -175,12 +205,18 @@ class Settings:
             for row in rows_prefs:
                 # Convert the string value to a Python boolean correctly
                 setting_value       = row[1].lower() == 'true'
+
                 if True is False: pass  # dummy first `if` line so other rows line up (readability)
                 elif row[0] == 'autoload_tray_icon'  : self.autoload_tray_icon  = setting_value
                 elif row[0] == 'gui_dark_theme'      : self.gui_dark_theme      = setting_value
+
                 elif row[0] == 'gui_theme_mode'      : self.gui_theme_mode      = row[1]
                 elif row[0] == 'override_kbtype'     : self.override_kbtype     = row[1]
                 elif row[0] == 'optspec_layout'      : self.optspec_layout      = row[1]
+
+                elif row[0] == 'overlay_mask'        :
+                    self.overlay_mask   = OverlayFlag(int(row[1]))
+
                 elif row[0] == 'forced_numpad'       : self.forced_numpad       = setting_value
                 elif row[0] == 'media_arrows_fix'    : self.media_arrows_fix    = setting_value
                 elif row[0] == 'multi_lang'          : self.multi_lang          = setting_value
@@ -216,9 +252,10 @@ class Settings:
 
     def get_settings_list(self):
         # get all attributes from the object
-        all_attributes = [attr for attr in dir(self) 
+        all_attributes = [  attr for attr in dir(self) 
                             if not callable(getattr(self, attr)) and 
-                            not attr.startswith("__")]
+                            not attr.startswith("__") and
+                            not attr.startswith("_")                    ]
 
         # Filter attributes further only if a specific attribute should be ignored.
         # Removed earlier list comprehension that limited data types too much.
@@ -295,7 +332,22 @@ class Settings:
             if self.shared_device_context and self.shared_device_context.active_monitors
             else "None"
         )
+        mask_active         = active_flags(self.overlay_mask)
+        mask_names_str      = ', '.join(f.name for f in mask_active) if mask_active else '(none)'
         
+        # Wrap to fit within the visual budget. The continuation indent matches the
+        # value-column position so wrapped lines align under the first chunk.
+        wrap_width = 76
+        indent = ' ' * 12  # adjust to match desired continuation indent
+        wrapped = textwrap.wrap(mask_names_str, width=wrap_width)
+
+        if len(wrapped) <= 1:
+            # Fits on one line — keep on the same line as the field name.
+            active_overlays_str = mask_names_str
+        else:
+            # Doesn't fit — break to next line, indent continuation chunks.
+            active_overlays_str = '\n' + '\n'.join(indent + chunk for chunk in wrapped)
+
         return f"""Current settings:
         ------------------------------------------------------------------------------
         calling_module          = '{self.calling_module}'
@@ -306,6 +358,9 @@ class Settings:
         gui_theme_mode          = '{self.gui_theme_mode}'
         ------------------------------------------------------------------------------
         override_kbtype         = '{self.override_kbtype}'
+        ------------------------------------------------------------------------------
+        overlay_mask            = {self.overlay_mask}
+        active_overlays         = {active_overlays_str}
         ------------------------------------------------------------------------------
         optspec_layout          = '{self.optspec_layout}'
         mru_layout              = {self.mru_layout}
