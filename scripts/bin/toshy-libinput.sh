@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/bin/toshy-libinput.sh
 #
-SCRIPT_VERSION="20260325"
+SCRIPT_VERSION="20260502"
 
 # Toshy libinput Diagnostic Utility
 # ----------------------------------
@@ -169,16 +169,55 @@ quirk_entry_is_installed() {
 # ── Dependency check ──────────────────────────────────────────────────────────
 
 check_libinput_tools() {
+    # Check for the main libinput dispatcher binary.
     if ! command -v libinput &>/dev/null; then
-        echo -e "${RED}ERROR:${RST} The 'libinput' command was not found."
-        echo -e "       Install the ${BLD}libinput-tools${RST} package for your distro."
+        echo -e "${YLW}WARNING:${RST} The 'libinput' command was not found."
+        echo -e "         Most operations in this script will not work."
+        echo -e "         Install the libinput tools package for your distro:"
         echo
-        echo -e "  Debian/Ubuntu:  sudo apt install libinput-tools"
-        echo -e "  Fedora/RHEL:    sudo dnf install libinput-utils"
-        echo -e "  Arch:           sudo pacman -S libinput"
-        echo -e "  openSUSE:       sudo zypper install libinput-tools"
+        echo -e "  Debian/Ubuntu/Mint:    sudo apt install libinput-tools"
+        echo -e "  Fedora/RHEL/Rocky:     sudo dnf install libinput-utils"
+        echo -e "  openSUSE:              sudo zypper install libinput-tools"
+        echo -e "  Arch/Manjaro:          sudo pacman -S libinput-tools"
+        echo -e "  Mageia:                sudo dnf install libinput-tools"
+        echo -e "  ALT Linux:             sudo apt-get install libinput-tools"
+        echo -e "  Chimera:               sudo apk add libinput-tools"
+        echo -e "  Solus/Void/AerynOS:    package usually bundled in 'libinput'"
+        echo -e "  Gentoo:                included with dev-libs/libinput"
         echo
-        exit 1
+        return 0
+    fi
+
+    # The 'libinput' dispatcher binary can be present without the 'libinput-quirks'
+    # helper — the helper ships in a separate package on most distros. When this
+    # happens, 'libinput quirks <anything>' prints "libinput: quirks is not
+    # installed" and exits non-zero, which then gets misinterpreted by the
+    # validator as a parsing error in the quirks file. Warn here so menu options
+    # that depend on the helper produce a contextualized failure instead of a
+    # cryptic one. Other operations (device list, quirk file edit/remove) still
+    # work and are not blocked.
+    if ! libinput quirks --help &>/dev/null; then
+        echo -e "${YLW}WARNING:${RST} The 'libinput quirks' helper is not installed."
+        echo -e "         Quirks-related operations (validation, per-device quirks"
+        echo -e "         lookup, diagnosis) will not work. Other operations such as"
+        echo -e "         the device list and DWT quirk install/remove are unaffected."
+        echo
+        echo -e "         The base 'libinput' library is present, but the diagnostic"
+        echo -e "         tools (which include 'libinput-quirks') ship in a separate"
+        echo -e "         package on most distros. Install it for your distro:"
+        echo
+        echo -e "  Debian/Ubuntu/Mint:    sudo apt install libinput-tools"
+        echo -e "  Fedora/RHEL/Rocky:     sudo dnf install libinput-utils"
+        echo -e "  openSUSE:              sudo zypper install libinput-tools"
+        echo -e "  Arch/Manjaro:          sudo pacman -S libinput-tools"
+        echo -e "  Mageia:                sudo dnf install libinput-tools"
+        echo -e "  ALT Linux:             sudo apt-get install libinput-tools"
+        echo -e "  Chimera:               sudo apk add libinput-tools"
+        echo -e "  Solus/Void/AerynOS:    helpers should already be present;"
+        echo -e "                         try reinstalling the 'libinput' package"
+        echo -e "  Gentoo:                re-emerge dev-libs/libinput"
+        echo
+        return 0
     fi
 }
 

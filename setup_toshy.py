@@ -1114,6 +1114,7 @@ distro_groups_map = {
 
 pkg_groups_map = {
 
+    # TODO: Verify the correct package for libinput quirks support
     'aerynos-based':       ["cairo-gobject-devel", "clang", "curl",
                             "git", "glib2-devel",
                             "evtest",
@@ -1237,6 +1238,7 @@ pkg_groups_map = {
                             "xset",
                             "zenity"],
 
+    # TODO: Verify the correct package for libinput quirks support
     'mandriva-based':      ["cairo-devel",
                             "dbus-daemon", "dbus-devel",
                             "git", "gobject-introspection-devel", "gtk4-devel",
