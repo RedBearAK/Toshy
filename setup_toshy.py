@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260416'                        # CLI option "--version" will print this out.
+__version__ = '20260504'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1719,6 +1719,149 @@ class DistroQuirksHandler:
             safe_shutdown(1)
 
     @staticmethod
+    def handle_quirks_Chimera():
+        """
+        Handle Chimera Linux package availability for the Ayatana AppIndicator
+        library. There are several sources of "package name chaos" to deal with:
+
+          1. The current package 'libayatana-appindicator-devel' was demoted from
+             'main/' to 'user/' in the Chimera cports tree (driven by the upstream
+             deprecation in March 2025). The 'user/' repo is NOT enabled by
+             default on a fresh Chimera install.
+          2. Upstream is steering consumers toward a successor library named
+             'libayatana-appindicator-glib'. Chimera may eventually package that
+             successor under either '-glib-devel' (matching their existing
+             '-devel' suffix convention) or just '-glib' (matching the upstream
+             name verbatim).
+          3. We can't assume which repo (main/ vs user/) any of these will live
+             in at any given time.
+
+        Strategy: probe a list of candidate package names in preference order
+        against currently enabled repos. If none are visible, enable the
+        'chimera-repo-user' metapackage to gain access to 'user/', refresh apk
+        indexes, and re-probe in the same order. If still nothing matches, bail
+        out with a clear message listing every name we tried.
+        """
+        print('Doing prep/checks for Chimera-based distros...')
+
+        # Make sure we only handle these quirks in the correct distros
+        if cnfg.DISTRO_ID not in distro_groups_map['chimera-based']:
+            error('Chimera quirks handler called, but this is not Chimera-based?')
+            safe_shutdown(1)
+
+        # Candidate package names in preference order:
+        #   1. Original/current Chimera name (still works as of this writing)
+        #   2. Speculative successor with '-devel' suffix (Chimera convention)
+        #   3. Speculative successor without suffix (matches upstream naming)
+        appindicator_candidates = [
+            'libayatana-appindicator-devel',
+            'libayatana-appindicator-glib-devel',
+            'libayatana-appindicator-glib',
+        ]
+
+        # The placeholder name in 'pkgs_for_distro' that gets swapped if the
+        # resolved package name differs from the original.
+        placeholder_pkg = 'libayatana-appindicator-devel'
+
+        # File installed by the 'chimera-repo-user' metapackage. Its presence
+        # indicates the user/ repo is already enabled.
+        user_repo_marker = '/usr/lib/apk/repositories.d/11-repo-user.list'
+
+        def apk_pkg_available(pkg_name):
+            """Return True if pkg_name is visible to apk in any enabled repo."""
+            cmd_lst = ['apk', 'search', '-e', pkg_name]
+            try:
+                result = subprocess.run(cmd_lst, stdout=PIPE, stderr=PIPE,
+                                        universal_newlines=True, timeout=10)
+            except (subprocess.TimeoutExpired, FileNotFoundError) as probe_err:
+                print(f"  apk search for '{pkg_name}' failed: {probe_err}")
+                return False
+            # 'apk search -e' prints '<pkg_name>-<version>' on a hit, exits 0
+            # in either case. Match the prefix to avoid accidental partial hits.
+            for line in result.stdout.splitlines():
+                if line.startswith(f'{pkg_name}-'):
+                    return True
+            return False
+
+        def find_first_available(candidates):
+            """Probe candidates in order, return first visible name or None."""
+            for pkg in candidates:
+                if apk_pkg_available(pkg):
+                    return pkg
+            return None
+
+        def substitute_in_pkg_list(found_pkg):
+            """Swap the placeholder name for the resolved name, if different."""
+            if found_pkg == placeholder_pkg:
+                return
+            print(f"  Substituting '{found_pkg}' for '{placeholder_pkg}' in "
+                    f"package list.")
+            print('  NOTE: This is a speculative substitution — the successor '
+                    'library may have API differences that affect runtime. If '
+                    'the GUI tray icon misbehaves, this is a likely culprit.')
+            cnfg.pkgs_for_distro = [
+                found_pkg if pkg == placeholder_pkg else pkg
+                for pkg in cnfg.pkgs_for_distro
+            ]
+
+        def bail_out_with_message():
+            """Common bailout path with a useful diagnostic message."""
+            error('No suitable AppIndicator package was found in Chimera repos.')
+            print('  Tried (in this order):')
+            for pkg in appindicator_candidates:
+                print(f'    - {pkg}')
+            print('  This may indicate that Chimera has dropped the package '
+                    'entirely, or that the successor is being packaged under a '
+                    'name not yet known to this installer. Please file a Toshy '
+                    'issue including the output of:')
+            print('    apk search libayatana-appindicator')
+            print('  ...so the candidate list can be updated.')
+            safe_shutdown(1)
+
+        # First pass: probe with current repo configuration.
+        print('  Probing apk for AppIndicator package availability...')
+        found = find_first_available(appindicator_candidates)
+        if found is not None:
+            print(f"  Found '{found}' in currently enabled repos.")
+            substitute_in_pkg_list(found)
+            return
+
+        # If user repo is already enabled, there's nothing more to try.
+        if os.path.exists(user_repo_marker):
+            print('  User repo is already enabled, but no candidate package '
+                    'was found.')
+            bail_out_with_message()
+
+        # User repo not enabled — enable it and re-probe.
+        print("  No candidate package visible. Enabling 'chimera-repo-user' "
+                "and refreshing indexes...")
+        call_attn_to_pwd_prompt_if_needed()
+        cmd_lst = [cnfg.priv_elev_cmd, 'apk', 'add', '--no-interactive',
+                    'chimera-repo-user']
+        try:
+            subprocess.run(cmd_lst, check=True)
+        except subprocess.CalledProcessError as proc_err:
+            error(f"Failed to install 'chimera-repo-user' metapackage:\n\t{proc_err}")
+            safe_shutdown(1)
+        cmd_lst = [cnfg.priv_elev_cmd, 'apk', 'update']
+        try:
+            subprocess.run(cmd_lst, check=True)
+        except subprocess.CalledProcessError as proc_err:
+            error(f"Failed to run 'apk update' after enabling user repo:\n\t{proc_err}")
+            safe_shutdown(1)
+
+        # Second pass: probe again with user repo now enabled.
+        print('  Re-probing apk for AppIndicator package availability...')
+        found = find_first_available(appindicator_candidates)
+        if found is not None:
+            print(f"  Found '{found}' after enabling user repo.")
+            substitute_in_pkg_list(found)
+            return
+
+        # Still nothing — bail out with the full diagnostic.
+        bail_out_with_message()
+
+    @staticmethod
     def handle_quirks_Debian():
         print('Doing prep/checks for Debian-based distros...')
 
@@ -2376,6 +2519,11 @@ class PackageInstallDispatcher:
         """utility function that gets dispatched for distros that use APK package manager"""
         native_pkg_installer.check_for_pkg_mgr_cmd('apk')
         call_attn_to_pwd_prompt_if_needed()
+
+        # Quirks handler resolves AppIndicator package name and enables user
+        # repo if needed, before main install logic runs.
+        if cnfg.DISTRO_ID in distro_groups_map['chimera-based']:
+            DistroQuirksHandler.handle_quirks_Chimera()
 
         def get_installed_packages_apk():
             """Get set of installed package names from apk"""
