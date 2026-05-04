@@ -1,4 +1,4 @@
-__version__ = '20260501'
+__version__ = '20260504'
 
 import os
 import inspect
@@ -16,6 +16,7 @@ from toshy_common.shared_device_context import SharedDeviceContext
 from toshy_common.overlay_context import (
     OverlayFlag,
     DEFAULT_OVERLAY_MASK,
+    OVL_DEPENDENCIES,
     apply_dependencies,
     active_flags,
 )
@@ -75,12 +76,27 @@ class Settings:
         """Set overlay mask, automatically enforcing flag dependencies.
 
         Accepts OverlayFlag values or plain ints. Converts to OverlayFlag
-        and applies dependency rules (e.g. clearing ENTER_TO_RENAME if
-        FINDER_MODS is not set) before storing.
+        and applies dependency rules:
+        - When a parent flag transitions off → on, its child is auto-enabled
+        - When a parent flag is off, its child is forced off
+        - Otherwise, the child's state is left alone (allowing manual disable
+            while parent stays on)
         """
         if not isinstance(value, OverlayFlag):
             value = OverlayFlag(int(value))
-        self._overlay_mask = apply_dependencies(value)
+
+        old_mask = self._overlay_mask
+        new_mask = value
+
+        for child, parent in OVL_DEPENDENCIES.items():
+            parent_was_on = bool(old_mask & parent)
+            parent_is_on = bool(new_mask & parent)
+            if parent_is_on and not parent_was_on:
+                new_mask |= child           # parent just turned on, restore child
+            elif not parent_is_on:
+                new_mask &= ~child          # parent off, child must be off too
+
+        self._overlay_mask = new_mask
 
     def ensure_database_setup(self):
         # This will create the database file if it doesn't exist yet

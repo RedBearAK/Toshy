@@ -94,6 +94,8 @@ DEFAULT_OVERLAY_MASK        = OVL_PRESET_FULL
 OVL_METADATA = [
     (OverlayFlag.MACOS_GLOBALS, "macOS Globals",
         "Globally-available Mac-style shortcuts shared across all apps."),
+    (OverlayFlag.DIALOG_ERGO, "Dialog Ergonomics",
+        "Escape to close dialogs and other dialog handling improvements."),
     (OverlayFlag.TERMINAL_ERGO, "Terminal Ergonomics",
         "Cmd+C/V for copy/paste in terminals, SIGINT prevention, per-terminal fixes."),
     (OverlayFlag.FINDER_MODS, "Finder Mods",
@@ -104,8 +106,6 @@ OVL_METADATA = [
         "Mac-style remaps in web browsers (Cmd+T, Cmd+W, Cmd+L, etc.)."),
     (OverlayFlag.VSCODE_SHORTCUTS, "VSCode Shortcuts",
         "Mac-style remaps in VSCode, Cursor, VSCodium, and related editors."),
-    (OverlayFlag.DIALOG_ERGO, "Dialog Ergonomics",
-        "Escape to close dialogs and other dialog handling improvements."),
     (OverlayFlag.USER_FLAG_A, "User Flag A",
         "Available for custom keymaps in your config."),
     (OverlayFlag.USER_FLAG_B, "User Flag B",
@@ -132,6 +132,7 @@ OVL_METADATA = [
 
 OVL_DEPENDENCIES = {
     OverlayFlag.ENTER_TO_RENAME:    OverlayFlag.FINDER_MODS,
+    OverlayFlag.DIALOG_ERGO:        OverlayFlag.MACOS_GLOBALS,
 }
 
 
@@ -236,12 +237,12 @@ def toggle(mask, flag):
 def apply_dependencies(mask):
     """Return a new mask with dependency rules enforced.
 
-    For each child flag whose parent is not set in the mask, the child
-    is also cleared. Called by the settings class whenever the mask is
-    changed, so the stored value is always internally consistent.
+    For each child whose parent is not set, the child is also cleared.
+    Used for load-time consistency checks on stored masks.
 
-    Single-pass only — nested dependencies are rejected at module load
-    (see _check_no_nested_deps()).
+    The auto-enable behavior (parent transitions off→on enables child)
+    is handled by the settings class setter, which has access to the
+    previous mask state. This function is for stateless validation.
     """
     result = mask
     for child, parent in OVL_DEPENDENCIES.items():
