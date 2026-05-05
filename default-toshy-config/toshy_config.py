@@ -4450,8 +4450,8 @@ keymap("Jetbrains", {
 keymap("Wordwise - not vscode", {
     # Wordwise remaining - for Everything but VS Code
     C("Alt-Left"):              C("C-Left"),                    # Left of Word
-    C("Alt-Shift-Left"):        C("C-Shift-Left"),              # Select Left of Word
     C("Alt-Right"):             C("C-Right"),                   # Right of Word
+    C("Alt-Shift-Left"):        C("C-Shift-Left"),              # Select Left of Word
     C("Alt-Shift-Right"):       C("C-Shift-Right"),             # Select Right of Word
     C("Alt-Shift-g"):           C("C-Shift-g"),                 # View source control
     # ** VS Code fix **
@@ -5718,21 +5718,24 @@ keymap("General GUI", {
     # This is better done with a native custom shortcut in each DE
     # C("Alt-RC-Space"):          C(""),                          # Open Finder - Placeholder not-deepin
 
-    # Wordwise
-    C("RC-Left"):               C("Home"),                      # Beginning of Line
-    C("Shift-RC-Left"):         C("Shift-Home"),                # Select all to Beginning of Line
-    C("RC-Right"):              C("End"),                       # End of Line
-    C("Shift-RC-Right"):        C("Shift-End"),                 # Select all to End of Line
-    C("RC-Up"):                 C("C-Home"),                    # Beginning of File
-    C("Shift-RC-Up"):           C("C-Shift-Home"),              # Select all to Beginning of File
-    C("RC-Down"):               C("C-End"),                     # End of File
-    C("Shift-RC-Down"):         C("C-Shift-End"),               # Select all to End of File
-    C("Super-Backspace"):       C("C-Backspace"),               # Delete Left Word of Cursor
-    C("Super-Delete"):          C("C-Delete"),                  # Delete Right Word of Cursor
-    C("RC-Backspace"):          C("C-Shift-Backspace"),         # Delete Entire Line Left of Cursor
-    C("Alt-Delete"):            C("C-Delete"),                  # Delete Right Word of Cursor
-    C("Shift-Alt-Backspace"):   C("C-Backspace"),               # Delete word left of cursor
-    C("Shift-Alt-Delete"):      C("C-Delete"),                  # Delete word right of cursor
+    # Wordwise - cursor movement and word/line selection/deletion
+    C("RC-Left"):               C("Home"),                      # Move Cursor to Beginning of Line
+    C("RC-Right"):              C("End"),                       # Move Cursor to End of Line
+    C("RC-Up"):                 C("C-Home"),                    # Move Cursor to Beginning of File
+    C("RC-Down"):               C("C-End"),                     # Move Cursor to End of File
+
+    C("Shift-RC-Left"):         C("Shift-Home"),                # Extend Selection to Beginning of Line
+    C("Shift-RC-Right"):        C("Shift-End"),                 # Extend Selection to End of Line
+    C("Shift-RC-Up"):           C("C-Shift-Home"),              # Extend Selection to Beginning of File
+    C("Shift-RC-Down"):         C("C-Shift-End"),               # Extend Selection to End of File
+
+    C("Super-Backspace"):       C("C-Backspace"),               # Delete Word Left of Cursor
+    C("Shift-Alt-Backspace"):   C("C-Backspace"),               # Delete Word Left of Cursor (alt)
+    C("Super-Delete"):          C("C-Delete"),                  # Delete Word Right of Cursor
+    C("Shift-Alt-Delete"):      C("C-Delete"),                  # Delete Word Right of Cursor (alt)
+    C("Alt-Delete"):            C("C-Delete"),                  # Delete Word Right of Cursor (Option-style)
+
+    C("RC-Backspace"):          C("C-Shift-Backspace"),         # Delete to Beginning of Line
 
     # Allow access to Linux TTY virtual consoles with the usual physical key locations (General GUI)
     C("Super-RC-F1"):           C("C-Alt-F1"),                  # Go to TTY virtual console 1
