@@ -1721,26 +1721,28 @@ class DistroQuirksHandler:
     @staticmethod
     def handle_quirks_Chimera():
         """
-        Handle Chimera Linux package availability for the Ayatana AppIndicator
-        library. There are several sources of "package name chaos" to deal with:
+        Detect Ayatana AppIndicator package availability on Chimera Linux and
+        bail with clear manual recovery instructions if the package is not
+        visible to apk.
 
-          1. The current package 'libayatana-appindicator-devel' was demoted from
-             'main/' to 'user/' in the Chimera cports tree (driven by the upstream
-             deprecation in March 2025). The 'user/' repo is NOT enabled by
-             default on a fresh Chimera install.
-          2. Upstream is steering consumers toward a successor library named
-             'libayatana-appindicator-glib'. Chimera may eventually package that
-             successor under either '-glib-devel' (matching their existing
-             '-devel' suffix convention) or just '-glib' (matching the upstream
-             name verbatim).
-          3. We can't assume which repo (main/ vs user/) any of these will live
-             in at any given time.
+        Why this is detect-only (not auto-fix):
 
-        Strategy: probe a list of candidate package names in preference order
-        against currently enabled repos. If none are visible, enable the
-        'chimera-repo-user' metapackage to gain access to 'user/', refresh apk
-        indexes, and re-probe in the same order. If still nothing matches, bail
-        out with a clear message listing every name we tried.
+            The 'libayatana-appindicator-devel' package was demoted from Chimera's
+            'main/' repository to 'user/' following the upstream library
+            deprecation in March 2025. Enabling the 'user/' repo via the
+            'chimera-repo-user' metapackage gains visibility, but on Chimera that
+            alone is not enough — package conflicts arise that require a full
+            'apk upgrade' (and typically a reboot) to resolve cleanly. This is
+            unlike RHEL/Fedora, where enabling extra repos and refreshing indexes
+            is generally sufficient. The Toshy installer cannot safely perform a
+            full system upgrade and reboot on the user's behalf, so when the
+            package is missing, this handler bails out with manual instructions.
+
+            A successor library named 'libayatana-appindicator-glib' is on the
+            horizon as a replacement. Chimera may eventually package it under
+            either '-glib-devel' (matching their existing '-devel' convention)
+            or just '-glib' (matching upstream verbatim). Both names are probed
+            here as fallbacks ahead of any name change.
         """
         print('Doing prep/checks for Chimera-based distros...')
 
@@ -1750,7 +1752,7 @@ class DistroQuirksHandler:
             safe_shutdown(1)
 
         # Candidate package names in preference order:
-        #   1. Original/current Chimera name (still works as of this writing)
+        #   1. Original/current Chimera name
         #   2. Speculative successor with '-devel' suffix (Chimera convention)
         #   3. Speculative successor without suffix (matches upstream naming)
         appindicator_candidates = [
@@ -1804,21 +1806,81 @@ class DistroQuirksHandler:
                 for pkg in cnfg.pkgs_for_distro
             ]
 
-        def bail_out_with_message():
-            """Common bailout path with a useful diagnostic message."""
-            error('No suitable AppIndicator package was found in Chimera repos.')
-            print('  Tried (in this order):')
+        def print_candidates_tried():
+            """Print the candidate package list that was probed."""
+            print('  Candidate package names probed (in order):')
             for pkg in appindicator_candidates:
                 print(f'    - {pkg}')
-            print('  This may indicate that Chimera has dropped the package '
-                    'entirely, or that the successor is being packaged under a '
-                    'name not yet known to this installer. Please file a Toshy '
-                    'issue including the output of:')
-            print('    apk search libayatana-appindicator')
-            print('  ...so the candidate list can be updated.')
+
+        def bail_user_repo_not_enabled():
+            """
+            User repo is not enabled — print full manual recovery sequence and
+            bail. Includes 'apk upgrade' and reboot because enabling the user
+            repo on Chimera typically surfaces conflicts that need a full
+            upgrade to resolve cleanly.
+            """
+            error('Required AppIndicator package not available in current repos.')
+            print('')
+            print('  This is a known issue specific to Chimera Linux:')
+            print('')
+            print("  Chimera's packaging policy split moved the AppIndicator")
+            print("  library from the 'main/' repository to the 'user/'")
+            print('  repository, following the upstream library deprecation in')
+            print("  March 2025. Chimera's 'user/' repo is not enabled by")
+            print('  default after a fresh install.')
+            print('')
+            print('  Additionally, simply enabling the user repository is not')
+            print('  enough on Chimera — package conflicts arise that require')
+            print("  a full system upgrade (and typically a reboot) to resolve")
+            print('  cleanly. This is different from how extra repos behave on')
+            print('  RHEL/Fedora, where enable + index refresh is generally')
+            print("  sufficient. The Toshy installer cannot safely perform a")
+            print("  full system upgrade and reboot on your behalf, so manual")
+            print('  intervention is required.')
+            print('')
+            print('  To resolve, run these steps in order, then re-run the')
+            print('  Toshy installer:')
+            print('')
+            print(f'    {cnfg.priv_elev_cmd} apk add chimera-repo-user')
+            print(f'    {cnfg.priv_elev_cmd} apk update')
+            print(f'    {cnfg.priv_elev_cmd} apk upgrade')
+            print(f'    {cnfg.priv_elev_cmd} reboot')
+            print('')
+            print_candidates_tried()
+            print('')
             safe_shutdown(1)
 
-        # First pass: probe with current repo configuration.
+        def bail_user_repo_enabled_but_missing():
+            """
+            User repo IS enabled but no candidate package is visible. Likely
+            stale indexes or pending upgrades; could also indicate further
+            packaging changes upstream of this handler.
+            """
+            error('Required AppIndicator package not available, '
+                    'despite user repo being enabled.')
+            print('')
+            print('  The Chimera user repository is already enabled, but no')
+            print('  AppIndicator package is visible. This may indicate stale')
+            print('  package indexes, pending upgrades blocking visibility, or')
+            print("  further changes to Chimera's AppIndicator packaging since")
+            print('  this installer was last updated.')
+            print('')
+            print('  Try the following steps, then re-run the Toshy installer:')
+            print('')
+            print(f'    {cnfg.priv_elev_cmd} apk update')
+            print(f'    {cnfg.priv_elev_cmd} apk upgrade')
+            print(f'    {cnfg.priv_elev_cmd} reboot')
+            print('')
+            print_candidates_tried()
+            print('')
+            print('  If none of these candidates are available after the steps')
+            print('  above, the upstream packaging may have changed further.')
+            print('  Please file a Toshy issue including the output of:')
+            print('    apk search libayatana-appindicator')
+            print('')
+            safe_shutdown(1)
+
+        # Probe with current repo configuration.
         print('  Probing apk for AppIndicator package availability...')
         found = find_first_available(appindicator_candidates)
         if found is not None:
@@ -1826,40 +1888,12 @@ class DistroQuirksHandler:
             substitute_in_pkg_list(found)
             return
 
-        # If user repo is already enabled, there's nothing more to try.
+        # Nothing visible — pick the appropriate bail message based on whether
+        # the user repo is already enabled or not.
         if os.path.exists(user_repo_marker):
-            print('  User repo is already enabled, but no candidate package '
-                    'was found.')
-            bail_out_with_message()
-
-        # User repo not enabled — enable it and re-probe.
-        print("  No candidate package visible. Enabling 'chimera-repo-user' "
-                "and refreshing indexes...")
-        call_attn_to_pwd_prompt_if_needed()
-        cmd_lst = [cnfg.priv_elev_cmd, 'apk', 'add', '--no-interactive',
-                    'chimera-repo-user']
-        try:
-            subprocess.run(cmd_lst, check=True)
-        except subprocess.CalledProcessError as proc_err:
-            error(f"Failed to install 'chimera-repo-user' metapackage:\n\t{proc_err}")
-            safe_shutdown(1)
-        cmd_lst = [cnfg.priv_elev_cmd, 'apk', 'update']
-        try:
-            subprocess.run(cmd_lst, check=True)
-        except subprocess.CalledProcessError as proc_err:
-            error(f"Failed to run 'apk update' after enabling user repo:\n\t{proc_err}")
-            safe_shutdown(1)
-
-        # Second pass: probe again with user repo now enabled.
-        print('  Re-probing apk for AppIndicator package availability...')
-        found = find_first_available(appindicator_candidates)
-        if found is not None:
-            print(f"  Found '{found}' after enabling user repo.")
-            substitute_in_pkg_list(found)
-            return
-
-        # Still nothing — bail out with the full diagnostic.
-        bail_out_with_message()
+            bail_user_repo_enabled_but_missing()
+        else:
+            bail_user_repo_not_enabled()
 
     @staticmethod
     def handle_quirks_Debian():
