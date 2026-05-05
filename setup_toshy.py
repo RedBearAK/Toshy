@@ -1727,22 +1727,21 @@ class DistroQuirksHandler:
 
         Why this is detect-only (not auto-fix):
 
-            The 'libayatana-appindicator-devel' package was demoted from Chimera's
-            'main/' repository to 'user/' following the upstream library
-            deprecation in March 2025. Enabling the 'user/' repo via the
-            'chimera-repo-user' metapackage gains visibility, but on Chimera that
-            alone is not enough — package conflicts arise that require a full
-            'apk upgrade' (and typically a reboot) to resolve cleanly. This is
-            unlike RHEL/Fedora, where enabling extra repos and refreshing indexes
-            is generally sufficient. The Toshy installer cannot safely perform a
-            full system upgrade and reboot on the user's behalf, so when the
-            package is missing, this handler bails out with manual instructions.
+        The 'libayatana-appindicator-devel' package was demoted from Chimera's
+        'main/' repository to 'user/' following the upstream library
+        deprecation in March 2025. Enabling the 'user/' repo via the
+        'chimera-repo-user' metapackage gains visibility, but on Chimera that
+        alone is not enough — package conflicts arise that require a full
+        'apk upgrade' (and typically a reboot) to resolve cleanly. The Toshy
+        installer should not be performing a full system upgrade and reboot
+        on the user's behalf, so when the package is missing, this handler
+        bails out with manual instructions.
 
-            A successor library named 'libayatana-appindicator-glib' is on the
-            horizon as a replacement. Chimera may eventually package it under
-            either '-glib-devel' (matching their existing '-devel' convention)
-            or just '-glib' (matching upstream verbatim). Both names are probed
-            here as fallbacks ahead of any name change.
+        A successor library named 'libayatana-appindicator-glib' is on the
+        horizon as a replacement. Chimera may eventually package it under
+        either '-glib-devel' (matching their existing '-devel' convention)
+        or just '-glib' (matching upstream verbatim). Both names are probed
+        here as fallbacks ahead of any name change.
         """
         print('Doing prep/checks for Chimera-based distros...')
 
@@ -1812,6 +1811,27 @@ class DistroQuirksHandler:
             for pkg in appindicator_candidates:
                 print(f'    - {pkg}')
 
+        def prompt_for_secret_code(secret_code):
+            """
+            Prompt the user to enter the secret code shown earlier in the
+            message. Used as a "did you actually read this" gate. Returns
+            after printing acknowledgement; does NOT shut down — the caller
+            is responsible for that, since both branches still bail.
+            """
+            print()
+            response = input(
+                "Enter the secret code shown above to confirm you've "
+                "read these instructions: "
+            )
+            if response == secret_code:
+                print()
+                info('Code matches. Follow the recovery steps above, '
+                        'then re-run the Toshy installer.')
+            else:
+                print()
+                error('Code does not match! Re-read the instructions above '
+                        'and try the installer again.')
+
         def bail_user_repo_not_enabled():
             """
             User repo is not enabled — print full manual recovery sequence and
@@ -1819,6 +1839,8 @@ class DistroQuirksHandler:
             repo on Chimera typically surfaces conflicts that need a full
             upgrade to resolve cleanly.
             """
+            secret_code = generate_secret_code()
+
             error('Required AppIndicator package not available in current repos.')
             print('')
             print('  This is a known issue specific to Chimera Linux:')
@@ -1831,12 +1853,13 @@ class DistroQuirksHandler:
             print('')
             print('  Additionally, simply enabling the user repository is not')
             print('  enough on Chimera — package conflicts arise that require')
-            print("  a full system upgrade (and typically a reboot) to resolve")
-            print('  cleanly. This is different from how extra repos behave on')
-            print('  RHEL/Fedora, where enable + index refresh is generally')
-            print("  sufficient. The Toshy installer cannot safely perform a")
+            print("  a full 'apk upgrade' (and probably a reboot) to resolve")
+            print('  cleanly. The Toshy installer should not be performing a')
             print("  full system upgrade and reboot on your behalf, so manual")
             print('  intervention is required.')
+            print('')
+            print(f"  >> Secret code for this run: '{secret_code}' "
+                    "(you'll be prompted for it below) <<")
             print('')
             print('  To resolve, run these steps in order, then re-run the')
             print('  Toshy installer:')
@@ -1847,7 +1870,7 @@ class DistroQuirksHandler:
             print(f'    {cnfg.priv_elev_cmd} reboot')
             print('')
             print_candidates_tried()
-            print('')
+            prompt_for_secret_code(secret_code)
             safe_shutdown(1)
 
         def bail_user_repo_enabled_but_missing():
@@ -1856,14 +1879,23 @@ class DistroQuirksHandler:
             stale indexes or pending upgrades; could also indicate further
             packaging changes upstream of this handler.
             """
+            secret_code = generate_secret_code()
+
             error('Required AppIndicator package not available, '
                     'despite user repo being enabled.')
+            print('')
+            print('  This issue stems from Chimera-specific packaging policies')
+            print('  and recent changes around the AppIndicator library, not')
+            print('  from a problem with Toshy itself.')
             print('')
             print('  The Chimera user repository is already enabled, but no')
             print('  AppIndicator package is visible. This may indicate stale')
             print('  package indexes, pending upgrades blocking visibility, or')
             print("  further changes to Chimera's AppIndicator packaging since")
             print('  this installer was last updated.')
+            print('')
+            print(f"  >> Secret code for this run: '{secret_code}' "
+                    "(you'll be prompted for it below) <<")
             print('')
             print('  Try the following steps, then re-run the Toshy installer:')
             print('')
@@ -1877,7 +1909,7 @@ class DistroQuirksHandler:
             print('  above, the upstream packaging may have changed further.')
             print('  Please file a Toshy issue including the output of:')
             print('    apk search libayatana-appindicator')
-            print('')
+            prompt_for_secret_code(secret_code)
             safe_shutdown(1)
 
         # Probe with current repo configuration.
@@ -1888,6 +1920,10 @@ class DistroQuirksHandler:
             substitute_in_pkg_list(found)
             return
 
+        # If we get here we're about to show a bail message, so flush the visual field:
+        print('\n' * 10, end='')
+        print('=' * 80)
+        print()
         # Nothing visible — pick the appropriate bail message based on whether
         # the user repo is already enabled or not.
         if os.path.exists(user_repo_marker):
