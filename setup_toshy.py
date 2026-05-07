@@ -5189,7 +5189,7 @@ def main():
                 cnfg.keymapper_cust_branch = args.dev_keymapper
 
         if args.fancy_pants:
-            cnfg.fancy_pants = 
+            cnfg.fancy_pants = True
         run_install_sequence(cnfg)
         safe_shutdown(0)    # redundant, but that's OK
 
