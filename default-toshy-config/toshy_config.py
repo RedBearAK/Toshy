@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260505'
+__version__ = '20260506'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -709,6 +709,7 @@ dialogs_Escape_lod = [
     # Reference: https://github.com/AtomsDevs/Atoms/issues/61
     {clas: "^atoms$", name: "^Preferences$|^Shortcuts$|^About$|^atoms$"},
     {clas: "^com.github.rafostar.Clapper$", name: "^Preferences$"},
+    {clas: "^dolphin$|^org.kde.dolphin$", name: "^Configure.*Dolphin"},
     {clas: "^epiphany$|^org.gnome.Epiphany$", name: "^Preferences$"},
     {clas: "^gnome-text-editor$|^org.gnome.TextEditor$", name: "^Preferences$"},
     {clas: "^io.github.celluloid_player.Celluloid$", name: "^Preferences$"},
