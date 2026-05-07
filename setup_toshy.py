@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260502'                        # CLI option "--version" will print this out.
+__version__ = '20260504'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1733,6 +1733,219 @@ class DistroQuirksHandler:
             safe_shutdown(1)
 
     @staticmethod
+    def handle_quirks_Chimera():
+        """
+        Detect Ayatana AppIndicator package availability on Chimera Linux and
+        bail with clear manual recovery instructions if the package is not
+        visible to apk.
+
+        Why this is detect-only (not auto-fix):
+
+        The 'libayatana-appindicator-devel' package was demoted from Chimera's
+        'main/' repository to 'user/' following the upstream library
+        deprecation in March 2025. Enabling the 'user/' repo via the
+        'chimera-repo-user' metapackage gains visibility, but on Chimera that
+        alone is not enough — package conflicts arise that require a full
+        'apk upgrade' (and typically a reboot) to resolve cleanly. The Toshy
+        installer should not be performing a full system upgrade and reboot
+        on the user's behalf, so when the package is missing, this handler
+        bails out with manual instructions.
+
+        A successor library named 'libayatana-appindicator-glib' is on the
+        horizon as a replacement. Chimera may eventually package it under
+        either '-glib-devel' (matching their existing '-devel' convention)
+        or just '-glib' (matching upstream verbatim). Both names are probed
+        here as fallbacks ahead of any name change.
+        """
+        print('Doing prep/checks for Chimera-based distros...')
+
+        # Make sure we only handle these quirks in the correct distros
+        if cnfg.DISTRO_ID not in distro_groups_map['chimera-based']:
+            error('Chimera quirks handler called, but this is not Chimera-based?')
+            safe_shutdown(1)
+
+        # Candidate package names in preference order:
+        #   1. Original/current Chimera name
+        #   2. Speculative successor with '-devel' suffix (Chimera convention)
+        #   3. Speculative successor without suffix (matches upstream naming)
+        appindicator_candidates = [
+            'libayatana-appindicator-devel',
+            'libayatana-appindicator-glib-devel',
+            'libayatana-appindicator-glib',
+        ]
+
+        # The placeholder name in 'pkgs_for_distro' that gets swapped if the
+        # resolved package name differs from the original.
+        placeholder_pkg = 'libayatana-appindicator-devel'
+
+        # File installed by the 'chimera-repo-user' metapackage. Its presence
+        # indicates the user/ repo is already enabled.
+        user_repo_marker = '/usr/lib/apk/repositories.d/11-repo-user.list'
+
+        def apk_pkg_available(pkg_name):
+            """Return True if pkg_name is visible to apk in any enabled repo."""
+            cmd_lst = ['apk', 'search', '-e', pkg_name]
+            try:
+                result = subprocess.run(cmd_lst, stdout=PIPE, stderr=PIPE,
+                                        universal_newlines=True, timeout=10)
+            except (subprocess.TimeoutExpired, FileNotFoundError) as probe_err:
+                print(f"  apk search for '{pkg_name}' failed: {probe_err}")
+                return False
+            # 'apk search -e' prints '<pkg_name>-<version>' on a hit, exits 0
+            # in either case. Match the prefix to avoid accidental partial hits.
+            for line in result.stdout.splitlines():
+                if line.startswith(f'{pkg_name}-'):
+                    return True
+            return False
+
+        def find_first_available(candidates):
+            """Probe candidates in order, return first visible name or None."""
+            for pkg in candidates:
+                if apk_pkg_available(pkg):
+                    return pkg
+            return None
+
+        def substitute_in_pkg_list(found_pkg):
+            """Swap the placeholder name for the resolved name, if different."""
+            if found_pkg == placeholder_pkg:
+                return
+            print(f"  Substituting '{found_pkg}' for '{placeholder_pkg}' in "
+                    f"package list.")
+            print('  NOTE: This is a speculative substitution — the successor '
+                    'library may have API differences that affect runtime. If '
+                    'the GUI tray icon misbehaves, this is a likely culprit.')
+            cnfg.pkgs_for_distro = [
+                found_pkg if pkg == placeholder_pkg else pkg
+                for pkg in cnfg.pkgs_for_distro
+            ]
+
+        def print_candidates_tried():
+            """Print the candidate package list that was probed."""
+            print('  Candidate package names probed (in order):')
+            for pkg in appindicator_candidates:
+                print(f'    - {pkg}')
+
+        def prompt_for_secret_code(secret_code):
+            """
+            Prompt the user to enter the secret code shown earlier in the
+            message. Used as a "did you actually read this" gate. Returns
+            after printing acknowledgement; does NOT shut down — the caller
+            is responsible for that, since both branches still bail.
+            """
+            print()
+            response = input(
+                "Enter the secret code shown above to confirm you've "
+                "read these instructions: "
+            )
+            if response == secret_code:
+                print()
+                info('Code matches. Follow the recovery steps above, '
+                        'then re-run the Toshy installer.')
+            else:
+                print()
+                error('Code does not match! Re-read the instructions above '
+                        'and try the installer again.')
+
+        def bail_user_repo_not_enabled():
+            """
+            User repo is not enabled — print full manual recovery sequence and
+            bail. Includes 'apk upgrade' and reboot because enabling the user
+            repo on Chimera typically surfaces conflicts that need a full
+            upgrade to resolve cleanly.
+            """
+            secret_code = generate_secret_code()
+
+            error('Required AppIndicator package not available in current repos.')
+            print('')
+            print('  This is a known issue specific to Chimera Linux:')
+            print('')
+            print("  Chimera's packaging policy split moved the AppIndicator")
+            print("  library from the 'main/' repository to the 'user/'")
+            print('  repository, following the upstream library deprecation in')
+            print("  March 2025. Chimera's 'user/' repo is not enabled by")
+            print('  default after a fresh install.')
+            print('')
+            print('  Additionally, simply enabling the user repository is not')
+            print('  enough on Chimera — package conflicts arise that require')
+            print("  a full 'apk upgrade' (and probably a reboot) to resolve")
+            print('  cleanly. The Toshy installer should not be performing a')
+            print("  full system upgrade and reboot on your behalf, so manual")
+            print('  intervention is required.')
+            print('')
+            print(f"  >> Secret code for this run: '{secret_code}' "
+                    "(you'll be prompted for it below) <<")
+            print('')
+            print('  To resolve, run these steps in order, then re-run the')
+            print('  Toshy installer:')
+            print('')
+            print(f'    {cnfg.priv_elev_cmd} apk add chimera-repo-user')
+            print(f'    {cnfg.priv_elev_cmd} apk update')
+            print(f'    {cnfg.priv_elev_cmd} apk upgrade')
+            print(f'    {cnfg.priv_elev_cmd} reboot')
+            print('')
+            print_candidates_tried()
+            prompt_for_secret_code(secret_code)
+            safe_shutdown(1)
+
+        def bail_user_repo_enabled_but_missing():
+            """
+            User repo IS enabled but no candidate package is visible. Likely
+            stale indexes or pending upgrades; could also indicate further
+            packaging changes upstream of this handler.
+            """
+            secret_code = generate_secret_code()
+
+            error('Required AppIndicator package not available, '
+                    'despite user repo being enabled.')
+            print('')
+            print('  This issue stems from Chimera-specific packaging policies')
+            print('  and recent changes around the AppIndicator library, not')
+            print('  from a problem with Toshy itself.')
+            print('')
+            print('  The Chimera user repository is already enabled, but no')
+            print('  AppIndicator package is visible. This may indicate stale')
+            print('  package indexes, pending upgrades blocking visibility, or')
+            print("  further changes to Chimera's AppIndicator packaging since")
+            print('  this installer was last updated.')
+            print('')
+            print(f"  >> Secret code for this run: '{secret_code}' "
+                    "(you'll be prompted for it below) <<")
+            print('')
+            print('  Try the following steps, then re-run the Toshy installer:')
+            print('')
+            print(f'    {cnfg.priv_elev_cmd} apk update')
+            print(f'    {cnfg.priv_elev_cmd} apk upgrade')
+            print(f'    {cnfg.priv_elev_cmd} reboot')
+            print('')
+            print_candidates_tried()
+            print('')
+            print('  If none of these candidates are available after the steps')
+            print('  above, the upstream packaging may have changed further.')
+            print('  Please file a Toshy issue including the output of:')
+            print('    apk search libayatana-appindicator')
+            prompt_for_secret_code(secret_code)
+            safe_shutdown(1)
+
+        # Probe with current repo configuration.
+        print('  Probing apk for AppIndicator package availability...')
+        found = find_first_available(appindicator_candidates)
+        if found is not None:
+            print(f"  Found '{found}' in currently enabled repos.")
+            substitute_in_pkg_list(found)
+            return
+
+        # If we get here we're about to show a bail message, so flush the visual field:
+        print('\n' * 10, end='')
+        print('=' * 80)
+        print()
+        # Nothing visible — pick the appropriate bail message based on whether
+        # the user repo is already enabled or not.
+        if os.path.exists(user_repo_marker):
+            bail_user_repo_enabled_but_missing()
+        else:
+            bail_user_repo_not_enabled()
+
+    @staticmethod
     def handle_quirks_Debian():
         print('Doing prep/checks for Debian-based distros...')
 
@@ -2390,6 +2603,11 @@ class PackageInstallDispatcher:
         """utility function that gets dispatched for distros that use APK package manager"""
         native_pkg_installer.check_for_pkg_mgr_cmd('apk')
         call_attn_to_pwd_prompt_if_needed()
+
+        # Quirks handler resolves AppIndicator package name and enables user
+        # repo if needed, before main install logic runs.
+        if cnfg.DISTRO_ID in distro_groups_map['chimera-based']:
+            DistroQuirksHandler.handle_quirks_Chimera()
 
         def get_installed_packages_apk():
             """Get set of installed package names from apk"""
@@ -4971,8 +5189,7 @@ def main():
                 cnfg.keymapper_cust_branch = args.dev_keymapper
 
         if args.fancy_pants:
-            cnfg.fancy_pants = True
-
+            cnfg.fancy_pants = 
         run_install_sequence(cnfg)
         safe_shutdown(0)    # redundant, but that's OK
 

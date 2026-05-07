@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20260101'
+__version__ = '20260503'
 
 # Indicator tray icon menu app for Toshy, using pygobject/gi
 TOSHY_PART      = 'tray'   # CUSTOMIZE TO SPECIFIC TOSHY COMPONENT! (gui, tray, config)
@@ -17,6 +17,15 @@ import threading
 import subprocess
 
 from subprocess import DEVNULL, PIPE
+
+from toshy_common.overlay_context import (
+    OverlayFlag,
+    OVL_METADATA,
+    OVL_PRESET_FULL,
+    OVL_PRESET_MINIMAL,
+    OVL_PRESET_NONE,
+    get_flag_parent,
+)
 
 
 # Check for accessibility support before importing GTK
@@ -520,6 +529,90 @@ if not runtime.barebones_config:
     # End of Preferences submenu
     ###############################################################
 
+
+    ###############################################################
+    # Overlays submenu
+    #
+    # Built dynamically from OVL_METADATA so that adding a new overlay
+    # flag requires only updating overlay_context.py — no changes here.
+    #
+    # All flags appear in the menu, including user flags. Users who add
+    # custom overlay-tagged keymaps to their config can enable the matching
+    # user flag from this menu without restarting the tray.
+
+    overlay_items = {}    # {OverlayFlag: Gtk.CheckMenuItem} for state sync
+
+    def save_overlay_setting(widget, flag):
+        """Toggle a single overlay flag bit and save to settings."""
+        if widget.get_active():
+            cnfg.overlay_mask = cnfg.overlay_mask | flag
+        else:
+            cnfg.overlay_mask = cnfg.overlay_mask & ~flag
+        cnfg.save_settings()
+        GLib.idle_add(load_overlay_submenu_settings)
+
+    def apply_overlay_preset(widget, preset_value):
+        """Replace the entire overlay mask with a preset value."""
+        cnfg.overlay_mask = preset_value
+        cnfg.save_settings()
+        GLib.idle_add(load_overlay_submenu_settings)
+
+    def load_overlay_submenu_settings():
+        """Reload overlay checkbox states from settings.
+
+        Also updates sensitivity for child flags — a child overlay is
+        greyed out when its required parent is not enabled, signaling
+        to the user that the child can't be activated independently.
+        """
+        cnfg.load_settings()
+        for flag, item in overlay_items.items():
+            set_item_active_thread_safe(item, bool(cnfg.overlay_mask & flag))
+            parent = get_flag_parent(flag)
+            if parent is not None:
+                item.set_sensitive(bool(cnfg.overlay_mask & parent))
+
+    overlays_submenu = Gtk.Menu()
+    overlays_submenu_item = Gtk.MenuItem(label="Overlays")
+    overlays_submenu_item.set_submenu(overlays_submenu)
+    menu.append(overlays_submenu_item)
+
+    # ─── Preset items at top of submenu ───
+    # One-click switches that replace the entire mask. Not radio items —
+    # presets just set the mask; users can then toggle individual flags
+    # without "leaving" any preset.
+
+    preset_full_item = Gtk.MenuItem(label="Preset: Full (all built-ins on)")
+    preset_full_item.connect('activate', apply_overlay_preset, OVL_PRESET_FULL)
+    overlays_submenu.append(preset_full_item)
+
+    preset_minimal_item = Gtk.MenuItem(label="Preset: Minimal (terminal only)")
+    preset_minimal_item.connect('activate', apply_overlay_preset, OVL_PRESET_MINIMAL)
+    overlays_submenu.append(preset_minimal_item)
+
+    preset_none_item = Gtk.MenuItem(label="Preset: None (everything off)")
+    preset_none_item.connect('activate', apply_overlay_preset, OVL_PRESET_NONE)
+    overlays_submenu.append(preset_none_item)
+
+    separator_below_presets_item = Gtk.SeparatorMenuItem()
+    overlays_submenu.append(separator_below_presets_item)  #-------------------------#
+
+    # ─── Individual flag toggles ───
+    # Built from metadata in declaration order. All flags shown — users
+    # who don't use the user slots can simply ignore them.
+
+    for _flag, _display_name, _description in OVL_METADATA:
+        _item = Gtk.CheckMenuItem(label=_display_name)
+        _item.connect('toggled', save_overlay_setting, _flag)
+        overlays_submenu.append(_item)
+        overlay_items[_flag] = _item
+
+    # separator_below_overlays_submenu_item = Gtk.SeparatorMenuItem()
+    # menu.append(separator_below_overlays_submenu_item)  #-------------------------#
+
+    # End of Overlays submenu
+    ###############################################################
+
+
     def load_optspec_layout_submenu_settings():
         cnfg.load_settings()
         layout = cnfg.optspec_layout
@@ -720,6 +813,7 @@ def main():
             GLib.idle_add(load_optspec_layout_submenu_settings)
             GLib.idle_add(load_kbtype_submenu_settings)
             GLib.idle_add(load_autoload_tray_icon_setting)
+            GLib.idle_add(load_overlay_submenu_settings)
 
     def on_service_status_changed(config_status, session_monitor_status):
         """Callback for when service status changes - update tray icon and labels."""
@@ -772,6 +866,8 @@ def main():
         load_kbtype_submenu_settings()
         # load the setting for the autostart tray icon item
         load_autoload_tray_icon_setting()
+        # load the setting for the overlay bitmask submenu
+        load_overlay_submenu_settings()
 
     # GUI loop event
     loop = GLib.MainLoop()

@@ -88,7 +88,13 @@ for file in "${desktop_files[@]}"; do
 
     # Replace $HOME placeholder with actual user home directory path
     err_sed_home_path="Problem updating ${file} with home directory path."
-    sed -i "s|\$HOME|${HOME}|g" "${LOCAL_SHARE_APPS}/${file}" || exit_w_error "$err_sed_home_path"
+
+    # This usage of "-i" on Chimera (BSD sed) caused an error
+    # sed -i "s|\$HOME|${HOME}|g" "${LOCAL_SHARE_APPS}/${file}" || exit_w_error "$err_sed_home_path"
+
+    sed -i.toshybak "s|\$HOME|${HOME}|g" "${LOCAL_SHARE_APPS}/${file}" \
+        || exit_w_error "$err_sed_home_path"
+    rm -f "${LOCAL_SHARE_APPS}/${file}.toshybak"
 
 done
 

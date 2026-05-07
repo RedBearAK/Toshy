@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260429'
+__version__ = '20260506'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -197,6 +197,7 @@ sys.path.insert(0, current_folder_path)
 from toshy_common.env_context import EnvironmentInfo
 from toshy_common.machine_context import get_machine_id_hash
 from toshy_common.notification_manager import NotificationManager
+from toshy_common.overlay_context import OverlayFlag as OFlag
 from toshy_common.runtime_utils import sanitize_text
 from toshy_common.settings_class import Settings
 from toshy_common.terminal_utils import print_pango_text
@@ -708,6 +709,7 @@ dialogs_Escape_lod = [
     # Reference: https://github.com/AtomsDevs/Atoms/issues/61
     {clas: "^atoms$", name: "^Preferences$|^Shortcuts$|^About$|^atoms$"},
     {clas: "^com.github.rafostar.Clapper$", name: "^Preferences$"},
+    {clas: "^dolphin$|^org.kde.dolphin$", name: "^Configure.*Dolphin"},
     {clas: "^epiphany$|^org.gnome.Epiphany$", name: "^Preferences$"},
     {clas: "^gnome-text-editor$|^org.gnome.TextEditor$", name: "^Preferences$"},
     {clas: "^io.github.celluloid_player.Celluloid$", name: "^Preferences$"},
@@ -955,14 +957,25 @@ def getKBtype(ctx: KeyContext):
     error(f"KBTYPE: '{KBTYPE}' | Dev fell through all checks: '{kbd_dev_name}'")
 
 
-# Global variables to store per-event context, set by `_context_pre_check`.
-# Replace dozens of hoisted matchProps and isKBtype calls with bool reads.
-ctx_app_is_remote               = False
-ctx_app_is_terminal             = False
-ctx_kbd_is_apple                = False
-ctx_kbd_is_chromebook           = False
-ctx_kbd_is_ibm                  = False
-ctx_kbd_is_windows              = False
+# ─── Add to existing module-level ctx_* globals ────────────────────
+# Place after the ctx_kbd_is_* block.
+
+# Built-in overlay flag states
+ctx_ovl_macos_globals           = False
+ctx_ovl_terminal_ergo           = False
+ctx_ovl_finder_mods             = False
+ctx_ovl_enter_to_rename         = False
+ctx_ovl_browser_shortcuts       = False
+ctx_ovl_vscode_shortcuts        = False
+ctx_ovl_dialog_ergo             = False
+
+# User overlay flag states
+ctx_ovl_user_flag_a             = False
+ctx_ovl_user_flag_b             = False
+ctx_ovl_user_flag_c             = False
+ctx_ovl_user_flag_d             = False
+ctx_ovl_user_flag_e             = False
+ctx_ovl_user_flag_f             = False
 
 
 def _context_pre_check(ctx: KeyContext):
@@ -974,6 +987,7 @@ def _context_pre_check(ctx: KeyContext):
         - App is a remote/VM? (Disables most remapping)
         - App is a terminal?  (Enable terminal-specific remaps)
         - Keyboard type (via getKBtype())
+        - Active overlay flags (avoids ~100 property-getter calls per event)
         - State of "Is Enter F2" latch
         - Future context checks...
     """
@@ -985,6 +999,14 @@ def _context_pre_check(ctx: KeyContext):
     global ctx_kbd_is_chromebook
     global ctx_kbd_is_ibm
     global ctx_kbd_is_windows
+
+    global ctx_ovl_macos_globals, ctx_ovl_dialog_ergo
+    global ctx_ovl_terminal_ergo
+    global ctx_ovl_finder_mods, ctx_ovl_enter_to_rename
+    global ctx_ovl_browser_shortcuts
+    global ctx_ovl_vscode_shortcuts
+    global ctx_ovl_user_flag_a, ctx_ovl_user_flag_b, ctx_ovl_user_flag_c
+    global ctx_ovl_user_flag_d, ctx_ovl_user_flag_e, ctx_ovl_user_flag_f
 
     # Update the boolean global vars to minimize repeated (hoisted) matchProps calls
     ctx_app_is_remote           = hmp_is_remote(ctx)
@@ -998,6 +1020,26 @@ def _context_pre_check(ctx: KeyContext):
     ctx_kbd_is_chromebook       = (KBTYPE == 'Chromebook')
     ctx_kbd_is_ibm              = (KBTYPE == 'IBM')
     ctx_kbd_is_windows          = (KBTYPE == 'Windows')
+
+    # Cache overlay flag states once per event. Single property access
+    # (cnfg.overlay_mask) replaces ~100 getter calls across keymap when-
+    # clause evaluations downstream.
+    mask = cnfg.overlay_mask
+
+    ctx_ovl_macos_globals       = mask & OFlag.MACOS_GLOBALS
+    ctx_ovl_terminal_ergo       = mask & OFlag.TERMINAL_ERGO
+    ctx_ovl_finder_mods         = mask & OFlag.FINDER_MODS
+    ctx_ovl_enter_to_rename     = mask & OFlag.ENTER_TO_RENAME
+    ctx_ovl_browser_shortcuts   = mask & OFlag.BROWSER_SHORTCUTS
+    ctx_ovl_vscode_shortcuts    = mask & OFlag.VSCODE_SHORTCUTS
+    ctx_ovl_dialog_ergo         = mask & OFlag.DIALOG_ERGO
+
+    ctx_ovl_user_flag_a         = mask & OFlag.USER_FLAG_A
+    ctx_ovl_user_flag_b         = mask & OFlag.USER_FLAG_B
+    ctx_ovl_user_flag_c         = mask & OFlag.USER_FLAG_C
+    ctx_ovl_user_flag_d         = mask & OFlag.USER_FLAG_D
+    ctx_ovl_user_flag_e         = mask & OFlag.USER_FLAG_E
+    ctx_ovl_user_flag_f         = mask & OFlag.USER_FLAG_F
 
     # Maintain the Enter-to-rename latch (resets when focus leaves a file manager)
     _get_iEF2_context(ctx)
@@ -3736,6 +3778,7 @@ keymap("Thunderbird email client", {
     C("RC-Alt-Right"):         [bind,C("C-Page_Down")],         # Go to next tab (macOS Thunderbird tab nav shortcut)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_thunderbird(ctx) )
 
 hmp_is_angry_ipscan             = matchProps(clas="^Angry.*IP.*Scanner$")
@@ -3746,6 +3789,7 @@ keymap("Angry IP Scanner", {
     C("Shift-RC-i"):            C("C-i"),                       # Invert selection
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_angry_ipscan(ctx) )
 
 hmp_is_transmission             = matchProps(clas=transmissionStr)
@@ -3754,6 +3798,7 @@ keymap("Transmission bittorrent client", {
     C("RC-comma"):             [C("Alt-e"),C("p")],             # Open preferences (settings) dialog
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_transmission(ctx) )
 
 _jdownloader_closures           = [matchProps(**dct) for dct in JDownloader_lod]
@@ -3771,6 +3816,7 @@ keymap("JDownloader", {
     C("RC-Comma"):              C("C-P"),                       # Open preferences (settings)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_jdownloader(ctx) )
 
 hmp_is_totem                    = matchProps(clas="^totem$")
@@ -3778,6 +3824,7 @@ keymap("Totem video player", {
     C("RC-dot"):                C("C-q"),                       # Stop (quit player, there is no "Stop" function)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_totem(ctx) )
 
 hmp_is_eog                      = matchProps(clas="^eog$")
@@ -3785,6 +3832,7 @@ keymap("GNOME image viewer", {
     C("RC-i"):                  C("Alt-Enter"),                 # Image properties
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_eog(ctx) )
 
 hmp_is_libreoffice_writer       = matchProps(clas="^libreoffice-writer$")
@@ -3792,6 +3840,7 @@ keymap("LibreOffice Writer", {
     C("RC-comma"):              C("Alt-F12"),                   # Tools > Options (preferences dialog)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_libreoffice_writer(ctx) )
 
 
@@ -3818,6 +3867,7 @@ keymap("Overrides for Caja - Finder Mods", {
     # C("RC-Super-o"):            C("Shift-C-W"),                 # Open in new window
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_caja(ctx) )
 
 # Keybindings overrides for COSMIC Files
@@ -3836,6 +3886,7 @@ keymap("Overrides for COSMIC Files - Finder Mods", {
     C("Alt-Enter"):             C("Space"),                     # Get info (properties) [Linux shortcut]
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_cosmic_files(ctx) )
 
 # Keybindings overrides for DDE (Deepin) File Manager
@@ -3851,6 +3902,7 @@ keymap("Overrides for DDE File Manager - Finder Mods", {
     C("Shift-RC-Right"):       [bind,C("C-Tab")],               # Go to next tab
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_dde_filemgr(ctx) )
 
 ##########################  DOLPHIN KEYMAPS - BEGIN  ##########################
@@ -3864,6 +3916,7 @@ keymap("Overrides for Dolphin - Finder Mods pre-KF6", {
     C("Shift-RC-n"):            iEF2(C("F10"), False),          # Create new folder (F10), toggle Enter to be Enter (pre-KF6!)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     DESKTOP_ENV == 'kde' and DE_MAJ_VER in ['5', '4', '3'] and
     hmp_is_dolphin(ctx)
 )
@@ -3883,6 +3936,7 @@ keymap("Overrides for Dolphin dialogs - Finder Mods", {
     C("Enter"):                 C("Enter"),                     # Override Enter to be Enter (never F2) for dialogs
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_dolphin_dialogs(ctx)
 )
 
@@ -3899,6 +3953,7 @@ keymap("Overrides for Dolphin - Finder Mods", {
     C("RC-comma"):              C("Shift-C-comma"),             # Open preferences dialog
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_dolphin(ctx) )
 
 #
@@ -3913,6 +3968,7 @@ keymap("Overrides for Pantheon - Finder Mods", {
     C("RC-comma"):              None,                           # Disable preferences shortcut since none available
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_elementary_files(ctx) )
 
 # Keybindings overrides for Krusader (alternative/old KDE file manager)
@@ -3930,6 +3986,7 @@ keymap("Overrides for Krusader - Finder Mods", {
     # C("RC-Backspace"):          C("Delete"),                    # Delete file/folder (no auto-confirm)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_krusader(ctx) )
 
 # Keybindings overrides for Nautilus
@@ -3939,6 +3996,7 @@ keymap("Overrides for Nautilus Create Archive dialog - Finder Mods", {
     C("Enter"):                 C("Enter"),                     # Use Enter as Enter in the Create Archive dialog
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_nautilus_archive(ctx) )
 hmp_is_nautilus                 = matchProps(clas="^org.gnome.nautilus$|^nautilus$")
 keymap("Overrides for Nautilus - Finder Mods", {
@@ -3954,6 +4012,7 @@ keymap("Overrides for Nautilus - Finder Mods", {
     C("RC-F"):                  C("C-F"),                       # Don't toggle Enter key, pass Cmd+F
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_nautilus(ctx) )
 
 # Keybindings overrides for Nemo
@@ -3963,6 +4022,7 @@ keymap("Overrides for Nemo - Finder Mods", {
     C("RC-Backspace"):          iEF2(C("Delete"), False),       # Set Enter to Enter for Cmd+Delete confirmation
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_nemo(ctx) )
 
 # Keybindings overrides for PCManFM and PCManFM-Qt
@@ -3972,6 +4032,7 @@ keymap("Overrides for PCManFM-Qt - Finder Mods - LXQt desktop", {
     C("Enter"):                 C("Enter"),                     # Use Enter as Enter on the LXQt desktop
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_pcmanfm_qt_desktop(ctx) )
 hmp_is_pcmanfm_qt               = matchProps(clas="^pcmanfm-qt$")
 keymap("Overrides for PCManFM-Qt - Finder Mods", {
@@ -3983,6 +4044,7 @@ keymap("Overrides for PCManFM-Qt - Finder Mods", {
     C("RC-KEY_4"):  [C("Alt-V"), sleep(0.1), C("V"), sleep(0.1), C("T")],   # View as Thumbnails
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_pcmanfm_qt(ctx) )
 
 hmp_is_pcmanfm_any              = matchProps(clas="^pcmanfm$|^pcmanfm-qt$")
@@ -3992,6 +4054,7 @@ keymap("Overrides for PCManFM - Finder Mods", {
     C("RC-F"):                  C("C-F"),                       # Don't toggle Enter key state, pass Cmd+F (Ctrl+F)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_pcmanfm_any(ctx) )
 
 # Keybindings overrides for Peony-Qt
@@ -4006,6 +4069,7 @@ keymap("Overrides for Peony-Qt - Finder Mods", {
     C("Shift-RC-Right"):       [bind,C("C-Tab")],               # Go to next tab
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_peony_qt(ctx) )
 
 # Keybindings overrides for SpaceFM
@@ -4017,6 +4081,7 @@ keymap("Overrides for SpaceFM Find Files dialog - Finder Mods", {
     C("RC-W"):                  C("Alt-F4"),                    # Close Find Files dialog with Cmd+W
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_spacefm_findfiles(ctx) )
 hmp_is_spacefm                  = matchProps(clas="^spacefm$")
 keymap("Overrides for SpaceFM - Finder Mods", {
@@ -4035,6 +4100,7 @@ keymap("Overrides for SpaceFM - Finder Mods", {
     # SpaceFM is doing some nasty binding that blocks all shortcuts, including Alt+Tab, while any menu is open.
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_spacefm(ctx) )
 
 # Keybindings overrides for Thunar
@@ -4046,6 +4112,7 @@ keymap("Overrides for Thunar - Finder Mods", {
     C("RC-F"):                  C("C-F"),                       # Don't toggle Enter key, pass Cmd+F (Ctrl+F)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_thunar(ctx) )
 
 # Keybindings overrides for GNOME XDG "Save As" and "Open File" dialogs
@@ -4066,6 +4133,7 @@ keymap("XDG file dialogs", {
     C("RC-Down"):               C("Enter"),                     # Go Down dir (open folder/file) [universal]
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_dialog_ergo and
     hmp_is_xdg_file_dialog(ctx)
 )
 
@@ -4149,6 +4217,7 @@ keymap("General File Managers - Finder Mods", {
     C("Shift-RC-Enter"):        C("Enter"),                             # alternative "Enter" key for unusual cases
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_finder_mods and
     hmp_is_filemanager(ctx) )
 
 
@@ -4196,6 +4265,7 @@ keymap("Firefox Browsers Overrides", {
 
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_browser_shortcuts and
     hmp_is_firefox_browser(ctx) )
 
 # Zotero is a Firefox-based research app
@@ -4205,6 +4275,7 @@ keymap("Zotero", {
     C("Shift-Alt-RC-i"):        C("Shift-Alt-C-i"),             # Import from clipboard
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_zotero(ctx) )
 
 
@@ -4214,6 +4285,7 @@ keymap("Vivaldi browser - Settings dialog", {
     C("Esc"):                   C("Alt-F4"),                    # Close Settings dialog with Escape
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_browser_shortcuts and
     hmp_is_vivaldi_settings(ctx) )
 hmp_is_vivaldi_browser          = matchProps(clas="^Vivaldi.*$")
 keymap("Overrides for Vivaldi browser", {
@@ -4237,6 +4309,7 @@ keymap("Overrides for Vivaldi browser", {
 
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_browser_shortcuts and
     hmp_is_vivaldi_browser(ctx) )
 
 # Falkon is a Chromium based web browser
@@ -4245,6 +4318,7 @@ keymap("Overrides for Falkon browser", {
     C("RC-comma"):              C("Shift-C-comma"),             # Open preferences (Settings)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_browser_shortcuts and
     hmp_is_falkon_browser(ctx) )
 
 # Brave is a Chromium-based web browser
@@ -4254,6 +4328,7 @@ keymap("Brave Browser Overrides", {
     C("RC-q"):                  C("RC-q"),                      # Quit Brave browser with Cmd+Q
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_browser_shortcuts and
     hmp_is_brave_browser(ctx) )
 
 keymap("Chrome Browsers Overrides", {
@@ -4272,6 +4347,7 @@ keymap("Chrome Browsers Overrides", {
     C("Shift-RC-j"):            C("C-J"),                       # Show Downloads view
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_browser_shortcuts and
     hmp_is_chrome_browser(ctx) )
 
 # Keybindings for General Web Browsers
@@ -4299,6 +4375,7 @@ keymap("General Web Browsers", {
 
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_browser_shortcuts and
     hmp_is_browser(ctx) )
 
 
@@ -4408,13 +4485,14 @@ keymap("Jetbrains", {
     C("Super-c"):               C("C-c"),                       # Sigints - interrupt
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_jetbrains(ctx) )
 
 keymap("Wordwise - not vscode", {
     # Wordwise remaining - for Everything but VS Code
     C("Alt-Left"):              C("C-Left"),                    # Left of Word
-    C("Alt-Shift-Left"):        C("C-Shift-Left"),              # Select Left of Word
     C("Alt-Right"):             C("C-Right"),                   # Right of Word
+    C("Alt-Shift-Left"):        C("C-Shift-Left"),              # Select Left of Word
     C("Alt-Shift-Right"):       C("C-Shift-Right"),             # Select Right of Word
     C("Alt-Shift-g"):           C("C-Shift-g"),                 # View source control
     # ** VS Code fix **
@@ -4441,6 +4519,7 @@ keymap("VSCodes overrides for Chromebook/IBM - Sublime", {
     C("C-Alt-g"):               C("C-f2"),                      # Chromebook/IBM - Sublime - find_all_under
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_vscode_shortcuts and
     cnfg.ST3_in_VSCode and
     (   ctx_kbd_is_chromebook or
         ctx_kbd_is_ibm ) and
@@ -4450,6 +4529,7 @@ keymap("VSCodes overrides for not Chromebook/IBM - Sublime", {
     C("Super-C-g"):             C("C-f2"),                      # Default - Sublime - find_all_under
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_vscode_shortcuts and
     cnfg.ST3_in_VSCode and
     not ( ctx_kbd_is_chromebook or
     ctx_kbd_is_ibm ) and
@@ -4460,6 +4540,7 @@ keymap("VSCodes overrides for Chromebook/IBM", {
     C("Alt-x"):                 C("C-x"),                       #  Chromebook/IBM - Terminal - Exit nano
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_vscode_shortcuts and
     (   ctx_kbd_is_chromebook or
         ctx_kbd_is_ibm ) and
     hmp_is_vscode(ctx)
@@ -4469,6 +4550,7 @@ keymap("VSCodes overrides for not Chromebook/IBM", {
     C("Super-x"):               C("C-x"),                       # Default - Terminal - Exit nano
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_vscode_shortcuts and
     not (   ctx_kbd_is_chromebook or
             ctx_kbd_is_ibm ) and
     hmp_is_vscode(ctx)
@@ -4548,6 +4630,7 @@ keymap("VSCodes", {
     C("C-Shift-g"):             C("Shift-f3"),                  # find_prev
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_vscode_shortcuts and
     hmp_is_vscode(ctx)
 )
 
@@ -4560,6 +4643,7 @@ keymap("Sublime Text overrides for Chromebook/IBM", {
     C("Alt-C-g"):               C("Alt-Refresh"),               # Chromebook/IBM - find_all_under
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     (   ctx_kbd_is_chromebook or
         ctx_kbd_is_ibm ) and
     hmp_is_sublime_text(ctx)
@@ -4571,6 +4655,7 @@ keymap("Sublime Text overrides for not Chromebook/IBM", {
     C("Super-C-g"):             C("Alt-f3"),                    # Default - find_all_under
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     not (   ctx_kbd_is_chromebook or
             ctx_kbd_is_ibm ) and
     hmp_is_sublime_text(ctx)
@@ -4644,6 +4729,7 @@ keymap("Sublime Text", {
     # C(""):                    C(""),                          #
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_sublime_text(ctx) )
 
 hmp_is_kate                     = matchProps(clas="^org.kde.kate$")
@@ -4653,6 +4739,7 @@ keymap("Kate Advanced Text Editor", {
     C("Super-g"):               C("C-g"),                       # Go to line
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_kate(ctx) )
 
 hmp_is_xed                      = matchProps(clas="^xed$")
@@ -4660,6 +4747,7 @@ keymap("Linux Mint xed text editor", {
     C("RC-T"):                  C("C-N"),                       # Open new tab (new file)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_xed(ctx) )
 
 hmp_is_kwrite_close_dlg         = matchProps(clas="^kwrite$|^org.kde.Kwrite$", name="^Close Document.*KWrite$")
@@ -4668,6 +4756,7 @@ keymap("KWrite text editor - Close Document dialog", {
     C("RC-s"):                  C("Alt-s"),                     # Save file (from Close Document dialog)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_kwrite_close_dlg(ctx) )
 hmp_is_kwrite                   = matchProps(clas="^kwrite$|^org.kde.Kwrite$")
 keymap("KWrite text editor", {
@@ -4680,6 +4769,7 @@ keymap("KWrite text editor", {
     C("RC-Backspace"):          C("C-k"),                       # Delete line (Cmd+Delete)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_kwrite(ctx) )
 
 hmp_is_gnome_text_editor        = matchProps(clas="^gnome-text-editor$|^org.gnome.TextEditor$")
@@ -4688,6 +4778,7 @@ keymap("GNOME Text Editor", {
     C("RC-Alt-f"):              C("C-h"),                       # Search and replace within the document
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     hmp_is_gnome_text_editor(ctx) )
 
 
@@ -4719,6 +4810,7 @@ keymap("Cmd+W dialog fix - send Escape", {
     C("RC-W"):                  iEF2(C("Esc"), True),
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_dialog_ergo and
     hmp_is_dialog_escape(ctx)
 )
 
@@ -4729,6 +4821,7 @@ if DISTRO_ID == 'manjaro'  and DESKTOP_ENV == 'gnome':
         C("RC-W"):                  iEF2(C("Super-Q"), True),
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_dialog_ergo and
         hmp_is_dialog_closewin(ctx)
     )
 
@@ -4736,6 +4829,7 @@ keymap("Cmd+W dialog fix - Alt+F4", {
     C("RC-W"):                  iEF2(C("Alt-F4"), True),
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_dialog_ergo and
     hmp_is_dialog_closewin(ctx)
 )
 
@@ -4781,6 +4875,7 @@ keymap("Tab Nav fix for apps that use Ctrl+Shift+Tab/Ctrl+Tab", {
     C("Shift-RC-Right"):       [bind,C("C-Tab")],               # Tab nav: Go to next tab (right)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_dialog_ergo and
     hmp_is_tab_UI_fix_CtrlShiftTab(ctx)
 )
 
@@ -4791,6 +4886,7 @@ keymap("Tab Nav fix for apps that use Ctrl+Alt+PgUp/PgDn", {
     C("Shift-RC-Right_Brace"): [bind,C("C-Alt-Page_Down")],     # Go to next tab (Right)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_dialog_ergo and
     hmp_is_tab_UI_fix_CtrlAltPgUp(ctx)
 )
 
@@ -4805,6 +4901,7 @@ keymap("Konsole tab switching", {
     C("Shift-RC-Right_Brace"): [bind,C("Shift-Right")],         # Go to next tab (Right)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_konsole(ctx) )
 
 hmp_is_term_elem_term_kitty     = matchProps(clas="^Io.elementary.terminal$|^kitty$")
@@ -4815,6 +4912,7 @@ keymap("Elementary Terminal tab switching", {
     C("LC-Tab") :              [bind,C("Shift-C-Right")],       # Go to next tab (Right)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_elem_term_kitty(ctx) )
 
 
@@ -4894,6 +4992,7 @@ keymap("SIGINT Preventer", {
     C("RC-C"):                  C("Ctrl-Insert"),
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_sigint_preventer(ctx)
 )
 
@@ -4903,6 +5002,7 @@ keymap("Alacritty terminal", {
     C("RC-K"):                  C("C-L"),                       # clear log
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_alacritty(ctx) )
 
 hmp_is_term_contour             = matchProps(clas="^contour$")
@@ -4910,6 +5010,7 @@ keymap("Contour terminal overrides", {
     C("RC-minus"):              C("Shift-C-minus"),             # Decrease font size (override general terminals remap)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_contour(ctx) )
 
 hmp_is_term_cosmic_term         = matchProps(clas="^com.system76.CosmicTerm$")
@@ -4918,6 +5019,7 @@ keymap("COSMIC Terminal overrides", {
     C("RC-equal"):              C("C-equal"),                   # Increase font size (override general terminals remap)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_cosmic_term(ctx) )
 
 hmp_is_term_deepin_term         = matchProps(clas="^deepin-terminal$")
@@ -4928,6 +5030,7 @@ keymap("Deepin Terminal overrides", {
     C("RC-equal"):              C("C-equal"),                   # Increase font size/zoom in
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_deepin_term(ctx) )
 
 hmp_is_term_ghostty             = matchProps(clas="^.*ghostty.*$")
@@ -4941,6 +5044,7 @@ keymap("Ghostty terminal overrides", {
     C("RC-K"):                  C("C-L"),                       # clear log
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_ghostty(ctx)
 )
 
@@ -4951,6 +5055,7 @@ keymap("Hyper terminal tab switching", {
     C("LC-Tab"):               [bind,C("C-Tab")],               # Tab nav: Go to next tab (right) [override general remap]
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_hyper_term(ctx) )
 
 hmp_is_term_kitty               = matchProps(clas="^kitty$")
@@ -4959,6 +5064,7 @@ keymap("Kitty terminal - not tab nav", {
     C("RC-K"):                  C("C-L"),                       # Clear log (macOS)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_kitty(ctx) )
 
 keymap("Konsole terminal - not tab nav", {
@@ -4967,6 +5073,7 @@ keymap("Konsole terminal - not tab nav", {
     C("RC-K"):                  C("Shift-C-K"),                 # Clear Scrollback and Reset
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_konsole(ctx) )
 
 hmp_is_term_terminology         = matchProps(clas="^terminology$")
@@ -4979,6 +5086,7 @@ keymap("Terminology terminal", {
     C("RC-Equal"):              C("C-Alt-Equal"),               # Increase font size
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_terminology(ctx) )
 
 hmp_is_term_wave                = matchProps(clas="^Wave$")
@@ -4990,6 +5098,7 @@ keymap("Wave terminal", {
     C("Shift-RC-w"):            C("Shift-Alt-w"),               # Close the current tab
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_wave(ctx) )
 
 hmp_is_term_xfce4_term          = matchProps(clas="^xfce4-terminal$")
@@ -4997,6 +5106,7 @@ keymap("Xfce4 terminal", {
     C("RC-comma"):      [C("Alt-e"), sleep(0.1), C("e")],       # Open Preferences dialog
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     hmp_is_term_xfce4_term(ctx) )
 
 
@@ -5007,6 +5117,7 @@ if DISTRO_ID in ['fedora', 'almalinux'] and DESKTOP_ENV == 'gnome':
         C("RC-H"):                  C("Super-h"),                   # Hide Window/Minimize app (gnome/fedora)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_terminal_ergo and
         ctx_app_is_terminal
     )
 
@@ -5016,6 +5127,7 @@ if DISTRO_ID == 'pop':
         C("LC-Left"):               [bind,C("Super-C-Down")],       # SL - Change workspace (pop)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_terminal_ergo and
         ctx_app_is_terminal
     )
 
@@ -5026,6 +5138,7 @@ if DISTRO_ID in ['ubuntu', 'fedora'] and DESKTOP_ENV == 'gnome':
         C("LC-Left"):               [bind,C("Super-Page_Down")],    # SL - Change workspace (ubuntu/fedora)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_terminal_ergo and
         ctx_app_is_terminal
     )
 
@@ -5038,6 +5151,7 @@ if DESKTOP_ENV == 'budgie':
         C("LC-Left"):               [bind,C("C-Alt-Left")],         # Default SL - Change workspace (budgie)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_terminal_ergo and
         ctx_app_is_terminal
     )
 
@@ -5048,6 +5162,7 @@ if DESKTOP_ENV in ['cosmic', 'pop']:
         C("LC-RC-F"):               C("Super-M"),                   # Maximize window toggle (overrides General terminals)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_terminal_ergo and
         ctx_app_is_terminal
     )
 
@@ -5058,6 +5173,7 @@ if DESKTOP_ENV == 'gnome':
         C("Shift-LC-Space"):       [bind,C("Super-Shift-Space")],   # keyboard input source (layout) switching (reverse) (gnome)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_terminal_ergo and
         ctx_app_is_terminal
     )
 
@@ -5079,6 +5195,7 @@ if DESKTOP_ENV == 'kde':
 
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_terminal_ergo and
         ctx_app_is_terminal
     )
 
@@ -5088,6 +5205,7 @@ if DESKTOP_ENV == 'pantheon':
         C("LC-Left"):               [bind,C("Super-Left")],         # SL - Change workspace (elementary)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_terminal_ergo and
         ctx_app_is_terminal
     )
 
@@ -5096,6 +5214,7 @@ if DESKTOP_ENV == 'sway':
         C("RC-Q"):                  C("Shift-C-Q"),                 # Override sway GenGUI Cmd+Q
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_terminal_ergo and
         ctx_app_is_terminal
     )
 
@@ -5107,6 +5226,7 @@ if DESKTOP_ENV == 'xfce':
         C("LC-Left"):              [bind,C("C-Alt-End")],           # SL - Change workspace xfce4
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_terminal_ergo and
         ctx_app_is_terminal
     )
 
@@ -5186,6 +5306,7 @@ keymap("General Terminals", {
 
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_terminal_ergo and
     ctx_app_is_terminal
 )
 
@@ -5208,6 +5329,7 @@ keymap("Cmd+Dot not in terminals", {
     C("RC-Dot"):                C("Esc"),                       # Mimic macOS Cmd+dot = Escape key (not in terminals)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     not ctx_app_is_terminal and not ctx_app_is_remote
 )
 
@@ -5222,6 +5344,7 @@ keymap("GenGUI overrides: Chromebook/IBM", {
     C("LAlt-Backspace"):        C("C-Backspace"),                   # Chromebook/IBM - Delete Left Word of Cursor
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     (   ctx_kbd_is_chromebook or
         ctx_kbd_is_ibm ) and
     not ctx_app_is_remote
@@ -5233,6 +5356,7 @@ keymap("GenGUI overrides: not Chromebook", {
     C("Alt-Backspace"):         C("C-Backspace"),                   # Default not-chromebook
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     not ctx_kbd_is_chromebook and
     not ctx_app_is_remote
 )
@@ -5245,6 +5369,7 @@ if DISTRO_ID in ['almalinux', 'rhel', 'rocky'] and DESKTOP_ENV == 'xfce':
         C("RC-Space"):             [iEF2NT(),C("Alt-F3")],       # Launch App Finder xfce4 (AlmaLinux/Rocky)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5253,6 +5378,7 @@ if DISTRO_ID == 'debian' and DESKTOP_ENV == 'xfce':
         C("RC-Space"):             [iEF2NT(),C("Alt-F1")],     # Launch Application Menu xfce4 (Debian)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5264,6 +5390,7 @@ if DISTRO_ID in ['fedora', 'almalinux'] and DESKTOP_ENV == 'gnome':
         C("Super-Left"):           [bind,C("Super-Page_Down")],     # SL - Change workspace (ubuntu/fedora)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5272,6 +5399,7 @@ if DISTRO_ID == 'manjaro' and DESKTOP_ENV == 'gnome':
         C("RC-Q"):              C("Super-Q"),                       # Close window
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5280,6 +5408,7 @@ if DISTRO_ID == 'manjaro' and DESKTOP_ENV == 'xfce':
         C("RC-Space"):             [iEF2NT(),C("Alt-F1")],          # Open Whisker Menu with Cmd+Space
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5288,6 +5417,7 @@ if DISTRO_ID == 'manjaro':
         C("Super-RC-f"):              C("Super-PAGE_UP"),             # SL- Maximize app manjaro
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5296,6 +5426,7 @@ if DISTRO_ID == 'mint' and DESKTOP_ENV == 'xfce':
         C("RC-Space"):             [iEF2NT(),C("Super-Space")],     # Launch Application Menu xfce4 (Linux Mint)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5306,6 +5437,7 @@ if DISTRO_ID == 'neon':
                                                                     # SL - Default SL - Change workspace (kde_neon)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5318,6 +5450,7 @@ if DISTRO_ID == 'pop':
         C("RC-Q"):                  C("Super-q"),                   # SL - Close Apps (pop)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5328,6 +5461,7 @@ if DISTRO_ID == 'ubuntu':
         C("Super-Left"):           [bind,C("Super-Page_Down")],     # SL - Change workspace (ubuntu)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5342,6 +5476,7 @@ if DESKTOP_ENV == 'budgie':
         C("RC-H"):                  C("Super-h"),                   # Minimize app (gnome/budgie/popos/fedora) not-deepin
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5350,6 +5485,7 @@ if DESKTOP_ENV == 'cinnamon':
         C("RC-Space"):             [iEF2NT(),C("C-Esc")],           # Right click, configure Mint menu shortcut to Ctrl+Esc
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5364,6 +5500,7 @@ if DESKTOP_ENV in ['cosmic', 'pop']:
         C("Super-RC-F"):            C("Super-M"),                   # Maximize window toggle (overrides General GUI)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5372,6 +5509,7 @@ if DESKTOP_ENV == 'dde':
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # Open Launcher menu (Deeping Desktop Environment)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5381,6 +5519,7 @@ if DESKTOP_ENV == 'deepin':
         C("Alt-RC-Space"):          C("Super-e"),                   # Open Finder - (deepin)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5391,6 +5530,7 @@ if DESKTOP_ENV == 'enlightenment':
         C("RC-Space"):             [iEF2NT(),C("C-Alt-Space")],     # enlightenment main menu (override in "User Apps" slice if necessary)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5401,6 +5541,7 @@ if DESKTOP_ENV == 'gnome':
             C("RC-Space"):             [iEF2NT(),C("Super-s")],         # Override GNOME 45+ Shift+Ctrl+Space remap
         }, when = lambda ctx:
             cnfg.screen_has_focus and
+            ctx_ovl_macos_globals and
             not ctx_app_is_remote
         )
     keymap("GenGUI overrides: GNOME", {
@@ -5414,6 +5555,7 @@ if DESKTOP_ENV == 'gnome':
         C("RC-Shift-Key_5"):        C("Print"),                     # Take a screenshot interactively (gnome)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5423,6 +5565,7 @@ if DESKTOP_ENV == 'hyprland':
         C("RC-Space"):             [C("Super-d"), iEF2NT()],        # Open Launcher with Cmd+Space
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5431,6 +5574,7 @@ if DESKTOP_ENV == 'icewm':
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # IceWM: Win95Keys=1 (Meta shows menu)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5466,6 +5610,7 @@ if DESKTOP_ENV == 'kde':
 
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5475,6 +5620,7 @@ if DESKTOP_ENV == 'mate' and DISTRO_ID == 'mint':
         C("RC-Space"):             [iEF2NT(), C("Alt-Space")],       # Open Mint app menu
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5484,6 +5630,7 @@ if DESKTOP_ENV == 'mate' and DISTRO_ID == 'ubuntu':
         C("RC-Space"):             [iEF2NT(), Key.LEFT_META],       # Open Brisk Menu Launcher
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5493,6 +5640,7 @@ if DESKTOP_ENV == 'miracle-wm':
         C("RC-Space"):             [C("Super-d"), iEF2NT()],        # Open Launcher with Cmd+Space
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5501,6 +5649,7 @@ if DESKTOP_ENV == 'nebide':
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # Open Launcher with Cmd+Space
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5512,6 +5661,7 @@ if DESKTOP_ENV == 'pantheon':
         C("Super-RC-f"):            C("Super-Up"),                  # Maximize app elementary
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5521,6 +5671,7 @@ if DESKTOP_ENV == 'sway':
         C("RC-Q"):                  C("C-Q"),                       # Override General GUI Alt+F4 remap
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5529,6 +5680,7 @@ if DESKTOP_ENV == 'trinity':
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # Trinity desktop (Q4OS)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5537,6 +5689,7 @@ if DESKTOP_ENV == 'unity':
         C("RC-Space"):             [iEF2NT(),Key.LEFT_META],        # Trinity desktop (Q4OS)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5545,6 +5698,7 @@ if DESKTOP_ENV == 'xfce' and DISTRO_ID == 'zorin':
         C("RC-Space"):             [iEF2NT(),C("Alt-Pause")],     # "Launch and switch applications" (Xfce on Zorin)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5561,6 +5715,7 @@ if DESKTOP_ENV == 'xfce':
         C("RC-Shift-Key_5"):        C("Shift-Print"),               # Take a screenshot interactively (xfce4)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
         not ctx_app_is_remote
     )
 
@@ -5604,21 +5759,24 @@ keymap("General GUI", {
     # This is better done with a native custom shortcut in each DE
     # C("Alt-RC-Space"):          C(""),                          # Open Finder - Placeholder not-deepin
 
-    # Wordwise
-    C("RC-Left"):               C("Home"),                      # Beginning of Line
-    C("Shift-RC-Left"):         C("Shift-Home"),                # Select all to Beginning of Line
-    C("RC-Right"):              C("End"),                       # End of Line
-    C("Shift-RC-Right"):        C("Shift-End"),                 # Select all to End of Line
-    C("RC-Up"):                 C("C-Home"),                    # Beginning of File
-    C("Shift-RC-Up"):           C("C-Shift-Home"),              # Select all to Beginning of File
-    C("RC-Down"):               C("C-End"),                     # End of File
-    C("Shift-RC-Down"):         C("C-Shift-End"),               # Select all to End of File
-    C("Super-Backspace"):       C("C-Backspace"),               # Delete Left Word of Cursor
-    C("Super-Delete"):          C("C-Delete"),                  # Delete Right Word of Cursor
-    C("RC-Backspace"):          C("C-Shift-Backspace"),         # Delete Entire Line Left of Cursor
-    C("Alt-Delete"):            C("C-Delete"),                  # Delete Right Word of Cursor
-    C("Shift-Alt-Backspace"):   C("C-Backspace"),               # Delete word left of cursor
-    C("Shift-Alt-Delete"):      C("C-Delete"),                  # Delete word right of cursor
+    # Wordwise - cursor movement and word/line selection/deletion
+    C("RC-Left"):               C("Home"),                      # Move Cursor to Beginning of Line
+    C("RC-Right"):              C("End"),                       # Move Cursor to End of Line
+    C("RC-Up"):                 C("C-Home"),                    # Move Cursor to Beginning of File
+    C("RC-Down"):               C("C-End"),                     # Move Cursor to End of File
+
+    C("Shift-RC-Left"):         C("Shift-Home"),                # Extend Selection to Beginning of Line
+    C("Shift-RC-Right"):        C("Shift-End"),                 # Extend Selection to End of Line
+    C("Shift-RC-Up"):           C("C-Shift-Home"),              # Extend Selection to Beginning of File
+    C("Shift-RC-Down"):         C("C-Shift-End"),               # Extend Selection to End of File
+
+    C("Super-Backspace"):       C("C-Backspace"),               # Delete Word Left of Cursor
+    C("Shift-Alt-Backspace"):   C("C-Backspace"),               # Delete Word Left of Cursor (alt)
+    C("Super-Delete"):          C("C-Delete"),                  # Delete Word Right of Cursor
+    C("Shift-Alt-Delete"):      C("C-Delete"),                  # Delete Word Right of Cursor (alt)
+    C("Alt-Delete"):            C("C-Delete"),                  # Delete Word Right of Cursor (Option-style)
+
+    C("RC-Backspace"):          C("C-Shift-Backspace"),         # Delete to Beginning of Line
 
     # Allow access to Linux TTY virtual consoles with the usual physical key locations (General GUI)
     C("Super-RC-F1"):           C("C-Alt-F1"),                  # Go to TTY virtual console 1
@@ -5638,6 +5796,7 @@ keymap("General GUI", {
 
 }, when = lambda ctx:
     cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
     not ctx_app_is_remote
 )
 
