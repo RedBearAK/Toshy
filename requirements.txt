@@ -55,7 +55,7 @@ ordered-set
 pywayland
 six       # not a direct dependency? 
 
-# TODO: Check on 'python-xlib' project by early-mid 2025 for a bug fix related to:
+# TODO: Check on 'python-xlib' project periodically for a bug fix related to:
 # [AttributeError: 'BadRRModeError' object has no attribute 'sequence_number']
 # If the bug is fixed, consider updating the version pinning.
 python-xlib==0.31
@@ -67,4 +67,5 @@ python-xlib==0.31
 # for KDE Plasma changed, and requires >=1.2.0 for `xwaykeyz` to be talking
 # to the correct D-Bus interface/object path. (org.toshy.Plasma)
 # New required minimum version for xwaykeyz >=1.12.0 (matchProps moved to config_api)
+# New required minimum version for xwaykeyz >=1.17.1 (Combo repeats, other changes)
 git+https://github.com/RedBearAK/xwaykeyz.git@main#egg=xwaykeyz
