@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260330'
+__version__ = '20260512'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -43,6 +43,7 @@ sys.path.insert(0, toshy_common_dir_path)
 # ~/.config/toshy/toshy_common/machine_context.py
 # ~/.config/toshy/toshy_common/monitoring.py            # Monitors settings and services
 # ~/.config/toshy/toshy_common/notification_manager.py
+# ~/.config/toshy/toshy_common/overlay_context.py
 # ~/.config/toshy/toshy_common/process_manager.py
 # ~/.config/toshy/toshy_common/runtime_utils.py
 # ~/.config/toshy/toshy_common/service_manager.py
@@ -79,6 +80,8 @@ machine_context_path    = os.path.join(toshy_dir_path,
                             'toshy_common', 'machine_context.py')
 notification_mgr_path   = os.path.join(toshy_dir_path,
                             'toshy_common', 'notification_manager.py')
+overlay_context_path    = os.path.join(toshy_dir_path,
+                            'toshy_common', 'overlay_context.py')
 process_mgr_path        = os.path.join(toshy_dir_path,
                             'toshy_common', 'process_manager.py')
 runtime_utils_path      = os.path.join(toshy_dir_path,
@@ -122,6 +125,7 @@ components = [
     ("Environment Context",         env_context_path),
     ("Machine Context",             machine_context_path),
     ("Notification Manager",        notification_mgr_path),
+    ("Overlay Context",             overlay_context_path),
     ("Process Manager",             process_mgr_path),
     ("Runtime Utils",               runtime_utils_path),
     ("Service Manager",             service_mgr_path),
