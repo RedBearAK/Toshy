@@ -1594,28 +1594,52 @@ pkg_groups_map = {
 
 }
 
-extra_pkgs_map = {
+# Group-level extras: applied to every distro in the named group, before any
+# distro-specific tweaks below.
+extra_pkgs_for_distro_group_map = {
     # Add a 2-tuple (2 quoted items in parentheses, separated by a comma) with
-    # distro name (ID), major version (or None)as the dict key,  and
-    # then a list (in brackets) of  packages to be added as the dict value...
-    # ('distro_id', '22'):        ["pkg1", "pkg2", ...],
-    # ('distro_id', None):        ["pkg1", "pkg2", ...],
+    # group name, major version (or None) as the dict key, and
+    # then a list (in brackets) of packages to be added as the dict value...
+    # ('group_name', '9'): ['pkg1', 'pkg2', ...],
+    # ('group_name', None): ['pkg1', 'pkg2', ...],
 }
 
-remove_pkgs_map = {
+# Group-level removes: applied to every distro in the named group, before any
+# distro-specific tweaks below.
+remove_pkgs_for_distro_group_map = {
+    # Add a 2-tuple (2 quoted items in parentheses, separated by a comma) with
+    # group name, major version (or None) as the dict key, and
+    # then a list (in brackets) of packages to be removed as the dict value...
+    # ('group_name', '9'): ['pkg1', 'pkg2', ...],
+    # ('group_name', None): ['pkg1', 'pkg2', ...],
+}
+
+# Distro-specific extras: applied only to the match distro ID, after group
+# tweaks above
+extra_pkgs_for_distro_id_map = {
+    # Add a 2-tuple (2 quoted items in parentheses, separated by a comma) with
+    # distro name (ID), major version (or None) as the dict key, and
+    # then a list (in brackets) of packages to be added as the dict value...
+    # ('distro_id', '22'): ['pkg1', 'pkg2', ...],
+    # ('distro_id', None): ['pkg1', 'pkg2', ...],
+}
+
+# Distro-specific removes: applied only to the match distro ID, after group
+# tweaks above
+remove_pkgs_for_distro_id_map = {
     # Add a 2-tuple (2 quoted items in parentheses, separated by a comma) with
     # distro name (ID), major version (or None) as the dict key, and
     # then a list (in brackets) of packages to be removed as the dict value...
-    # ('distro_id', '22'): ["pkg1", "pkg2", ...],
-    # ('distro_id', None): ["pkg1", "pkg2", ...],
+    # ('distro_id', '22'): ['pkg1', 'pkg2', ...],
+    # ('distro_id', None): ['pkg1', 'pkg2', ...],
     ('centos', '7'): [
         'dbus-daemon',
         'gnome-shell-extension-appindicator',
         'libinput-utils',
-        ],
+    ],
     ('deepin', None): [
         'input-utils',
-        ],
+    ],
 }
 
 pip_pkgs   = [
@@ -2997,35 +3021,66 @@ def install_distro_pkgs():
         print(f'Try some options in "./{this_file_name} --help"')
         safe_shutdown(1)
 
-    cnfg.pkgs_for_distro = pkg_groups_map[pkg_group]
+    # Use local variable for pkg list construction, to reduce type ambiguity
+    local_pkgs_for_distro = copy.copy(pkg_groups_map[pkg_group])
+
+    if not isinstance(local_pkgs_for_distro, list):
+        error(f"Expected list for pkgs_for_distro, got "
+                f"{type(local_pkgs_for_distro).__name__}.")
+        safe_shutdown(1)
+
+    # Add extra packages for the distro group and version
+    for version in [cnfg.distro_mjr_ver, None]:
+        group_key = (pkg_group, version)
+        if group_key in extra_pkgs_for_distro_group_map:
+            print(f"Group key {group_key} matched in 'extra_pkgs_for_distro_group_map'.")
+            local_pkgs_for_distro.extend(extra_pkgs_for_distro_group_map[group_key])
+            print("Added package(s) to queue:")
+            for pkg in extra_pkgs_for_distro_group_map[group_key]:
+                print(f"\t'{pkg}'")
+            print("All necessary extra group packages added to queue. Continuing...")
+
+    # Remove packages for the distro group and version
+    for version in [cnfg.distro_mjr_ver, None]:
+        group_key = (pkg_group, version)
+        if group_key in remove_pkgs_for_distro_group_map:
+            print(f"Group key {group_key} matched in 'remove_pkgs_for_distro_group_map'.")
+            for pkg in remove_pkgs_for_distro_group_map[group_key]:
+                if pkg in local_pkgs_for_distro:
+                    local_pkgs_for_distro.remove(pkg)
+                    print(f"Removing '{pkg}' from package list.")
+            print("All incompatible group packages removed from package list. Continuing...")
 
     # Add extra packages for specific distros and versions
     for version in [cnfg.distro_mjr_ver, None]:
         distro_key = (cnfg.DISTRO_ID, version)
-        if distro_key in extra_pkgs_map:
-            print(f"Distro key {distro_key} matched in 'extra_pkgs_map'.")
-            cnfg.pkgs_for_distro.extend(extra_pkgs_map[distro_key])
+        if distro_key in extra_pkgs_for_distro_id_map:
+            print(f"Distro key {distro_key} matched in 'extra_pkgs_for_distro_id_map'.")
+            local_pkgs_for_distro.extend(extra_pkgs_for_distro_id_map[distro_key])
             print("Added package(s) to queue:")
-            for pkg in extra_pkgs_map[distro_key]:
+            for pkg in extra_pkgs_for_distro_id_map[distro_key]:
                 print(f"\t'{pkg}'")
-            print("All necessary extra packages added to queue. Continuing...")
+            print("All necessary extra distro packages added to queue. Continuing...")
 
     # Remove packages for specific distros and versions
     for version in [cnfg.distro_mjr_ver, None]:
         distro_key = (cnfg.DISTRO_ID, version)
-        if distro_key in remove_pkgs_map:
-            print(f"Distro key {distro_key} matched in 'remove_pkgs_map'.")
-            for pkg in remove_pkgs_map[distro_key]:
-                if pkg in cnfg.pkgs_for_distro:
-                    cnfg.pkgs_for_distro.remove(pkg)
+        if distro_key in remove_pkgs_for_distro_id_map:
+            print(f"Distro key {distro_key} matched in 'remove_pkgs_for_distro_id_map'.")
+            for pkg in remove_pkgs_for_distro_id_map[distro_key]:
+                if pkg in local_pkgs_for_distro:
+                    local_pkgs_for_distro.remove(pkg)
                     print(f"Removing '{pkg}' from package list.")
-            print("All incompatible packages removed from package list. Continuing...")
+            print("All incompatible distro packages removed from package list. Continuing...")
 
     # Filter out systemd packages if systemctl is not present
-    cnfg.pkgs_for_distro = [
-        pkg for pkg in cnfg.pkgs_for_distro
+    local_pkgs_for_distro = [
+        pkg for pkg in local_pkgs_for_distro
         if cnfg.systemctl_present or 'systemd' not in pkg
     ]
+
+    # Make the rebuilt local variable list available on global 'cnfg' object attribute
+    cnfg.pkgs_for_distro = copy.copy(local_pkgs_for_distro)
 
     def call_installer_method(installer_method):
         """Utility function to call the installer function and handle post-call tasks."""
