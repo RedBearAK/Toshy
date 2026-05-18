@@ -7,7 +7,8 @@ Yes. Yes, it is. So here are some...
 
 _(See top-right icon here on GitHub for full README table of contents)_
 
-- [How to Install](#how-to-install)
+- [How to Install (via one-line command)](https://github.com/RedBearAK/toshy/wiki/How-to-install-Toshy-with-a-single-command)
+- [How to Install (by downloading the zip)](#how-to-install)
 - [How to Uninstall](#how-to-uninstall)
 - [Requirements](#requirements)
 - [Supported Desktop Environments/Window Managers](#currently-working-desktop-environments-or-window-managers)
@@ -29,7 +30,7 @@ I don't really know many other places where it might be considered appropriate t
 
 # Current status: Stable Beta (Please Read)
 
-**2026-03-13**: Added support for NebiOS, an Ubuntu-based distro with a Wayfire-based Mac-like desktop environment (NebiDE). 
+**2026-03-13 UPDATE**: Added support for NebiOS, an Ubuntu-based distro with a Wayfire-based Mac-like desktop environment (NebiDE). 
 
 **2026-02-02 UPDATE**: Finally added official support for installing on Gentoo Linux. Maybe also Calculate Linux and Redcore Linux, but only plain Gentoo is tested. Thanks to user @sazz who proved that it was possible to get Toshy running on Gentoo in issue 775.
 
