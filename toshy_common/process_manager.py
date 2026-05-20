@@ -80,8 +80,6 @@ class ProcessManager:
 
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGQUIT, signal_handler)
-        # Stop each last child process from hanging on as a "zombie" after it quits.
-        signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
     def get_pid_from_lockfile(self):
         """
