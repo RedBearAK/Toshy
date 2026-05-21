@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20260504'
+__version__ = '20260520'
 
 # Preferences app for Toshy, using GTK-4 and Adwaita
 TOSHY_PART      = 'gui-gtk4'  # Different from tkinter version to avoid lockfile conflicts
@@ -24,7 +24,7 @@ if os.path.exists(gtk4_config):
     except:
         pass
 
-# Check for accessibility support before importing GTK
+# Check for accessibility support before importing GTK (to suppress a warning)
 def is_a11y_available():
     try:
         # D-Bus query to check whether a11y support is present:
@@ -63,7 +63,8 @@ def null_log_handler(domain, level, message, user_data):
     print(f"({domain}): {message}")
 
 
-# Install the log handler for GTK and Adwaita domains ('gtk-modules' can't be suppressed)
+# Install the log handler for GTK and Adwaita domains, to suppress 
+# unimportant terminal warnings ('gtk-modules' can't be suppressed)
 GLib.log_set_handler("Gtk", GLib.LogLevelFlags.LEVEL_WARNING, null_log_handler, None)
 GLib.log_set_handler("Adwaita", GLib.LogLevelFlags.LEVEL_WARNING, null_log_handler, None)
 
