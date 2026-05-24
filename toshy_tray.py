@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20260503'
+__version__ = '20260520'
 
 # Indicator tray icon menu app for Toshy, using pygobject/gi
 TOSHY_PART      = 'tray'   # CUSTOMIZE TO SPECIFIC TOSHY COMPONENT! (gui, tray, config)
@@ -26,6 +26,7 @@ from toshy_common.overlay_context import (
     OVL_PRESET_NONE,
     get_flag_parent,
 )
+from toshy_common.proc_launcher import launch_detached
 
 
 # Check for accessibility support before importing GTK
@@ -137,20 +138,9 @@ check_environment()
 # =============================================================================
 
 def show_cinnamon_wayland_warning():
-    """
-    Show async warning dialog about Cinnamon Wayland tray menu bugs.
-    
-    Uses zenity in a non-blocking subprocess so it doesn't delay app startup.
-    """
-    zenity_cmd = shutil.which('zenity')
-    if not zenity_cmd:
-        # Fall back to just logging if zenity isn't available
-        error("Cinnamon Wayland has known bugs affecting tray icon menus.")
-        return
-
+    """Show async warning dialog about Cinnamon Wayland tray menu bugs."""
     warning_title = "Cinnamon Wayland: Known Tray Menu Bugs"
-
-    warning_text = (
+    warning_text  = (
         "Cinnamon's Wayland session has bugs affecting tray icon menus:\n\n"
         "• Menu appears in wrong location (top-left instead of near icon)\n"
         "• Menu stops appearing after first use\n\n"
@@ -162,7 +152,7 @@ def show_cinnamon_wayland_warning():
     )
 
     cmd_lst = [
-        zenity_cmd,
+        'zenity',
         '--warning',
         '--title', warning_title,
         '--text', warning_text,
@@ -170,11 +160,8 @@ def show_cinnamon_wayland_warning():
         '--no-wrap',
     ]
 
-    # Run async (non-blocking) so the tray app continues loading
-    try:
-        subprocess.Popen(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
-    except OSError as e:
-        error(f"Failed to show Cinnamon Wayland warning dialog: {e}")
+    if not launch_detached(cmd_lst, stdout=DEVNULL, stderr=DEVNULL):
+        error("Cinnamon Wayland has known bugs affecting tray icon menus (zenity not available).")
 
 
 # Cinnamon Wayland: Show warning about known tray menu bugs
@@ -226,52 +213,24 @@ tray_indicator.set_title("Toshy Status Indicator") # try to set what might show 
 
 
 def fn_open_preferences(widget):
-    # First check if toshy-gui exists
-    toshy_gui_cmd = shutil.which('toshy-gui')
-    if not toshy_gui_cmd:
-        _ntfy_icon = icon_file_inverse
-        _ntfy_msg = ("The 'toshy-gui' utility is missing.\r"
+    if launch_detached(['toshy-gui']):
+        return
+
+    _ntfy_icon = icon_file_inverse
+    _ntfy_msg  = ("The 'toshy-gui' utility is missing.\r"
                     "Please check your installation.")
-        ntfy.send_notification(_ntfy_msg, _ntfy_icon, urgency='critical')
-        _error_msg = ("The 'toshy-gui' utility is missing.\n"
+    ntfy.send_notification(_ntfy_msg, _ntfy_icon, urgency='critical')
+
+    _error_msg = ("The 'toshy-gui' utility is missing.\n"
                     "     Please check your installation.")
-        error(f"{_error_msg}")
-        return
-
-    # Launch the process
-    process = subprocess.Popen([toshy_gui_cmd], stdout=PIPE, stderr=PIPE)
-
-    # Wait a short time to see if it exits immediately
-    time.sleep(1)
-
-    # Check if it's still running
-    return_code = process.poll()
-
-    if return_code is not None:
-        # Process has already terminated
-        stderr = process.stderr.read().decode()
-        stdout = process.stdout.read().decode()
-
-        _ntfy_icon = icon_file_inverse
-        _ntfy_msg = (f"'toshy-gui' exited too quickly (code {return_code}).\r"
-                    f"Error: {stderr.strip() if stderr else 'No error output'}")
-        ntfy.send_notification(_ntfy_msg, _ntfy_icon, urgency='critical')
-
-        _error_msg = (f"'toshy-gui' exited too quickly with code {return_code}.\n"
-                    f"     Error: {stderr.strip() if stderr else 'No error output'}")
-        error(f"{_error_msg}")
-        return
-
-    # Process is running normally
-    return
+    error(f"{_error_msg}")
 
 
 def fn_open_config_folder(widget):
 
-    xdg_open_cmd = shutil.which('xdg-open')
-    if not xdg_open_cmd:
+    if not shutil.which('xdg-open'):
         _ntfy_icon = icon_file_inverse
-        _ntfy_msg = ("The 'xdg-open' utility is missing.\r"
+        _ntfy_msg  = ("The 'xdg-open' utility is missing.\r"
                         "Try installing 'xdg-utils' package.")
         ntfy.send_notification(_ntfy_msg, _ntfy_icon, urgency='critical')
         _error_msg = ("The 'xdg-open' utility is missing.\n"
@@ -280,15 +239,11 @@ def fn_open_config_folder(widget):
         return
 
     # Sometimes xdg-open script is unpatched for Plasma 6 (e.g., Leap 16), so use kde-open instead
-    kde_open_cmd = shutil.which('kde-open')
-    if DESKTOP_ENV == 'kde' and DE_MAJ_VER == '6' and kde_open_cmd:
-        xdg_open_cmd = kde_open_cmd
+    opener_cmd = 'xdg-open'
+    if DESKTOP_ENV == 'kde' and DE_MAJ_VER == '6' and shutil.which('kde-open'):
+        opener_cmd = 'kde-open'
 
-    try:
-        subprocess.Popen([xdg_open_cmd, runtime.config_dir])
-    except FileNotFoundError as e:
-        error('File not found. I have no idea how this error is possible.')
-        error(e)
+    launch_detached([opener_cmd, runtime.config_dir])
 
 
 def fn_show_services_log(widget):
@@ -325,47 +280,6 @@ def set_item_active_thread_safe(menu_item, state=True):
     else:
         # Schedule for main thread
         GLib.idle_add(do_set_active)
-
-
-def show_cinnamon_wayland_warning():
-    """
-    Show async warning dialog about Cinnamon Wayland tray menu bugs.
-    
-    Uses zenity in a non-blocking subprocess so it doesn't delay app startup.
-    """
-    zenity_cmd = shutil.which('zenity')
-    if not zenity_cmd:
-        # Fall back to just logging if zenity isn't available
-        error("Cinnamon Wayland has known bugs affecting tray icon menus.")
-        return
-
-    warning_title = "Cinnamon Wayland: Known Tray Menu Bugs"
-
-    warning_text = (
-        "Cinnamon's Wayland session has bugs affecting tray icon menus:\n\n"
-        "• Menu appears in wrong location (top-left instead of near icon)\n"
-        "• Menu stops appearing after first use\n\n"
-        "This is a Cinnamon compositor bug, not a Toshy issue.\n\n"
-        "<b>Alternatives:</b>\n"
-        "• Use the Toshy Preferences app instead (has all the same options)\n"
-        "• Restart the tray icon via app menu: \"Toshy Tray Icon\"\n"
-        "• From terminal: <tt>nohup toshy-tray &amp;</tt> (allows closing terminal)"
-    )
-
-    cmd_lst = [
-        zenity_cmd,
-        '--warning',
-        '--title', warning_title,
-        '--text', warning_text,
-        '--width', '500',
-        '--no-wrap',
-    ]
-
-    # Run async (non-blocking) so the tray app continues loading
-    try:
-        subprocess.Popen(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
-    except OSError as e:
-        error(f"Failed to show Cinnamon Wayland warning dialog: {e}")
 
 
 

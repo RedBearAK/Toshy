@@ -1,4 +1,4 @@
-__version__ = '20250714'
+__version__ = '20260520'
 
 import os
 import time
@@ -7,6 +7,7 @@ from subprocess import DEVNULL
 
 from toshy_common.logger import debug, error
 from toshy_common.notification_manager import NotificationManager
+from toshy_common.proc_launcher import launch_detached
 
 
 class ServiceManager:
@@ -50,89 +51,91 @@ class ServiceManager:
         Starts both the config service and session monitor service.
         Shows notification if notification manager is available.
         """
-        try:
-            debug("Starting Toshy services...")
-            subprocess.Popen([self.toshy_svcs_restart_cmd], stdout=DEVNULL, stderr=DEVNULL)
-            time.sleep(3)
-            
-            message = 'Toshy systemd services (re)started.'
-            if self.ntfy:
-                self.ntfy.send_notification(message, self.icon_active)
-                
-            debug(message)
-            
-        except Exception as e:
-            message = (f"Failed to start Toshy services: {e}")
+        debug("Starting Toshy services...")
+
+        if not launch_detached([self.toshy_svcs_restart_cmd], stdout=DEVNULL, stderr=DEVNULL):
+            message = f"Failed to start Toshy services: {self.toshy_svcs_restart_cmd} not found"
             error(message)
             if self.ntfy:
                 self.ntfy.send_notification(message, self.icon_grayscale)
+            return
+
+        time.sleep(3)
+
+        message = 'Toshy systemd services (re)started.'
+        if self.ntfy:
+            self.ntfy.send_notification(message, self.icon_active)
+
+        debug(message)
 
     def stop_services(self):
         """
         Stop Toshy services with CLI command.
-        
+
         Stops both the config service and session monitor service.
         Shows notification if notification manager is available.
         """
-        try:
-            debug("Stopping Toshy services...")
-            subprocess.Popen([self.toshy_svcs_stop_cmd], stdout=DEVNULL, stderr=DEVNULL)
-            time.sleep(3)
-            
-            message = 'Toshy systemd services stopped.'
-            if self.ntfy:
-                self.ntfy.send_notification(message, self.icon_inactive)
-                
-            debug(message)
-            
-        except Exception as e:
-            message = (f"Failed to stop Toshy services: {e}")
+        debug("Stopping Toshy services...")
+
+        if not launch_detached([self.toshy_svcs_stop_cmd], stdout=DEVNULL, stderr=DEVNULL):
+            message = f"Failed to stop Toshy services: {self.toshy_svcs_stop_cmd} not found"
             error(message)
             if self.ntfy:
                 self.ntfy.send_notification(message, self.icon_grayscale)
+            return
+
+        time.sleep(3)
+
+        message = 'Toshy systemd services stopped.'
+        if self.ntfy:
+            self.ntfy.send_notification(message, self.icon_inactive)
+
+        debug(message)
 
     def restart_config_only(self):
         """
         Start the config service only (manual run mode).
-        
+
         This is used for testing or when running config independently
         of the full systemd service setup.
         """
-        try:
-            debug("Starting Toshy config only...")
-            subprocess.Popen([self.toshy_cfg_restart_cmd], stdout=DEVNULL, stderr=DEVNULL)
-            time.sleep(3)
-            message = 'Toshy config-only process (re)started.'
-            debug(message)
-            if self.ntfy:
-                self.ntfy.send_notification(message, self.icon_active)
-            
-        except Exception as e:
-            message = (f"Failed to start Toshy config-only: {e}")
+        debug("Starting Toshy config only...")
+
+        if not launch_detached([self.toshy_cfg_restart_cmd], stdout=DEVNULL, stderr=DEVNULL):
+            message = f"Failed to start Toshy config-only: {self.toshy_cfg_restart_cmd} not found"
             error(message)
             if self.ntfy:
                 self.ntfy.send_notification(message, self.icon_grayscale)
+            return
+
+        time.sleep(3)
+
+        message = 'Toshy config-only process (re)started.'
+        debug(message)
+        if self.ntfy:
+            self.ntfy.send_notification(message, self.icon_active)
 
     def stop_config_only(self):
         """
         Stop the config service only (manual run mode).
-        
+
         This stops the config service without affecting other services.
         """
-        try:
-            debug("Stopping Toshy config-only process...")
-            subprocess.Popen([self.toshy_cfg_stop_cmd], stdout=DEVNULL, stderr=DEVNULL)
-            time.sleep(1)
-            message = 'Toshy config-only process stopped.'
-            debug(message)
-            if self.ntfy:
-                self.ntfy.send_notification(message, self.icon_inactive)
-            
-        except Exception as e:
-            message = (f"Failed to stop Toshy config-only: {e}")
+        debug("Stopping Toshy config-only process...")
+
+        if not launch_detached([self.toshy_cfg_stop_cmd], stdout=DEVNULL, stderr=DEVNULL):
+            message = f"Failed to stop Toshy config-only: {self.toshy_cfg_stop_cmd} not found"
             error(message)
             if self.ntfy:
                 self.ntfy.send_notification(message, self.icon_grayscale)
+            return
+
+        time.sleep(1)
+
+        message = 'Toshy config-only process stopped.'
+        debug(message)
+        if self.ntfy:
+            self.ntfy.send_notification(message, self.icon_inactive)
 
     def enable_services(self):
         """

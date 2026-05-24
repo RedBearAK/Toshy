@@ -6,8 +6,10 @@ import subprocess
 
 import toshy_common.terminal_utils as term_utils
 
-from toshy_common.logger import debug
+from toshy_common.env_context import EnvironmentInfo
+from toshy_common.logger import debug, error
 from toshy_common.notification_manager import NotificationManager
+from toshy_common.proc_launcher import launch_detached
 from toshy_common.service_manager import ServiceManager
 from toshy_common.settings_class import Settings
 from toshy_common.runtime_utils import ToshyRuntime
@@ -513,19 +515,27 @@ class ToolsPanel(Gtk.Box):
         except subprocess.CalledProcessError as e:
             debug(f"Error updating tray autostart: {e}")
 
-
     def on_open_config_folder(self, button):
         """Handle open config folder button click"""
         config_path = self.runtime.config_dir
         debug(f"Opening config folder: {config_path}")
 
-        try:
-            # Use xdg-open to open the folder in the default file manager
-            subprocess.Popen(['xdg-open', config_path])
-        except Exception as e:
-            error_msg = f"Failed to open config folder: {e}"
-            debug(error_msg)
-            self.ntfy.send_notification(error_msg)
+        if not shutil.which('xdg-open'):
+            msg = ("The 'xdg-open' utility is missing.\n"
+                "Try installing 'xdg-utils' package.")
+            error(msg)
+            self.ntfy.send_notification(msg, urgency='critical')
+            return
+
+        # Sometimes xdg-open is unpatched for Plasma 6 (e.g., Leap 16); use kde-open instead
+        opener = 'xdg-open'
+        if self.desktop_env == 'kde' and shutil.which('kde-open'):
+            env_info   = EnvironmentInfo().get_env_info()
+            de_maj_ver = str(env_info.get('DE_MAJ_VER', '')).casefold()
+            if de_maj_ver == '6':
+                opener = 'kde-open'
+
+        launch_detached([opener, config_path])
 
     def on_show_services_log(self, button):
         """Handle show services log button click"""

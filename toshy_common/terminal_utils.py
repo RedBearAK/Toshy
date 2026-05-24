@@ -1,4 +1,4 @@
-__version__ = "20260313"
+__version__ = "20260520"
 
 """
 Terminal utilities for Toshy applications.
@@ -13,6 +13,7 @@ import shutil
 import subprocess
 
 from toshy_common.logger import debug
+from toshy_common.proc_launcher import launch_detached
 
 
 local_bin = os.path.join(os.path.expanduser('~'), '.local', 'bin')
@@ -76,20 +77,11 @@ def run_cmd_lst_in_terminal(command_list, desktop_env: str=None):
 
     def _try_terminal(terminal_cmd, args_list):
         """Try to run command in a specific terminal. Returns True if successful."""
-        terminal_path = shutil.which(terminal_cmd)
-        if not terminal_path:
+        full_command = [terminal_cmd] + args_list + command_list
+        if not launch_detached(full_command):
             return False
-
-        full_command = [terminal_path] + args_list + command_list
-        try:
-
-            subprocess.Popen(full_command)
-
-            debug(f"Successfully launched command in {terminal_cmd}")
-            return True
-        except subprocess.SubprocessError as e:
-            debug(f'Error launching {terminal_cmd}: {e}')
-            return False
+        debug(f"Successfully launched command in {terminal_cmd}")
+        return True
 
     # Resolve bare command names to absolute paths so terminal emulators
     # can find commands even if the launched shell lacks ~/.local/bin on PATH

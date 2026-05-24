@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260506'
+__version__ = '20260520'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -198,6 +198,7 @@ from toshy_common.env_context import EnvironmentInfo
 from toshy_common.machine_context import get_machine_id_hash
 from toshy_common.notification_manager import NotificationManager
 from toshy_common.overlay_context import OverlayFlag as OFlag
+from toshy_common.proc_launcher import launch_detached
 from toshy_common.runtime_utils import sanitize_text
 from toshy_common.settings_class import Settings
 from toshy_common.terminal_utils import print_pango_text
@@ -1291,17 +1292,18 @@ def notify_context():
         ctx_name        = ctx.wm_name
         ctx_devn        = ctx.device_name
 
-        # ------ following are all True/False
-        ctx_term        = hmp_is_terminal(ctx)
-        ctx_rmte        = hmp_is_remote(ctx)
-        ctx_fmgr        = hmp_is_filemanager(ctx)
-        ctx_brws        = hmp_is_browser(ctx)
-        ctx_vscd        = hmp_is_vscode(ctx)
-
         if hmp_is_dialog_closewin(ctx) or hmp_is_dialog_escape(ctx):
-            ctx_dlgs        = True
+            _ctx_dlgs        = True
         else:
-            ctx_dlgs        = False
+            _ctx_dlgs        = False
+
+        # ------ following are all True/False
+        ctx_term        = '[X]' if hmp_is_terminal(ctx)         else '[ ]'
+        ctx_rmte        = '[X]' if hmp_is_remote(ctx)           else '[ ]'
+        ctx_fmgr        = '[X]' if hmp_is_filemanager(ctx)      else '[ ]'
+        ctx_brws        = '[X]' if hmp_is_browser(ctx)          else '[ ]'
+        ctx_vscd        = '[X]' if hmp_is_vscode(ctx)           else '[ ]'
+        ctx_dlgs        = '[X]' if _ctx_dlgs                    else '[ ]'
 
         message         = (
             f"<tt>"
@@ -1320,13 +1322,13 @@ def notify_context():
             f"<b> • DE_MAJ_VER ___________</b> '{DE_MAJ_VER     }' {nwln_str}"
             f"<b> • WINDOW_MGR ___________</b> '{WINDOW_MGR     }' {nwln_str}"
             f"{nwln_str}"
-            f"<b>Do any app class groups match on this window?:</b>  {nwln_str}"
-            f"<b> • Terminals ____________</b> '{ctx_term}' {nwln_str}"
-            f"<b> • Remotes/VMs __________</b> '{ctx_rmte}' {nwln_str}"
-            f"<b> • File Managers ________</b> '{ctx_fmgr}' {nwln_str}"
-            f"<b> • Web Browsers _________</b> '{ctx_brws}' {nwln_str}"
-            f"<b> • VSCode(s) ____________</b> '{ctx_vscd}' {nwln_str}"
-            f"<b> • Dialogs ______________</b> '{ctx_dlgs}' {nwln_str}"
+            f"<b>App class groups that match on this window:</b>  {nwln_str}"
+            f"<b> • Terminals ____________</b> {ctx_term} {nwln_str}"
+            f"<b> • Remotes/VMs __________</b> {ctx_rmte} {nwln_str}"
+            f"<b> • File Managers ________</b> {ctx_fmgr} {nwln_str}"
+            f"<b> • Web Browsers _________</b> {ctx_brws} {nwln_str}"
+            f"<b> • VSCode(s) ____________</b> {ctx_vscd} {nwln_str}"
+            f"<b> • Dialogs ______________</b> {ctx_dlgs} {nwln_str}"
             f"{nwln_str}"
             f"<b> __________________________________________________ </b>{nwln_str}"
             f"<i>Keyboard shortcuts (Ctrl+C/Cmd+C) may not work here.</i>{nwln_str}"
@@ -1353,9 +1355,11 @@ def notify_context():
         kdialog_cmd_lst += ['--icon', 'toshy_app_icon_rainbow']
 
         if dialog_cmd == kdialog_cmd:
-            subprocess.Popen(kdialog_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
+            # subprocess.Popen(kdialog_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
+            launch_detached(kdialog_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
         elif dialog_cmd == zenity_cmd:
-            subprocess.Popen(zenity_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
+            # subprocess.Popen(zenity_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
+            launch_detached(zenity_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
 
         # Also print out the diagnostics to the terminal, in case the dialog doesn't work.
         # Trim the last 4 lines (dialog-only hints) for terminal output
@@ -5829,7 +5833,7 @@ keymap("Diagnostics (isMultiTap)", {
                                 C("Enter"), C("Enter")],
                         ),
 
-}, when = lambda _: True is True)
+}, when = lambda _: True)
 
 
 # keymap("Diagnostics (isDoubleTap)", {
