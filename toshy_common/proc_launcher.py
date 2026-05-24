@@ -27,6 +27,12 @@ from xwaykeyz.lib.logger import error
 
 
 def launch_detached(args, **kwargs):
+    # Whitelist of allowed kwargs
+    allowed_kwargs = ['capture_output', 'check', 'cwd', 'env', 'input', 'stdout', 'stderr', 'text', 'timeout']
+    for kwarg in kwargs:
+        if kwarg not in allowed_kwargs:
+            error(f"Disallowed kwarg '{kwarg}' passed to launch_detached")
+            return False
     """
     Launch a process in the background; it auto-reaps when it exits.
 
