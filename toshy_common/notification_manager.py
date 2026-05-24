@@ -15,7 +15,7 @@ class NotificationManager:
         self.prio_arg       = f'--urgency={urgency}'
         self.icon_arg       = '' if icon_file is None else f'--icon={icon_file}'
         self.app_name_arg   = '--app-name=Toshy'
-        self.title_arg      = "" if title is None else title
+        self.title_arg      = "" if title is None else title.lstrip('-')
         self.ntfy_id_new    = None
         self.ntfy_id_last   = '0'
 
@@ -44,7 +44,9 @@ class NotificationManager:
                 return False
         return True
 
-    def send_notification(self, message: str, icon_file: str=None, 
+def send_notification(self, message: str, icon_file: str=None, urgency: str=None, replace_previous=True):
+        if not isinstance(message, str) or not message.strip():
+            return
                                 urgency: str=None, replace_previous=True):
         """Show a notification with given message and icon.
             Replace existing notification unless argument is false."""
@@ -53,8 +55,8 @@ class NotificationManager:
         if not self.ntfy_cmd:
             return
 
-        _icon_arg = self.icon_arg if icon_file is None else f'--icon={icon_file}'
-        _prio_arg = self.prio_arg if urgency is None else f'--urgency={urgency}'
+        _icon_arg = self.icon_arg if icon_file is None else f'--icon={shutil.which(icon_file) or icon_file}'
+        _prio_arg = self.prio_arg if urgency is None else f'--urgency={urgency}' if urgency in ['low', 'normal', 'critical'] else self.prio_arg
         if self.is_p_option_supported and replace_previous:
             _ntfy_id_new = subprocess.run(
                 [self.ntfy_cmd, _prio_arg, self.app_name_arg,
