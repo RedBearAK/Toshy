@@ -4401,71 +4401,75 @@ keymap("General Web Browsers", {
 hmp_is_jetbrains                = matchProps(clas="^jetbrains-(?!.*toolbox).*$")
 keymap("Jetbrains", {
     # General
-    C("C-Key_0"):               C("Alt-Key_0"),                 # Open corresponding tool window
-    C("C-Key_1"):               C("Alt-Key_1"),                 # Open corresponding tool window
-    C("C-Key_2"):               C("Alt-Key_2"),                 # Open corresponding tool window
-    C("C-Key_3"):               C("Alt-Key_3"),                 # Open corresponding tool window
-    C("C-Key_4"):               C("Alt-Key_4"),                 # Open corresponding tool window
-    C("C-Key_5"):               C("Alt-Key_5"),                 # Open corresponding tool window
-    C("C-Key_6"):               C("Alt-Key_6"),                 # Open corresponding tool window
-    C("C-Key_7"):               C("Alt-Key_7"),                 # Open corresponding tool window
-    C("C-Key_8"):               C("Alt-Key_8"),                 # Open corresponding tool window
-    C("C-Key_9"):               C("Alt-Key_9"),                 # Open corresponding tool window
+    C("RC-Key_0"):              C("Alt-Key_0"),                 # Open corresponding tool window
+    C("RC-Key_1"):              C("Alt-Key_1"),                 # Open corresponding tool window
+    C("RC-Key_2"):              C("Alt-Key_2"),                 # Open corresponding tool window
+    C("RC-Key_3"):              C("Alt-Key_3"),                 # Open corresponding tool window
+    C("RC-Key_4"):              C("Alt-Key_4"),                 # Open corresponding tool window
+    C("RC-Key_5"):              C("Alt-Key_5"),                 # Open corresponding tool window
+    C("RC-Key_6"):              C("Alt-Key_6"),                 # Open corresponding tool window
+    C("RC-Key_7"):              C("Alt-Key_7"),                 # Open corresponding tool window
+    C("RC-Key_8"):              C("Alt-Key_8"),                 # Open corresponding tool window
+    C("RC-Key_9"):              C("Alt-Key_9"),                 # Open corresponding tool window
     C("Super-Grave"):           C("C-Grave"),                   # Quick switch current scheme
-    C("C-Comma"):               C("C-Alt-s"),                   # Open Settings dialog
-    C("C-Semicolon"):           C("C-Alt-Shift-s"),             # Open Project Structure dialog
+    C("RC-Comma"):              C("C-Alt-s"),                   # Open Settings dialog
+    C("RC-Semicolon"):          C("Shift-C-Alt-s"),             # Open Project Structure dialog
     # Debugging
-    C("C-Alt-r"):               C("F9"),                        # Resume program
+    C("Alt-RC-r"):              C("F9"),                        # Resume program
     # Search/Replace
-    C("C-g"):                   C("F3"),                        # Find next
-    C("C-Shift-F3"):            C("Shift-F3"),                  # Find previous
-    C("Super-g"):               C("Alt-j"),                     # Select next occurrence
-    C("C-Super-g"):             C("C-Alt-Shift-j"),             # Select all occurrences
-    C("Super-Shift-g"):         C("Alt-Shift-j"),               # Unselect occurrence
+    C("RC-g"):                  C("F3"),                        # Find next (Mac Cmd+G)
+    C("Shift-RC-g"):            C("Shift-F3"),                  # Find previous (Mac Cmd+Shift+G)
+    C("Super-g"):               C("Alt-j"),                     # Select next occurrence (Mac Ctrl+G)
+    C("Super-RC-g"):            C("Shift-C-Alt-j"),             # Select all occurrences (Mac Cmd+Ctrl+G)
+    C("Shift-Super-g"):         C("Shift-Alt-j"),               # Unselect occurrence (Mac Ctrl+Shift+G)
     # Editing
     # C("Super-Space"):           C("C-Space"),                   # Basic code completion (conflicts with input switching)
-    # C("Super-Shift-Space"):     C("Shift-C-Space"),             # Smart code completion (conflicts with input switching)
-    C("Super-j"):               C("C-q"),                       # Quick documentation lookup
-    C("C-n"):                   C("Alt-Insert"),                # Generate code...
+    # C("Shift-Super-Space"):     C("Shift-C-Space"),             # Smart code completion (conflicts with input switching)
+    C("Super-j"):               C("C-q"),                       # Quick documentation lookup (Mac Ctrl+J, legacy)
+    C("F1"):                    C("C-q"),                       # Quick documentation lookup (Mac F1, current default)
+    C("RC-n"):                  C("Alt-Insert"),                # Generate code...
     C("Super-o"):               C("C-o"),                       # Override methods
     C("Super-i"):               C("C-i"),                       # Implement methods
     C("Alt-Up"):                C("C-w"),                       # Extend selection
-    C("Alt-Down"):              C("C-Shift-w"),                 # Shrink selection
-    C("Super-Shift-q"):         C("Alt-q"),                     # Context info
+    C("Alt-Down"):              C("Shift-C-w"),                 # Shrink selection
+    # TODO: Verify - Mac default keymap docs no longer list Ctrl+Shift+Q for Context Info.
+    #       May be a legacy mapping. Leaving in place pending confirmation from a JetBrains user.
+    C("Shift-Super-q"):         C("Alt-q"),                     # Context info
     C("Super-Alt-o"):           C("C-Alt-o"),                   # Optimize imports
     C("Super-Alt-i"):           C("C-Alt-i"),                   # Auto-indent line(s)
-    C("C-Backspace"):           C("C-y"),                       # Delete line at caret
-    C("Super-Shift-j"):         C("C-Shift-j"),                 # Smart line join
+    C("RC-Backspace"):          C("C-y"),                       # Delete line at caret
+    C("Shift-Super-j"):         C("Shift-C-j"),                 # Smart line join
     C("Alt-Delete"):            C("C-Delete"),                  # Delete to word end
     C("Alt-Backspace"):         C("C-Backspace"),               # Delete to word start
-    C("C-Shift-Equal"):         C("C-KPPLUS"),                  # Expand code block
-    C("C-Minus"):               C("C-KPMINUS"),                 # Collapse code block
-    C("C-Shift-Equal"):         C("C-Shift-KPPLUS"),            # Expand all
-    C("C-Shift-Minus"):         C("C-Shift-KPMINUS"),           # Collapse all
-    C("C-w"):                   C("C-F4"),                      # Close active editor tab
+    C("RC-Equal"):              C("C-KPPLUS"),                  # Expand code block (Mac Cmd+=)
+    C("RC-Minus"):              C("C-KPMINUS"),                 # Collapse code block (Mac Cmd+-)
+    C("Shift-RC-Equal"):        C("Shift-C-KPPLUS"),            # Expand all (Mac Cmd+Shift+=)
+    C("Shift-RC-Minus"):        C("Shift-C-KPMINUS"),           # Collapse all (Mac Cmd+Shift+-)
+    C("RC-w"):                  C("C-F4"),                      # Close active editor tab
     # Refactoring
-    C("C-Delete"):              C("Alt-Delete"),                # Safe Delete
-    C("C-T"):                   C("C-Alt-Shift-t"),             # Refactor this
+    C("RC-Delete"):             C("Alt-Delete"),                # Safe Delete (Mac Cmd+ForwardDelete)
+    C("Super-t"):               C("Shift-C-Alt-t"),             # Refactor This (Mac Ctrl+T)
     # Navigation
-    C("C-o"):                   C("C-n"),                       # Go to class
-    C("C-Shift-o"):             C("C-Shift-n"),                 # Go to file
-    C("C-Alt-o"):               C("C-Alt-Shift-n"),             # Go to symbol
+    C("RC-o"):                  C("C-n"),                       # Go to class
+    C("Shift-RC-o"):            C("Shift-C-n"),                 # Go to file
+    C("Alt-RC-o"):              C("Shift-C-Alt-n"),             # Go to symbol
     C("Super-Right"):           C("Alt-Right"),                 # Go to next editor tab
     C("Super-Left"):            C("Alt-Left"),                  # Go to previous editor tab
-    C("C-l"):                   C("C-g"),                       # Go to line
-    C("Alt-Space"):             C("C-Shift-i"),                 # Open quick definition lookup
-    C("C-Y"):                   C("C-Shift-i"),                 # Open quick definition lookup
-    C("Super-Shift-b"):         C("C-Shift-b"),                 # Go to type declaration
-    C("Super-Up"):              C("Alt-Up"),                    # Go to previous
-    C("Super-Down"):            C("Alt-Down"),                  # Go to next method
-    C("C-Left_Brace"):          C("Alt-Shift-Left"),            # Go back
-    C("C-Right_Brace"):         C("Alt-Shift-Right"),           # Go forward
+    C("RC-l"):                  C("C-g"),                       # Go to line
+    C("Alt-Space"):             C("Shift-C-i"),                 # Open quick definition lookup
+    C("RC-Y"):                  C("Shift-C-i"),                 # Open quick definition lookup
+    # Note: Mac Cmd+Shift+B (Go to Type Declaration) passes through naturally to Linux Ctrl+Shift+B,
+    #       so no explicit remap is needed. The earlier 'Super-Shift-b' input was incorrect (Mac uses Cmd, not Ctrl).
+    C("Shift-Super-Up"):        C("Alt-Up"),                    # Go to previous method (Mac Ctrl+Shift+Up)
+    C("Shift-Super-Down"):      C("Alt-Down"),                  # Go to next method (Mac Ctrl+Shift+Down)
+    C("RC-Left_Brace"):         C("Shift-Alt-Left"),            # Go back
+    C("RC-Right_Brace"):        C("Shift-Alt-Right"),           # Go forward
     C("Super-h"):               C("C-h"),                       # Type hierarchy
     C("Super-Alt-h"):           C("C-Alt-h"),                   # Call hierarchy
-    C("C-Down"):                C("C-Enter"),                   # Edit source/View source
+    C("RC-Down"):               C("C-Enter"),                   # Edit source/View source
     C("Alt-Home"):              C("Alt-Home"),                  # Show navigation bar
-    C("F2"):                    C("F11"),                       # Toggle bookmark
-    C("Super-F3"):              C("C-F11"),                     # Toggle bookmark with mnemonic
+    C("F3"):                    C("F11"),                       # Toggle bookmark (Mac F3)
+    C("Alt-F3"):                C("C-F11"),                     # Toggle bookmark with mnemonic (Mac Alt+F3)
     C("Super-Key_0"):           C("C-Key_0"),                   # Go to numbered bookmark
     C("Super-Key_1"):           C("C-Key_1"),                   # Go to numbered bookmark
     C("Super-Key_2"):           C("C-Key_2"),                   # Go to numbered bookmark
@@ -4476,14 +4480,14 @@ keymap("Jetbrains", {
     C("Super-Key_7"):           C("C-Key_7"),                   # Go to numbered bookmark
     C("Super-Key_8"):           C("C-Key_8"),                   # Go to numbered bookmark
     C("Super-Key_9"):           C("C-Key_9"),                   # Go to numbered bookmark
-    C("C-F3"):                  C("Shift-F11"),                 # Show bookmarks
+    C("RC-F3"):                 C("Shift-F11"),                 # Show bookmarks
     # Compile and Run
-    C("Super-Alt-r"):           C("Alt-Shift-F10"),             # Select configuration and run
-    C("Super-Alt-d"):           C("Alt-Shift-F9"),              # Select configuration and debug
+    C("Super-Alt-r"):           C("Shift-Alt-F10"),             # Select configuration and run
+    C("Super-Alt-d"):           C("Shift-Alt-F9"),              # Select configuration and debug
     C("Super-r"):               C("Shift-F10"),                 # Run
     C("Super-d"):               C("Shift-F9"),                  # Debug
-    C("Super-Shift-r"):         C("C-Shift-F10"),               # Run context configuration from editor
-    C("Super-Shift-d"):         C("C-Shift-F9"),                # Debug context configuration from editor
+    C("Shift-Super-r"):         C("Shift-C-F10"),               # Run context configuration from editor
+    C("Shift-Super-d"):         C("Shift-C-F9"),                # Debug context configuration from editor
     # VCS/Local History
     C("Super-v"):               C("Alt-Grave"),                 # VCS quick popup
     C("Super-c"):               C("C-c"),                       # Sigints - interrupt
