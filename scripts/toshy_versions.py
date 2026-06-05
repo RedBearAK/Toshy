@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260520'
+__version__ = '20260604'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -52,6 +52,11 @@ sys.path.insert(0, toshy_common_dir_path)
 # ~/.config/toshy/toshy_common/shared_device_context.py
 # ~/.config/toshy/toshy_common/xkb_check.py
 
+# ~/.config/toshy/toshy_common/kblayout_analyze.py
+# ~/.config/toshy/toshy_common/kblayout_common.py
+# ~/.config/toshy/toshy_common/kblayout_context.py
+# ~/.config/toshy/toshy_common/kblayout_detect.py
+
 # These two are shell scripts, not Python scrips
 # ~/.config/toshy/scripts/tshysvc-config
 # ~/.config/toshy/scripts/tshysvc-sessmon
@@ -102,6 +107,15 @@ terminal_utils_path     = os.path.join(toshy_dir_path,
 xkb_check_path          = os.path.join(toshy_dir_path,
                             'toshy_common', 'xkb_check.py')
 
+kblayout_analyze_path   = os.path.join(toshy_dir_path,
+                            'toshy_common', 'kblayout_analyze.py')
+kblayout_common_path    = os.path.join(toshy_dir_path,
+                            'toshy_common', 'kblayout_common.py')
+kblayout_context_path   = os.path.join(toshy_dir_path,
+                            'toshy_common', 'kblayout_context.py')
+kblayout_detect_path    = os.path.join(toshy_dir_path,
+                            'toshy_common', 'kblayout_detect.py')
+
 # These two files are shell scripts, not Python scripts:
 config_svc_path         = os.path.join(toshy_dir_path,'scripts', 'tshysvc-config')
 sessmon_svc_path        = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-sessmon')
@@ -124,7 +138,7 @@ components = [
     ("Preferences App (GTK4)",      preferences_app_gtk4),
     ("Preferences App (Tk)",        preferences_app_tk),
     ("Tray Indicator",              tray_indicator_path),
-    (None, None),  # Spacing
+    (None, None),                   # Spacing
     ("Environment Context",         env_context_path),
     ("Machine Context",             machine_context_path),
     ("Notification Manager",        notification_mgr_path),
@@ -138,16 +152,21 @@ components = [
     ("Shared Device Context",       shared_device_path),
     ("Terminal Utils",              terminal_utils_path),
     ("XKB Options Check",           xkb_check_path),
-    (None, None),  # Spacing
-    ("Keymapper Config Service",    config_svc_path),
-    ("Session Monitor Service",     sessmon_svc_path),
-    (None, None),  # Spacing
+    (None, None),                   # Spacing
+    ("Keyboard Layout Analyzer",    kblayout_analyze_path),
+    ("Keyboard Layout Common",      kblayout_common_path),
+    ("Keyboard Layout Context",     kblayout_context_path),
+    ("Keyboard Layout Detector",    kblayout_detect_path),
+    (None, None),                   # Spacing
+    ("SysD Svc: Keymapper Config",  config_svc_path),
+    ("SysD Svc: Session Monitor",   sessmon_svc_path),
+    (None, None),                   # Spacing
     ("D-Bus Service: COSMIC",       cosmic_dbus_path),
     ("D-Bus Service: KWin",         kwin_dbus_path),
     ("D-Bus Service: Wlroots",      wlroots_dbus_path),
-    (None, None),  # Spacing
+    (None, None),                   # Spacing
     ("KWin Script Helper",          kwin_script_path),
-    (None, None),  # Spacing
+    (None, None),                   # Spacing
     ("Versions Script (Me)",        versions_path),
 ]
 
@@ -198,3 +217,5 @@ for component_name, path in components:
                 "No version found or error reading file.")
 
 print()     # separate from next command prompt
+
+# End of File #
