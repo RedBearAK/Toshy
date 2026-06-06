@@ -36,6 +36,7 @@ __version__ = '20260605'
 
 import os
 import sys
+import mmap
 import ctypes
 import ctypes.util
 import select
@@ -63,6 +64,18 @@ try:
     _HAVE_XLIB = True
 except ImportError:
     _HAVE_XLIB = False
+
+
+# Guarded pywayland import for the generic Wayland backend. Absent on X11-only
+# systems and on Wayland sessions without it installed; the backend's
+# available() then returns False and the detector falls through. 'Display' is
+# aliased to avoid any confusion with an X11 display.
+try:
+    from pywayland.client import Display as WaylandDisplay
+    from pywayland.protocol.wayland import WlSeat
+    _HAVE_PYWAYLAND = True
+except ImportError:
+    _HAVE_PYWAYLAND = False
 
 
 # When run directly from inside the toshy_common/ folder, only that folder is
@@ -275,23 +288,33 @@ class LayoutBackend:
         return None
 
     def start(self, callback):
-        """Begin watching. callback(LayoutSpec) fires on the watcher thread."""
+        """Begin watching. callback(spec, keymap_string) fires on the watcher
+        thread; keymap_string is None except on the generic Wayland path."""
         return False
 
     def stop(self):
         pass
 
-    def _emit(self, spec):
-        """Deliver a change to the consumer, deduped by (layout, variant)."""
-        if spec is None:
+    def _emit(self, spec, keymap_string=None):
+        """Deliver a change to the consumer on the watcher thread.
+
+        Backends that resolve a layout to canonical (layout, variant) codes pass
+        a spec and dedup on it. The generic Wayland backend cannot recover those
+        codes, so it passes the compiled keymap text as keymap_string and dedup
+        keys on that text instead (its spec is only a display placeholder).
+        """
+        if spec is None and keymap_string is None:
             return
-        key = (spec.layout, spec.variant)
+        if keymap_string is not None:
+            key = keymap_string
+        else:
+            key = (spec.layout, spec.variant)
         if key == self._last:
             return
         self._last = key
         if self._callback:
             try:
-                self._callback(spec)
+                self._callback(spec, keymap_string)
             except Exception as callback_err:
                 _warn(f'Layout-change callback raised: {callback_err}')
 
@@ -1125,20 +1148,29 @@ class X11XkbBackend(LayoutBackend):
 # ── Generic Wayland backend (placeholder) ───────────────────────────────
 
 class WaylandGenericBackend(LayoutBackend):
-    """Placeholder for a compositor-agnostic Wayland layout reader.
+    """Compositor-agnostic Wayland layout reader via wl_keyboard.
 
-    The intended implementation connects as a minimal Wayland client
-    (wl_registry -> wl_seat -> wl_keyboard), reads wl_keyboard.keymap for the
-    active keymap, and watches wl_keyboard.modifiers for group (active-layout)
-    changes. The known wrinkle is that key/modifiers events follow keyboard
-    focus, so a background client may not observe group changes on every
-    compositor; some compositors send a fresh keymap on switch, which
-    sidesteps it. wlroots compositors also expose layout state through their
-    own IPC (Sway's get_inputs, Hyprland's hyprctl devices), which may be a
-    more reliable interim source.
+    Connects as a minimal, surfaceless Wayland client — wl_registry -> wl_seat
+    -> wl_keyboard, with no surface ever created — and reads the active layout
+    from wl_keyboard.keymap. The compositor sends that keymap once when the
+    keyboard is bound, so the startup layout is readable on any Wayland session,
+    and re-sends a freshly compiled keymap on each layout switch.
 
-    Not yet implemented: available() returns False, so the detector degrades
-    to a one-shot query plus the manual setting.
+    Because the client never owns a surface it can never hold focus, so any
+    keymap re-send it receives is focus-independent by construction. Whether a
+    compositor re-sends to unfocused clients is its own choice, not a protocol
+    guarantee: confirmed on cosmic-comp (a switch rotates the active layout to
+    group 0 and re-sends), where this backend live-tracks every switch. On a
+    compositor that only re-sends to the focused client, this backend still
+    reads the correct startup layout but then sits on it silently after a switch
+    it was never told about — so it is a genuine last resort. Where a wlroots
+    compositor exposes layout state through its own IPC (Sway's get_inputs,
+    Hyprland's hyprctl devices), that focus-independent channel is preferable
+    and would warrant its own backend.
+
+    The identity here is the compiled keymap, not (layout, variant) codes, so it
+    is emitted as keymap_string for the coordinator's load_from_string path; the
+    LayoutSpec it emits alongside is only a display placeholder.
     """
 
     name = 'wayland-generic'
@@ -1147,6 +1179,10 @@ class WaylandGenericBackend(LayoutBackend):
         self._init_watch_state()
         self.desktop_env = desktop_env
         self.session_type = session_type
+        self._stop_event = threading.Event()
+        self._display = None
+        self._seat = None
+        self._keyboard = None
 
     def detected_compositor(self):
         if os.environ.get('SWAYSOCK'):
@@ -1156,18 +1192,122 @@ class WaylandGenericBackend(LayoutBackend):
         return self.desktop_env or 'unknown'
 
     def available(self):
-        return False
+        if not _HAVE_PYWAYLAND:
+            return False
+        return bool(os.environ.get('WAYLAND_DISPLAY'))
 
     def get_active_layout(self):
+        # No usable one-shot here: the active layout's identity is the compiled
+        # keymap, which arrives on the watcher thread right after bind. The
+        # coordinator primes from that first _emit rather than from this query.
         return None
 
     def start(self, callback):
-        _warn(f'Wayland generic backend not implemented '
-              f'(detected compositor: {self.detected_compositor()}).')
-        return False
+        if not self.available():
+            _warn('Wayland generic backend unavailable '
+                  '(no pywayland or no WAYLAND_DISPLAY).')
+            return False
+        self._callback = callback
+        self._last = None
+        self._seat = None
+        self._keyboard = None
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._run, name='kblayout-wayland', daemon=True)
+        self._thread.start()
+        return True
 
     def stop(self):
-        pass
+        self._stop_event.set()
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=2.0)
+        self._thread = None
+
+    def _run(self):
+        """Watcher-thread body: connect, bind keyboard, dispatch keymap events.
+
+        Owns the Wayland connection start to finish (created and torn down on
+        this thread). stop() only sets the event; the select timeout bounds how
+        long teardown takes.
+        """
+        try:
+            display = WaylandDisplay()
+            display.connect()
+        except Exception as connect_err:
+            _warn(f'Wayland generic backend could not connect: {connect_err}')
+            return
+
+        self._display = display
+        try:
+            registry = display.get_registry()
+            registry.dispatcher['global'] = self._on_global
+            display.roundtrip()     # globals -> bind seat + get_keyboard
+            display.roundtrip()     # initial keymap -> first _emit (the prime)
+
+            if self._keyboard is None:
+                _warn('Wayland generic backend found no seat keyboard; '
+                      'no layout watcher started.')
+                return
+
+            fd = display.get_fd()
+            while not self._stop_event.is_set():
+                display.flush()
+                rlist, _, _ = select.select([fd], [], [], 0.5)
+                if rlist:
+                    display.dispatch(block=True)
+        except Exception as loop_err:
+            _warn(f'Wayland generic backend watch loop error: {loop_err}')
+        finally:
+            try:
+                display.disconnect()
+            except Exception:
+                pass
+            self._display = None
+
+    def _on_global(self, registry, id_num, iface_name, version):
+        if iface_name != 'wl_seat':
+            return
+        if self._keyboard is not None:
+            return
+        seat = registry.bind(id_num, WlSeat, version)
+        keyboard = seat.get_keyboard()
+        keyboard.dispatcher['keymap'] = self._on_keymap
+        self._seat = seat
+        self._keyboard = keyboard
+
+    def _on_keymap(self, keyboard, keymap_format, fd, size):
+        try:
+            keymap_text = self._read_keymap_fd(fd, size)
+        finally:
+            os.close(fd)
+        if not keymap_text:
+            return
+        # Placeholder spec for display only; the coordinator fills in the
+        # description from the compiled keymap's group-0 name.
+        spec = make_layout_spec(
+            layout=self.detected_compositor(),
+            raw_variant=None,
+            description=None,
+        )
+        self._emit(spec, keymap_string=keymap_text)
+
+    def _read_keymap_fd(self, fd, size):
+        """Read a wl_keyboard.keymap fd into the keymap text.
+
+        The fd is a read-only mapping; the payload is NUL-terminated and size
+        includes the terminator, so the text is everything up to the first NUL.
+        """
+        try:
+            buf = mmap.mmap(fd, size, mmap.MAP_PRIVATE, mmap.PROT_READ)
+        except (OSError, ValueError) as map_err:
+            _warn(f'Wayland generic backend could not map keymap fd: {map_err}')
+            return None
+        try:
+            raw = buf.read(size)
+        finally:
+            buf.close()
+        return raw.split(b'\x00', 1)[0].decode('utf-8', 'replace')
 
 
 # ── Backend selection + top-level detector ──────────────────────────────
@@ -1277,8 +1417,9 @@ def main():
 
     print('\nWatching for layout changes (Ctrl-C to stop)...\n')
 
-    def on_change(spec):
-        print(f'  Layout changed -> {format_layout(spec)}  '
+    def on_change(spec, keymap_string=None):
+        via = ' (keymap)' if keymap_string is not None else ''
+        print(f'  Layout changed -> {format_layout(spec)}{via}  '
               f'[layout={spec.layout} variant={spec.variant}]')
 
     stop_event = threading.Event()

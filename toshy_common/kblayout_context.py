@@ -19,7 +19,7 @@ contract kblayout_detect documents — so a consumer that needs the main thread
 marshals there itself.
 """
 
-__version__ = '20260604'
+__version__ = '20260605'
 
 import os
 import sys
@@ -68,6 +68,7 @@ class KeyboardLayoutContext:
         self._detector = KeyboardLayoutDetector(desktop_env, session_type)
         self._analyzer = KeyboardLayoutAnalyzer()
         self._current_spec = None
+        self._current_keymap = None
         self._current_map = {}
 
     @property
@@ -107,21 +108,42 @@ class KeyboardLayoutContext:
         """Stop watching for layout changes."""
         self._detector.stop()
 
-    def _on_layout_change(self, spec):
+    def _on_layout_change(self, spec, keymap_string=None):
         """Detector callback; runs on the watcher thread."""
-        self._apply_for_spec(spec)
+        self._apply_for_spec(spec, keymap_string)
 
-    def _apply_for_spec(self, spec):
-        """Analyze one layout and hand its correction map to the keymapper."""
-        if spec == self._current_spec:
-            return                          # same layout; nothing to rebuild
+    def _apply_for_spec(self, spec, keymap_string=None):
+        """Analyze one layout and hand its correction map to the keymapper.
 
-        if not self._analyzer.load_from_spec(spec):
+        Two identity models share this path. Spec-based backends supply
+        canonical (layout, variant) codes, are deduped on the spec, and are
+        analyzed via load_from_spec. The generic Wayland backend supplies the
+        compiled keymap text as keymap_string with only a placeholder spec; it
+        is deduped on the keymap text and analyzed via load_from_string, and its
+        display spec gets the compiled keymap's group-0 name filled in after.
+        """
+        if keymap_string is None:
+            if spec == self._current_spec:
+                return                      # same layout; nothing to rebuild
+            ok = self._analyzer.load_from_spec(spec)
+        else:
+            if keymap_string == self._current_keymap:
+                return                      # same keymap; nothing to rebuild
+            ok = self._analyzer.load_from_string(keymap_string)
+
+        if not ok:
             _warn(f'could not analyze layout {format_layout(spec)}; '
                     f'keeping the previous correction map.')
             return
 
         correction_map = self._analyzer.build_correction_map()
+
+        if keymap_string is not None:
+            # The backend could only supply a placeholder spec, so name it from
+            # the compiled keymap for any observer (logging, a UI indicator).
+            spec = spec._replace(description=self._analyzer.layout_name)
+            self._current_keymap = keymap_string
+
         self._current_spec = spec
         self._current_map = correction_map
 
