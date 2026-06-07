@@ -49,7 +49,7 @@ A combination that exists on only one side is exactly how a level-count
 mismatch surfaces, so that case needs no special handling.
 """
 
-__version__ = '20260604'
+__version__ = '20260607'
 
 import os
 import sys
@@ -550,6 +550,11 @@ class KeyboardLayoutAnalyzer:
         character-producing keys are considered (letters, digits, punctuation);
         modifier, function, and dead keys are never corrected. The map is empty
         for US-like layouts, where no correction is needed.
+
+        Both sides of every entry are kernel/evdev keycodes: XKB's +8 keycode
+        offset is removed here via _kernel_keycode, so the keymapper consumes the
+        map directly against its evdev-based Key enum and applies no offset of
+        its own.
 
         number_row:
             'positional' (default) leaves the digit-row keys (KEY_1..KEY_0)
