@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260520'
+__version__ = '20260607'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -92,6 +92,12 @@ devices_api(
     ignore_devices = [
         # 'Example Wireless Receiver Mouse',
     ],
+)
+
+
+keyboard_layout_correction(
+    enabled             = False,
+    correct_number_row  = False,
 )
 
 
@@ -194,14 +200,19 @@ current_folder_path = os.path.dirname(os.path.abspath(config_globals["__config__
 sys.path.insert(0, current_folder_path)
 
 # Local imports after path has been set
-from toshy_common.env_context import EnvironmentInfo
-from toshy_common.machine_context import get_machine_id_hash
-from toshy_common.notification_manager import NotificationManager
-from toshy_common.overlay_context import OverlayFlag as OFlag
-from toshy_common.proc_launcher import launch_detached
-from toshy_common.runtime_utils import sanitize_text
-from toshy_common.settings_class import Settings
-from toshy_common.terminal_utils import print_pango_text
+from toshy_common.env_context           import EnvironmentInfo
+from toshy_common.kblayout_setup        import start_kblayout_correction
+from toshy_common.machine_context       import get_machine_id_hash
+from toshy_common.notification_manager  import NotificationManager
+from toshy_common.overlay_context       import OverlayFlag as OFlag
+from toshy_common.proc_launcher         import launch_detached
+from toshy_common.runtime_utils         import sanitize_text
+from toshy_common.settings_class        import Settings
+from toshy_common.terminal_utils        import print_pango_text
+
+# Start up the mechanism that optionally auto-corrects keycodes that
+# differ from the standard US-default key definitions in kernel/keymapper.
+start_kblayout_correction()
 
 assets_path         = os.path.join(current_folder_path, 'assets')
 icon_file_active    = os.path.join(assets_path, "toshy_app_icon_rainbow.svg")

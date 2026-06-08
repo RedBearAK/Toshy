@@ -62,9 +62,11 @@ class KeyboardLayoutContext:
     """
 
     def __init__(self, apply_correction_map, desktop_env=None,
-                    session_type=None, reference_layout='us'):
+                    session_type=None, reference_layout='us',
+                    number_row='positional'):
         self._apply_correction_map = apply_correction_map
         self._reference_layout = reference_layout
+        self._number_row = number_row
         self._detector = KeyboardLayoutDetector(desktop_env, session_type)
         self._analyzer = KeyboardLayoutAnalyzer()
         self._current_spec = None
@@ -136,7 +138,7 @@ class KeyboardLayoutContext:
                     f'keeping the previous correction map.')
             return
 
-        correction_map = self._analyzer.build_correction_map()
+        correction_map = self._analyzer.build_correction_map(number_row=self._number_row)
 
         if keymap_string is not None:
             # The backend could only supply a placeholder spec, so name it from
