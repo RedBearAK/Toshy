@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260604'
+__version__ = '20260608'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -56,6 +56,7 @@ sys.path.insert(0, toshy_common_dir_path)
 # ~/.config/toshy/toshy_common/kblayout_common.py
 # ~/.config/toshy/toshy_common/kblayout_context.py
 # ~/.config/toshy/toshy_common/kblayout_detect.py
+# ~/.config/toshy/toshy_common/kblayout_setup.py
 
 # These two are shell scripts, not Python scrips
 # ~/.config/toshy/scripts/tshysvc-config
@@ -115,6 +116,8 @@ kblayout_context_path   = os.path.join(toshy_dir_path,
                             'toshy_common', 'kblayout_context.py')
 kblayout_detect_path    = os.path.join(toshy_dir_path,
                             'toshy_common', 'kblayout_detect.py')
+kblayout_setup_path     = os.path.join(toshy_dir_path,
+                            'toshy_common', 'kblayout_setup.py')
 
 # These two files are shell scripts, not Python scripts:
 config_svc_path         = os.path.join(toshy_dir_path,'scripts', 'tshysvc-config')
@@ -157,6 +160,7 @@ components = [
     ("Keyboard Layout Common",      kblayout_common_path),
     ("Keyboard Layout Context",     kblayout_context_path),
     ("Keyboard Layout Detector",    kblayout_detect_path),
+    ("Keyboard Layout Setup",       kblayout_setup_path),
     (None, None),                   # Spacing
     ("SysD Svc: Keymapper Config",  config_svc_path),
     ("SysD Svc: Session Monitor",   sessmon_svc_path),
