@@ -5,12 +5,25 @@
 #
 # Drives Sway keyboard-layout changes through both switch mechanisms so you
 # can watch what "toshy-kblayout-check" detects. Run the check command in one
-# tab/window and this script in another. It narrates each step, prints Sway's
-# own active layout as ground truth, and always returns the keyboard to a plain
-# US layout on exit (including on Ctrl-C).
+# tab/window and this script in another.
+#
+# The two paths deliberately use DIFFERENT layouts so the event is self-
+# identifying in the watcher tab, with no need to correlate timing:
+#   - PATH A (reconfigure) uses French / AZERTY  -> a FRENCH map = PATH A fired
+#   - PATH B (group toggle) uses German / QWERTZ -> a GERMAN map = PATH B fired
+#   - if the German map NEVER appears, the group toggle was missed
+#
+# It prints Sway's own active layout as ground truth and always returns the
+# keyboard to a plain US layout on exit (including on Ctrl-C).
 
 # shellcheck disable=SC2034
 VERSION='20260608'
+
+# Distinct layouts per path so the watcher output identifies which path fired.
+# PATH_B_LAYOUT can be set to 'ru' for a much larger, unmistakable map if the
+# German map is too subtle to spot at a glance.
+PATH_A_LAYOUT='fr'
+PATH_B_LAYOUT='de'
 
 # Seconds to pause on each step so you can read the watcher in the other tab.
 # Bump this up if the changes scroll by too fast to correlate.
@@ -72,8 +85,12 @@ pause() {
 
 banner "Keyboard layout switch test for Sway"
 echo "Make sure 'toshy-kblayout-check' is already running and visible in"
-echo "another tab or window. This script narrates each change and shows Sway's"
-echo "own active layout. It returns you to US automatically at the end."
+echo "another tab or window."
+echo
+echo "Watch the LAYOUT it reports, not the timing:"
+echo "  - a FRENCH  map appearing means PATH A (reconfigure) was detected"
+echo "  - a GERMAN  map appearing means PATH B (group toggle) was detected"
+echo "  - if the GERMAN map never appears, the group toggle was missed"
 pause
 
 banner "STEP 0  -  baseline: single US layout"
@@ -81,34 +98,37 @@ set_layout us
 ground_truth
 pause
 
-banner "PATH A  -  reconfigure swap (EXPECT the watcher to PRINT a change)"
-echo "Switching to single 'fr' (AZERTY). This recompiles and re-sends the keymap,"
-echo "so the surfaceless detector should see it."
-set_layout fr
+banner "PATH A  -  reconfigure swap   (EXPECT a FRENCH map in the watcher)"
+echo "Switching to single '${PATH_A_LAYOUT}'. This recompiles and re-sends the"
+echo "keymap, so the surfaceless detector should see it and report French."
+set_layout "$PATH_A_LAYOUT"
 ground_truth
 pause
 
 echo
-echo "Switching back to single 'us'. Again recompiles and re-sends the keymap."
+echo "Switching back to single 'us' (recompiles + re-sends; watcher clears)."
 set_layout us
 ground_truth
 pause
 
-banner "PATH B  -  group toggle (EXPECT the watcher to STAY SILENT)"
-echo "Loading two layouts as groups: 'us,fr' (group 0 = us, group 1 = fr/AZERTY)."
-set_layout "us,fr"
+banner "PATH B  -  group toggle   (EXPECT NO change; a GERMAN map = caught)"
+echo "Loading two layouts as groups: 'us,${PATH_B_LAYOUT}' (group 0 = us)."
+echo "Active layout stays us here, so the watcher should not change yet."
+set_layout "us,${PATH_B_LAYOUT}"
 ground_truth
 pause
 
 echo
-echo "Group toggle to next (us -> fr). The active GROUP index changes but the"
-echo "keymap is NOT recompiled, so the surfaceless detector should not see this."
+echo "Group toggle to next (us -> ${PATH_B_LAYOUT}). Active GROUP index changes"
+echo "but the keymap is not recompiled. If the watcher shows a GERMAN map, Sway"
+echo "re-sent a rotated keymap and the toggle was caught; if it stays silent,"
+echo "the group toggle was missed."
 switch_next
 ground_truth
 pause
 
 echo
-echo "Group toggle to next again (fr -> us)."
+echo "Group toggle to next again (${PATH_B_LAYOUT} -> us)."
 switch_next
 ground_truth
 pause
