@@ -95,10 +95,18 @@ devices_api(
 )
 
 
-keyboard_layout_correction(
-    enabled             = False,
-    correct_number_row  = False,
-)
+# Keyboard layout correction needs the keymapper's layout-correction API, which
+# currently lives only on the <BRANCH-NAME> branch of xwaykeyz — install it
+# deliberately via toshy-reinstall to test. On any keymapper without that API the
+# function below isn't defined, so guard the call: the feature stays off and
+# config load is unaffected.
+try:
+    keyboard_layout_correction(
+        enabled             = False,
+        correct_number_row  = False,
+    )
+except NameError:
+    pass
 
 
 ###########################################################

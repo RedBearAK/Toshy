@@ -19,7 +19,7 @@ contract kblayout_detect documents — so a consumer that needs the main thread
 marshals there itself.
 """
 
-__version__ = '20260605'
+__version__ = '20260608'
 
 import os
 import sys
@@ -45,20 +45,23 @@ class KeyboardLayoutContext:
     """Maintains the active layout's correction map and keeps it in sync.
 
     Lifecycle:
-        ctx = KeyboardLayoutContext(
-            apply_correction_map=lambda spec, m: keymapper.set_correction_map(m))
-        ctx.start()     # primes from the active layout, then watches for changes
+        kbl_ctx = KeyboardLayoutContext(
+            apply_correction_map=lambda spec, correction_map, symbol_hints:
+                keymapper.set_correction_map(correction_map, symbol_hints=symbol_hints))
+        kbl_ctx.start()     # primes from the active layout, then watches for changes
         ...
-        ctx.stop()
+        kbl_ctx.stop()
 
     On start() and on every subsequent layout change, the active LayoutSpec is
     loaded into the analyzer, compared against the reference layout, reduced to a
-    keycode->keycode correction map, and passed — together with the spec — to
-    apply_correction_map(spec, correction_map). The spec is there for observers
-    (logging, a UI indicator); a keymapper consumer ignores it and applies only
-    the map, so layout vocabulary never reaches the keymapper. The map is empty
-    for US-like layouts (no correction needed), so applying it is always safe,
-    and an unchanged layout is skipped so nothing is rebuilt needlessly.
+    keycode->keycode correction map, and passed — with the spec and a
+    keycode->symbol hint map for log readability — to apply_correction_map(spec,
+    correction_map, symbol_hints). The spec is there for observers (logging, a UI
+    indicator); a keymapper consumer applies the map and uses the hints only as
+    opaque display labels in its logs, so no layout vocabulary ever drives
+    keymapper logic. The map is empty for US-like layouts (no correction needed),
+    so applying it is always safe, and an unchanged layout is skipped so nothing
+    is rebuilt needlessly.
     """
 
     def __init__(self, apply_correction_map, desktop_env=None,
@@ -115,7 +118,8 @@ class KeyboardLayoutContext:
         self._apply_for_spec(spec, keymap_string)
 
     def _apply_for_spec(self, spec, keymap_string=None):
-        """Analyze one layout and hand its correction map to the keymapper.
+        """Analyze one layout and hand its correction map — plus a keycode->symbol
+        hint map for log readability — to the keymapper.
 
         Two identity models share this path. Spec-based backends supply
         canonical (layout, variant) codes, are deduped on the spec, and are
@@ -139,6 +143,7 @@ class KeyboardLayoutContext:
             return
 
         correction_map = self._analyzer.build_correction_map(number_row=self._number_row)
+        symbol_hints = self._analyzer.build_symbol_hints(correction_map)
 
         if keymap_string is not None:
             # The backend could only supply a placeholder spec, so name it from
@@ -151,23 +156,25 @@ class KeyboardLayoutContext:
 
         # A consumer exception must not kill the detector's watcher thread.
         try:
-            self._apply_correction_map(spec, correction_map)
+            self._apply_correction_map(spec, correction_map, symbol_hints)
         except Exception as apply_err:
             _warn(f'apply_correction_map raised for {format_layout(spec)}: {apply_err}')
 
 
 def main():
     """Standalone harness: announce each layout and print its correction map."""
-    def show(spec, correction_map):
+    def show(spec, correction_map, symbol_hints):
         count = len(correction_map)
         plural = 'entry' if count == 1 else 'entries'
         print(f'\nLayout -> {format_layout(spec)}  '
                 f'[layout={spec.layout} variant={spec.variant}]')
         print(f'    correction map: {count} {plural}  {correction_map}')
+        if symbol_hints:
+            print(f'    symbol hints:   {symbol_hints}')
 
-    context = KeyboardLayoutContext(apply_correction_map=show)
+    kbl_ctx = KeyboardLayoutContext(apply_correction_map=show)
 
-    print(f'Backend: {context.backend_name}')
+    print(f'Backend: {kbl_ctx.backend_name}')
     print('Starting layout coordinator (Ctrl-C to stop)...')
 
     stop_event = threading.Event()
@@ -180,7 +187,7 @@ def main():
 
     # start() primes from the active layout, so show() announces it (layout then
     # map) before the watcher takes over; every later switch prints the same way.
-    if not context.start():
+    if not kbl_ctx.start():
         print('No detection backend available; nothing to coordinate.')
         return
 
@@ -189,7 +196,7 @@ def main():
     try:
         stop_event.wait()
     finally:
-        context.stop()
+        kbl_ctx.stop()
         print('\nStopped.')
 
 

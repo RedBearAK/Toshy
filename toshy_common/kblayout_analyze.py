@@ -49,7 +49,7 @@ A combination that exists on only one side is exactly how a level-count
 mismatch surfaces, so that case needs no special handling.
 """
 
-__version__ = '20260607'
+__version__ = '20260608'
 
 import os
 import sys
@@ -154,7 +154,7 @@ def _produces_character(keysym: int) -> bool:
     return xkb.keysym_to_string(keysym) is not None
 
 
-def _base_char_keysyms(keymap) -> dict:
+def _base_char_keysyms(keymap: xkb.Keymap) -> dict:
     """Map xkb_keycode -> base-level keysym, for character-producing keys only.
 
     Base level (level 0, primary group) is the key's identity: which letter or
@@ -231,7 +231,7 @@ class KeyboardLayoutAnalyzer:
 
     def __init__(self):
         self.context = xkb.Context()
-        self.keymap = None          # set by a load_* call; methods guard on it
+        self.keymap: 'xkb.Keymap | None' = None          # set by a load_* call; methods guard on it
         self.layout_name = None
         self.layout_spec = None     # source LayoutSpec on name/spec loads; None
                                     # when string-loaded (literal identity unknown)
@@ -298,7 +298,7 @@ class KeyboardLayoutAnalyzer:
             return False
         return self._adopt_keymap(keymap)
 
-    def _adopt_keymap(self, keymap) -> bool:
+    def _adopt_keymap(self, keymap: xkb.Keymap) -> bool:
         """Store a freshly compiled keymap and cache its primary layout name.
 
         Resets layout_spec to None — the 'literal identity unknown' default that
@@ -539,6 +539,28 @@ class KeyboardLayoutAnalyzer:
             yield comparison_dct
 
     # ── Correction map (keymapper hand-off) ─────────────────────────────
+
+    def build_symbol_hints(self, correction_map: dict) -> dict:
+        """Return {kernel_keycode: active-layout base symbol} for the keys in a
+        correction map — keymapper-side log readability only, never correction.
+
+        The keymapper names keycodes from the US kernel header (Key.W is evdev
+        17), so on a non-US layout the corrected and emitted keycodes in its logs
+        wear names that do not match the user's keycaps. This reports the base
+        symbol each of those physical keys actually produces on the active layout
+        (evdev 17 -> 'z' on AZERTY), so the keymapper can annotate the relevant
+        log lines without ever doing symbol reasoning itself. Keyed on the
+        correction map's own keys, so the hint set cannot drift from it.
+        """
+        if self.keymap is None:
+            return {}
+        active_syms = _base_char_keysyms(self.keymap)
+        hints_dct = {}
+        for kernel in correction_map:
+            keysym = active_syms.get(kernel + XKB_KEYCODE_OFFSET)
+            if keysym is not None:
+                hints_dct[kernel] = xkb.keysym_to_string(keysym)
+        return hints_dct
 
     def build_correction_map(self, number_row='positional', latin_fallback=False) -> dict:
         """Return the sparse keycode->keycode correction map for the keymapper.
