@@ -49,7 +49,7 @@ ln -sf "${TOSHY_BIN}/toshy-versions.sh"                 "${LOCAL_BIN}/toshy-vers
 ln -sf "${TOSHY_BIN}/toshy-reinstall.sh"                "${LOCAL_BIN}/toshy-reinstall"
 ln -sf "${TOSHY_BIN}/toshy-xkb-check.sh"                "${LOCAL_BIN}/toshy-xkb-check"
 ln -sf "${TOSHY_BIN}/toshy-machine-id.sh"               "${LOCAL_BIN}/toshy-machine-id"
-ln -sf "${TOSHY_BIN}/toshy-kblayout-check.sh"           "${LOCAL_BIN}/toshy-kblayout-check.sh"
+ln -sf "${TOSHY_BIN}/toshy-kblayout-check.sh"           "${LOCAL_BIN}/toshy-kblayout-check"
 ln -sf "${TOSHY_BIN}/toshy-kwin-dbus-service.sh"        "${LOCAL_BIN}/toshy-kwin-dbus-service"
 ln -sf "${TOSHY_BIN}/toshy-cosmic-dbus-service.sh"      "${LOCAL_BIN}/toshy-cosmic-dbus-service"
 ln -sf "${TOSHY_BIN}/toshy-wlroots-dbus-service.sh"     "${LOCAL_BIN}/toshy-wlroots-dbus-service"
