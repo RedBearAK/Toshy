@@ -3286,10 +3286,33 @@ def install_udev_rules():
 
     if setfacl_path is not None:
         acl_rule                = f', RUN+="{setfacl_path} -m g::rw /dev/uinput"'
+
+    # Apple Touch Bar (T2 MacBooks): the keymapper must grab the internal keyboard
+    # to remap it, which bypasses the in-kernel `hid_appletb_kbd` Fn handler that
+    # switches the Touch Bar to the F1-F12 row. The Toshy config reproduces that
+    # behavior by writing the driver's per-device sysfs `mode` attribute, so that
+    # file needs to be writable by the `input` group. udev expands `$devpath` to
+    # the matched HID device, where the `mode` attribute lives. Harmless no-op on
+    # any machine without an Apple Touch Bar (the rule simply never matches).
+    chgrp_path                  = shutil.which('chgrp')
+    chmod_path                  = shutil.which('chmod')
+    touchbar_rule               = ''
+    if chgrp_path is not None and chmod_path is not None:
+        # NOTE: udev exposes the driver as `hid-appletb-kbd` (dashes), not the
+        # module name `hid_appletb_kbd`. The `?` glob matches either spelling so
+        # this keeps working across kernels. `bind` is included so the rule also
+        # fires when the driver attaches at boot (DRIVER is unset on bare `add`).
+        touchbar_rule           = (
+            'ACTION=="add|change|bind", SUBSYSTEM=="hid", DRIVER=="hid?appletb?kbd", '
+            f'RUN+="{chgrp_path} input /sys$devpath/mode", '
+            f'RUN+="{chmod_path} g+w /sys$devpath/mode"\n'
+        )
+
     new_rules_content           = (
         'SUBSYSTEM=="input", GROUP="input", MODE="0660", TAG+="uaccess"\n'
         'KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", ' # No line break here!
         f'TAG+="uaccess"{acl_rule}\n'
+        f'{touchbar_rule}'
     )
 
     def rules_file_missing_or_content_differs():

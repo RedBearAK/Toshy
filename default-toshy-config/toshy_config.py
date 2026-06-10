@@ -1829,6 +1829,112 @@ def isMultiTap( tap_1_action: 'Callable | None' = None,
 
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+#  Apple Touch Bar: keep the "Fn" key switching to F1-F12 while Toshy runs
+#  (T2 / Touch Bar MacBooks only — no-op on all other hardware).
+#
+#  To remap the internal keyboard the keymapper takes an exclusive evdev grab
+#  (EVIOCGRAB) on it. The kernel `hid_appletb_kbd` driver normally watches the
+#  Fn key (via an input handler attached to that same keyboard device) to switch
+#  the Touch Bar between the media row and the F1-F12 row. An exclusive grab
+#  routes events only to the keymapper and bypasses the driver's handler, so the
+#  Touch Bar stops responding to Fn while Toshy runs (and works again the moment
+#  the services are stopped and the grab is released).
+#
+#  Since the keymapper is now the only process that sees the Fn key, we reproduce
+#  the driver's behavior in userspace by writing the Touch Bar's writable
+#  per-device sysfs `mode` attribute. We mirror the native default (momentary):
+#  show F-keys while Fn is held, restore the previous mode on release. Values:
+#  0 = esc-only, 1 = function keys (F1-F12), 2 = media/special keys.
+#
+#  The `mode` attribute must be group-writable by the `input` group; the Toshy
+#  installer adds a udev rule for that (see `install_udev_rules()` in setup).
+
+import glob as _glob
+
+_APPLETB_MODE_FNKEYS    = '1'   # show F1-F12 row
+_APPLETB_MODE_DEFAULT   = '2'   # media/special keys row (fallback if read fails)
+
+
+def _find_appletb_mode_path():
+    """Return the writable Touch Bar `mode` sysfs path, or None if not present.
+
+    A `mode` attribute is matched only when the HID device is actually bound to
+    the `hid_appletb_kbd` driver (its sysfs name is `hid-appletb-kbd`). This is
+    independent of USB product ID, yet an unrelated HID device that happens to
+    expose a generic `mode` attribute can never be mistaken for an Apple Touch
+    Bar — so this is a safe no-op on all non-Touch-Bar hardware.
+    """
+    for path in _glob.glob('/sys/bus/hid/devices/*/mode'):
+        driver_link = os.path.join(os.path.dirname(path), 'driver')
+        driver_name = os.path.basename(os.path.realpath(driver_link))
+        if driver_name.replace('_', '-') == 'hid-appletb-kbd':
+            return path
+    return None
+
+
+_appletb_mode_path      = _find_appletb_mode_path()
+
+if _appletb_mode_path:
+
+    from evdev import ecodes as _ecodes
+
+    _appletb_saved_mode = _APPLETB_MODE_DEFAULT
+    _appletb_warned     = False
+
+    def _appletb_warn_once(msg):
+        global _appletb_warned
+        if not _appletb_warned:
+            _appletb_warned = True
+            error(f"## touchbar-fn: {msg}")
+
+    def _touchbar_fn_observe(event):
+        """Drive the Touch Bar mode from Fn press/release. Side-effect only;
+        must never raise into the key-event pipeline."""
+        global _appletb_saved_mode
+        try:
+            if event.type != _ecodes.EV_KEY or event.code != _ecodes.KEY_FN:
+                return
+            if event.value == 1:            # Fn pressed: remember mode, show F-keys
+                try:
+                    with open(_appletb_mode_path, 'r') as f:
+                        current = f.read().strip()
+                    if current in ('0', '1', '2'):
+                        _appletb_saved_mode = current
+                except OSError:
+                    pass                    # keep last known saved mode
+                with open(_appletb_mode_path, 'w') as f:
+                    f.write(_APPLETB_MODE_FNKEYS)
+            elif event.value == 0:          # Fn released: restore previous mode
+                with open(_appletb_mode_path, 'w') as f:
+                    f.write(_appletb_saved_mode)
+            # event.value == 2 (auto-repeat) is intentionally ignored
+        except OSError as os_err:
+            _appletb_warn_once(
+                f"could not write '{_appletb_mode_path}' (need 'input' group write "
+                f"access; is the Toshy udev rule installed?): {os_err}")
+        except Exception as unexpected:     # never disturb the key event pipeline
+            _appletb_warn_once(f"unexpected error: {unexpected}")
+
+    # Install the hook by wrapping the input loop's `on_event` reference.
+    # `xwaykeyz/input.py` does `from .transform import on_event` and calls that
+    # module-global by name, so we must patch the name in `xwaykeyz.input`
+    # (patching `xwaykeyz.transform.on_event` would not be seen by the loop).
+    try:
+        import xwaykeyz.input as _xwk_input
+        if not getattr(_xwk_input, '_toshy_touchbar_hooked', False):
+            def _on_event_with_touchbar(event, device, _orig=_xwk_input.on_event):
+                _touchbar_fn_observe(event)
+                return _orig(event, device)
+            _xwk_input.on_event = _on_event_with_touchbar
+            _xwk_input._toshy_touchbar_hooked = True
+            debug(f"## touchbar-fn: Fn->Touch Bar handler active "
+                    f"(mode sysfs: {_appletb_mode_path})")
+    except Exception as hook_err:
+        error(f"## touchbar-fn: failed to install Fn handler: {hook_err}")
+
+
+
 #################################  MODMAPS  ####################################
 ###                                                                          ###
 ###                                                                          ###
