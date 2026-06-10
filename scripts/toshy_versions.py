@@ -9,6 +9,8 @@ __version__ = '20260608'
 
 import os
 import sys
+import glob
+
 from xwaykeyz.version import __version__ as xwaykeyz_ver
 
 home_dir                = os.path.expanduser('~')
@@ -30,6 +32,13 @@ run_tmp_dir             = os.environ.get('XDG_RUNTIME_DIR') or '/tmp'
 sys.path.insert(0, toshy_dir_path)
 sys.path.insert(0, toshy_common_dir_path)
 # print(sys.path)
+
+if '--help' in sys.argv or '-h' in sys.argv:
+    print('Usage: toshy_versions.py [--all]')
+    print('  --all   also show detector package sub-modules and other detailed entries')
+    sys.exit(0)
+
+show_all_modules = '--all' in sys.argv or '-a' in sys.argv
 
 
 # Files to parse for version info:
@@ -115,7 +124,7 @@ kblayout_common_path    = os.path.join(toshy_dir_path,
 kblayout_context_path   = os.path.join(toshy_dir_path,
                             'toshy_common', 'kblayout_context.py')
 kblayout_detect_path    = os.path.join(toshy_dir_path,
-                            'toshy_common', 'kblayout_detect.py')
+                            'toshy_common', 'kblayout_detect')      # package dir now
 kblayout_setup_path     = os.path.join(toshy_dir_path,
                             'toshy_common', 'kblayout_setup.py')
 
@@ -134,6 +143,11 @@ kwin_script_path        = os.path.join(toshy_dir_path,
                             'kwin-dbus-service', 'toshy_kwin_script_setup.py')
 versions_path           = os.path.join(toshy_dir_path,
                             'scripts', 'toshy_versions.py')
+
+
+# Detector is a package now; its per-module entries (below) show only with --all.
+def _kbld_module(filename):
+    return os.path.join(kblayout_detect_path, filename)
 
 
 components = [
@@ -156,10 +170,23 @@ components = [
     ("Terminal Utils",              terminal_utils_path),
     ("XKB Options Check",           xkb_check_path),
     (None, None),                   # Spacing
-    ("Keyboard Layout Analyzer",    kblayout_analyze_path),
-    ("Keyboard Layout Common",      kblayout_common_path),
-    ("Keyboard Layout Context",     kblayout_context_path),
-    ("Keyboard Layout Detector",    kblayout_detect_path),
+    ("Kbd Layout Analyzer",         kblayout_analyze_path),
+    ("Kbd Layout Common",           kblayout_common_path),
+    ("Kbd Layout Context",          kblayout_context_path),
+    ("Kbd Layout Detection (pkg)",  kblayout_detect_path),
+    (None, None, True),             # Spacing (detailed output only)
+    ("  Detector: __init__",        _kbld_module('__init__.py'),                True),
+    ("  Detector: __main__",        _kbld_module('__main__.py'),                True),
+    ("  Detector: base",            _kbld_module('kbld_backend_base.py'),       True),
+    ("  Detector: registry",        _kbld_module('kbld_registry.py'),           True),
+    (None, None, True),             # Spacing (detailed output only)
+    ("  Detector: Cinnamon",        _kbld_module('kbld_backend_cinnamon.py'),   True),
+    ("  Detector: COSMIC",          _kbld_module('kbld_backend_cosmic.py'),     True),
+    ("  Detector: GNOME",           _kbld_module('kbld_backend_gnome.py'),      True),
+    ("  Detector: KDE",             _kbld_module('kbld_backend_kde.py'),        True),
+    ("  Detector: Wayland-generic", _kbld_module('kbld_backend_wl_generic.py'), True),
+    ("  Detector: X11",             _kbld_module('kbld_backend_x11.py'),        True),
+    (None, None, True),             # Spacing (detailed output only)
     ("Keyboard Layout Setup",       kblayout_setup_path),
     (None, None),                   # Spacing
     ("SysD Svc: Keymapper Config",  config_svc_path),
@@ -176,29 +203,62 @@ components = [
 
 
 # Helper function to extract version from file content
+def _format_version(version_raw):
+    # Format YYYYMMDD as YYYY.MM.DD for readability; pass anything else through.
+    if (version_raw.isdigit() and '.' not in version_raw and
+            2020 <= int(version_raw[:4]) <= 2038):
+        return f"{version_raw[:4]}.{version_raw[4:6]}.{version_raw[6:]}"
+    return version_raw
+
+
+def _raw_version_in_file(file_path):
+    with open(file_path, 'r') as file:
+        for line in file:
+            # Extract from both the Python style variable, and shell script style variable
+            if line.startswith('__version__') or line.startswith('SCRIPT_VERSION'):
+                return line.split('=')[1].strip().strip('"').strip("'")
+    return None
+
+
 def extract_version(file_path: str):
     try:
-        with open(file_path, 'r') as file:
-            for line in file:
-                # Extract from both the Python style variable, and shell script style variable
-                if line.startswith('__version__') or line.startswith('SCRIPT_VERSION'):
-                    version_raw = line.split('=')[1].strip().strip('"').strip("'")
-                    # Check if the version is all digits, has no dots, 
-                    # and starts with a year in a rational range
-                    if (version_raw.isdigit() and '.' not in version_raw and 
-                            2020 <= int(version_raw[:4]) <= 2038):
-                        # Format the version string for readability
-                        return f"{version_raw[:4]}.{version_raw[4:6]}.{version_raw[6:]}"
-                    # Return the raw version if it doesn't meet the criteria
-                    else:
-                        return version_raw
+        # A package directory: report the newest version among its modules.
+        if os.path.isdir(file_path):
+            raw_lst = []
+            for module_path in sorted(glob.glob(os.path.join(file_path, '*.py'))):
+                raw = _raw_version_in_file(module_path)
+                if raw is not None:
+                    raw_lst.append(raw)
+            if not raw_lst:
+                return None
+            return _format_version(max(raw_lst))
+
+        raw = _raw_version_in_file(file_path)
+        if raw is None:
+            return None
+        return _format_version(raw)
     except Exception as e:
         return f"Error reading file: {str(e)}"
 
 
 
-# Update the formatting logic for tuples:
-max_component_name_length = max(len(name) for name, path in components if name is not None)
+# Unpack an entry into (name, path, detail_only), tolerating 2- or 3-tuples.
+def _entry_fields(entry):
+    name = entry[0]
+    path = entry[1] if len(entry) > 1 else None
+    detail_only = entry[2] if len(entry) > 2 else False
+    return name, path, detail_only
+
+
+def _is_shown(name, detail_only):
+    return name is not None and not (detail_only and not show_all_modules)
+
+
+# Width is computed over only the rows that will actually print.
+max_component_name_length = max(
+    len(name) for name, path, detail_only in (_entry_fields(e) for e in components)
+    if _is_shown(name, detail_only)
+)
 
 print()     # separate from command
 # Print the keymapper info
@@ -208,17 +268,28 @@ print(f"  {'Component'.ljust(max_component_name_length + 4)}Version")
 print('  ' + '-' * (max_component_name_length + 14))
 
 # Print version information
-for component_name, path in components:
+for entry in components:
+    component_name, path, detail_only = _entry_fields(entry)
+    if detail_only and not show_all_modules:
+        continue
     if component_name is None:
         print()  # Blank line for spacing
         continue
-    
+    if not isinstance(component_name, str):        # narrow type to str for ljust() below
+        raise TypeError(
+            f"component_name should be str, got "
+            f"{type(component_name).__name__}: {component_name!r}")
+
     version = extract_version(path) if path else "N/A"
     if version:
         print(f"  {component_name.ljust(max_component_name_length + 4)}{version}")
     else:
         print(f"  {component_name.ljust(max_component_name_length + 4)}"
                 "No version found or error reading file.")
+
+if not show_all_modules:
+    print()
+    print("  Use --all to show more detailed sub-module versions.")
 
 print()     # separate from next command prompt
 
