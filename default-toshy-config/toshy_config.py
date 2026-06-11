@@ -95,11 +95,7 @@ devices_api(
 )
 
 
-# Keyboard layout correction needs the keymapper's layout-correction API, which
-# currently lives only on the <BRANCH-NAME> branch of xwaykeyz — install it
-# deliberately via toshy-reinstall to test. On any keymapper without that API the
-# function below isn't defined, so guard the call: the feature stays off and
-# config load is unaffected.
+# Requires xwaykeyz v1.18.0 or later
 try:
     keyboard_layout_correction(
         enabled             = False,
