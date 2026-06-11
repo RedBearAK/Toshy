@@ -15,4 +15,4 @@ fi
 # shellcheck disable=SC1091
 source "${VENV_PATH}/bin/activate"
 
-"${VENV_PATH}/bin/python" "${HOME}/.config/toshy/scripts/toshy_versions.py"
+"${VENV_PATH}/bin/python" "${HOME}/.config/toshy/scripts/toshy_versions.py" "$@"
