@@ -1,15 +1,16 @@
-__version__ = '20260504'
+__version__ = '20260611'
 
 import os
 import inspect
 import sqlite3
 import textwrap
 
+import xwaykeyz.lib.logger
+
 from typing import Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 
-import xwaykeyz.lib.logger
 from xwaykeyz.lib.logger import debug, error
 
 from toshy_common.shared_device_context import SharedDeviceContext
@@ -50,6 +51,7 @@ class Settings:
         self.optspec_layout         = 'Disabled'        # Default: 'Disabled'
         self.mru_layout             = ('us', 'default') # Default: ('us', 'default')
         self.forced_numpad          = True              # Default: True
+        self.altgr_on_menu_key      = True              # Default: True
         self.media_arrows_fix       = False             # Default: False
         self.multi_lang             = False             # Default: False
         self.Caps2Cmd               = False             # Default: False
@@ -183,6 +185,7 @@ class Settings:
             ('overlay_mask',            str(int(self.overlay_mask))),
             ('optspec_layout',          str(self.optspec_layout)),
             ('forced_numpad',           str(self.forced_numpad)),
+            ('altgr_on_menu_key',       str(self.altgr_on_menu_key)),
             ('media_arrows_fix',        str(self.media_arrows_fix)),
             ('multi_lang',              str(self.multi_lang)),
             ('Caps2Cmd',                str(self.Caps2Cmd)),
@@ -223,23 +226,24 @@ class Settings:
                 setting_value       = row[1].lower() == 'true'
 
                 if True is False: pass  # dummy first `if` line so other rows line up (readability)
-                elif row[0] == 'autoload_tray_icon'  : self.autoload_tray_icon  = setting_value
-                elif row[0] == 'gui_dark_theme'      : self.gui_dark_theme      = setting_value
+                elif row[0] == 'autoload_tray_icon'     : self.autoload_tray_icon  = setting_value
+                elif row[0] == 'gui_dark_theme'         : self.gui_dark_theme      = setting_value
 
-                elif row[0] == 'gui_theme_mode'      : self.gui_theme_mode      = row[1]
-                elif row[0] == 'override_kbtype'     : self.override_kbtype     = row[1]
-                elif row[0] == 'optspec_layout'      : self.optspec_layout      = row[1]
+                elif row[0] == 'gui_theme_mode'         : self.gui_theme_mode      = row[1]
+                elif row[0] == 'override_kbtype'        : self.override_kbtype     = row[1]
+                elif row[0] == 'optspec_layout'         : self.optspec_layout      = row[1]
 
-                elif row[0] == 'overlay_mask'        :
+                elif row[0] == 'overlay_mask'           :
                     self.overlay_mask   = OverlayFlag(int(row[1]))
 
-                elif row[0] == 'forced_numpad'       : self.forced_numpad       = setting_value
-                elif row[0] == 'media_arrows_fix'    : self.media_arrows_fix    = setting_value
-                elif row[0] == 'multi_lang'          : self.multi_lang          = setting_value
-                elif row[0] == 'Caps2Cmd'            : self.Caps2Cmd            = setting_value
-                elif row[0] == 'Caps2Esc_Cmd'        : self.Caps2Esc_Cmd        = setting_value
-                elif row[0] == 'Enter2Ent_Cmd'       : self.Enter2Ent_Cmd       = setting_value
-                elif row[0] == 'ST3_in_VSCode'       : self.ST3_in_VSCode       = setting_value
+                elif row[0] == 'forced_numpad'          : self.forced_numpad       = setting_value
+                elif row[0] == 'altgr_on_menu_key'      : self.altgr_on_menu_key   = setting_value
+                elif row[0] == 'media_arrows_fix'       : self.media_arrows_fix    = setting_value
+                elif row[0] == 'multi_lang'             : self.multi_lang          = setting_value
+                elif row[0] == 'Caps2Cmd'               : self.Caps2Cmd            = setting_value
+                elif row[0] == 'Caps2Esc_Cmd'           : self.Caps2Esc_Cmd        = setting_value
+                elif row[0] == 'Enter2Ent_Cmd'          : self.Enter2Ent_Cmd       = setting_value
+                elif row[0] == 'ST3_in_VSCode'          : self.ST3_in_VSCode       = setting_value
 
             db_cursor.execute('''
                 SELECT layout_code, variant_code from mru_layouts 
@@ -382,6 +386,7 @@ class Settings:
         mru_layout              = {self.mru_layout}
         ------------------------------------------------------------------------------
         forced_numpad           = {self.forced_numpad}
+        altgr_on_menu_key       = {self.altgr_on_menu_key}
         media_arrows_fix        = {self.media_arrows_fix}
         multi_lang              = {self.multi_lang}
         Caps2Cmd                = {self.Caps2Cmd}

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20260520'
+__version__ = '20260611'
 
 # Indicator tray icon menu app for Toshy, using pygobject/gi
 TOSHY_PART      = 'tray'   # CUSTOMIZE TO SPECIFIC TOSHY COMPONENT! (gui, tray, config)
@@ -379,6 +379,7 @@ if not runtime.barebones_config:
     def load_prefs_submenu_settings():
         cnfg.load_settings()
         set_item_active_thread_safe(forced_numpad_item, cnfg.forced_numpad)
+        set_item_active_thread_safe(altgr_on_menu_key_item, cnfg.altgr_on_menu_key)
         set_item_active_thread_safe(media_arrows_fix_item, cnfg.media_arrows_fix)
         set_item_active_thread_safe(multi_lang_item, cnfg.multi_lang)
         set_item_active_thread_safe(ST3_in_VSCode_item, cnfg.ST3_in_VSCode)
@@ -388,6 +389,7 @@ if not runtime.barebones_config:
 
     def save_prefs_settings(widget):
         cnfg.forced_numpad      = forced_numpad_item.get_active()
+        cnfg.altgr_on_menu_key  = altgr_on_menu_key_item.get_active()
         cnfg.media_arrows_fix   = media_arrows_fix_item.get_active()
         cnfg.multi_lang         = multi_lang_item.get_active()
         cnfg.ST3_in_VSCode      = ST3_in_VSCode_item.get_active()
@@ -434,6 +436,11 @@ if not runtime.barebones_config:
     forced_numpad_item.set_active(cnfg.forced_numpad)
     forced_numpad_item.connect('toggled', save_prefs_settings)
     prefs_submenu.append(forced_numpad_item)
+
+    altgr_on_menu_key_item = Gtk.CheckMenuItem(label='Alt_Gr on Menu key')
+    altgr_on_menu_key_item.set_active(cnfg.altgr_on_menu_key)
+    altgr_on_menu_key_item.connect('toggled', save_prefs_settings)
+    prefs_submenu.append(altgr_on_menu_key_item)
 
     media_arrows_fix_item = Gtk.CheckMenuItem(label='Media Arrows Fix')
     media_arrows_fix_item.set_active(cnfg.media_arrows_fix)

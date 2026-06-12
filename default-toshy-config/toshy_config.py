@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260607'
+__version__ = '20260611'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -984,6 +984,7 @@ ctx_ovl_enter_to_rename         = False
 ctx_ovl_browser_shortcuts       = False
 ctx_ovl_vscode_shortcuts        = False
 ctx_ovl_dialog_ergo             = False
+ctx_ovl_level3_left_alt         = False
 
 # User overlay flag states
 ctx_ovl_user_flag_a             = False
@@ -1021,6 +1022,8 @@ def _context_pre_check(ctx: KeyContext):
     global ctx_ovl_finder_mods, ctx_ovl_enter_to_rename
     global ctx_ovl_browser_shortcuts
     global ctx_ovl_vscode_shortcuts
+    global ctx_ovl_level3_left_alt
+
     global ctx_ovl_user_flag_a, ctx_ovl_user_flag_b, ctx_ovl_user_flag_c
     global ctx_ovl_user_flag_d, ctx_ovl_user_flag_e, ctx_ovl_user_flag_f
 
@@ -1049,6 +1052,7 @@ def _context_pre_check(ctx: KeyContext):
     ctx_ovl_browser_shortcuts   = mask & OFlag.BROWSER_SHORTCUTS
     ctx_ovl_vscode_shortcuts    = mask & OFlag.VSCODE_SHORTCUTS
     ctx_ovl_dialog_ergo         = mask & OFlag.DIALOG_ERGO
+    ctx_ovl_level3_left_alt     = mask & OFlag.LEVEL3_LEFT_ALT
 
     ctx_ovl_user_flag_a         = mask & OFlag.USER_FLAG_A
     ctx_ovl_user_flag_b         = mask & OFlag.USER_FLAG_B
@@ -2047,6 +2051,20 @@ multipurpose_modmap("Caps2Esc - Chromebook kbd", {
 
 
 # [Global GUI conditional modmaps] Change modifier keys as in xmodmap
+multipurpose_modmap("Cond multi-modmap - Alt_Gr on Menu key", {
+    # Only gets to level 3/4 special characters on a layout that has "Level3 Shift" on
+    # the right-side Alt (Alt_Gr) key. Won't really do anything on layouts where
+    # that key is just Alt_R. Compose/Menu key will just become another Alt_R key.
+    # But this means there will be an Option/Alt key equivalent on the correct
+    # key position on many PC laptop keyboards.
+    # As a multipurpose modmap, the Menu/Compose key can continue to activate context
+    # menus like it normally does, when tapped alone.
+    Key.COMPOSE:                [Key.COMPOSE, Key.RIGHT_ALT],                  # Menu/Compose → Alt_Gr (Level3/4)
+}, when = lambda ctx:
+    cnfg.altgr_on_menu_key and
+    cnfg.screen_has_focus and
+    not ctx_app_is_remote
+)
 modmap("Cond modmap - GUI - Caps2Cmd - not Cbk kdb", {
     Key.CAPSLOCK:               Key.RIGHT_CTRL,                 # Caps2Cmd
 }, when = lambda ctx:
