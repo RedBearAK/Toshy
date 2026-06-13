@@ -8,7 +8,7 @@ unchanged. Backends never import each other - only kbld_backend_base and the
 shared kblayout_common types.
 """
 
-__version__ = '20260608'
+__version__ = '20260613'
 
 import os
 import threading
@@ -92,8 +92,8 @@ class KdeBackend(LayoutBackend):
     broadcast). The index is resolved to (layout, variant) through kxkbrc's
     parallel LayoutList/VariantList, which carry the precise XKB variant codes
     that the D-Bus longName only describes in prose. getLayoutsList() is used
-    as a cross-check (its shortName must match kxkbrc's LayoutList) and as the
-    source of the human-readable label.
+    as a cross-check (its shortNames must match the leading slice of kxkbrc's
+    LayoutList) and as the source of the human-readable label.
     """
 
     name = 'kde-dbus'
@@ -156,9 +156,15 @@ class KdeBackend(LayoutBackend):
         dbus_list = self._call_get_layouts_list()
         layout_lst, variant_lst = self._read_kxkbrc()
 
-        # Preferred path: kxkbrc supplies precise variant codes. Cross-check
-        # that its order matches the D-Bus list before trusting it.
-        if layout_lst and len(layout_lst) == len(dbus_list):
+        # Preferred path: kxkbrc supplies precise variant codes. getLayout()
+        # indexes the live (loaded) set that getLayoutsList returns, and that
+        # set is the leading slice of kxkbrc: KDE loads only the first few
+        # layouts as XKB groups (the "main layouts") and leaves any extras as
+        # configured-but-unloaded "spares" further down kxkbrc. So kxkbrc is
+        # normally *longer* than the D-Bus list, which is expected, not a
+        # mismatch. Trust the variants as long as the layout codes line up with
+        # the D-Bus order across that leading slice.
+        if layout_lst and len(layout_lst) >= len(dbus_list):
             order_matches = all(
                 dbus_list[i][0] == layout_lst[i] for i in range(len(dbus_list))
             )
@@ -170,11 +176,12 @@ class KdeBackend(LayoutBackend):
                     table.append(make_layout_spec(layout_lst[i], variant, long_name or None))
                 self._table = table
                 return
-            _warn('kxkbrc layout order does not match D-Bus list; falling back '
-                  'to layout-only resolution (variants unavailable).')
+            _warn('kxkbrc layout codes do not match the D-Bus order; falling '
+                  'back to layout-only resolution (variants unavailable).')
         elif layout_lst:
-            _warn(f'kxkbrc lists {len(layout_lst)} layouts but D-Bus reports '
-                  f'{len(dbus_list)}; falling back to layout-only resolution.')
+            _warn(f'kxkbrc lists {len(layout_lst)} layouts, fewer than the '
+                  f'{len(dbus_list)} reported on D-Bus; falling back to '
+                  f'layout-only resolution.')
 
         # Degraded fallback: D-Bus shortName as the layout, no variant. Wrong
         # about the variant, but never wrong about which base layout is active.
