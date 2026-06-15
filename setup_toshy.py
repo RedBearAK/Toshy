@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260611'                        # CLI option "--version" will print this out.
+__version__ = '20260614'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1200,6 +1200,7 @@ pkg_groups_map = {
         'python-pygobject-devel',
         'python-setuptools',
         'python-virtualenv',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1260,6 +1261,7 @@ pkg_groups_map = {
         'python-devel',
         'python-evdev',
         'python-pip',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1291,6 +1293,7 @@ pkg_groups_map = {
         'python3-pip',
         'python3-tk',
         'python3-venv',
+        'libwayland-dev',
         'zenity',
     ],
 
@@ -1385,6 +1388,7 @@ pkg_groups_map = {
         'systemd-devel',
         'tk',
         'typelib-1_0-AyatanaAppIndicator3-0_1',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1459,6 +1463,7 @@ pkg_groups_map = {
         'systemd-devel',
         'tk',
         'typelib-1_0-AyatanaAppIndicator3-0_1',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1509,6 +1514,7 @@ pkg_groups_map = {
         'python3-dbus-devel',
         'python-gobject-devel',
         'systemd-devel',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1537,6 +1543,7 @@ pkg_groups_map = {
         'systemd-devel',
         'tk',
         'typelib-1_0-AyatanaAppIndicator3-0_1',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1565,6 +1572,7 @@ pkg_groups_map = {
         'python3-pip',
         'python3-tk',
         'python3-venv',
+        'libwayland-dev',
         'zenity',
     ],
 
