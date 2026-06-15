@@ -1253,7 +1253,7 @@ pkg_groups_map = {
         'git',
         'gobject-introspection-devel',
         'libayatana-appindicator-devel',
-        'libinput-tools',
+        # 'libinput-devel',                 # Not needed for DWT quirks file, toshy-libinput tool
         'libnotify',
         'libxkbcommon-devel',
         'pkgconf',
