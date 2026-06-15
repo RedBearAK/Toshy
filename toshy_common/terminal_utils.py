@@ -1,11 +1,11 @@
-__version__ = "20260520"
-
 """
 Terminal utilities for Toshy applications.
 
 Simple terminal emulator detection and command execution with optional
 desktop environment awareness for optimal terminal selection.
 """
+
+__version__ = "20260615"
 
 import os
 import re
@@ -109,18 +109,21 @@ def run_cmd_lst_in_terminal(command_list, desktop_env: str=None):
     raise TerminalNotFoundError(message)
 
 
-def print_pango_text(text, newline_str='\n'):
-    """Render a Pango-formatted dialog message to the terminal.
+def render_pango_text(text, newline_str='\n'):
+    """Render a Pango-formatted dialog message to an ANSI terminal string.
 
     Converts Pango markup tags to ANSI escape codes where possible,
     and replaces the dialog's newline string with actual newlines.
-    Intended as a terminal fallback when a GUI dialog is unavailable
-    or broken.
+    Returns the rendered string instead of printing it, so callers can
+    route the output where they want (terminal print, logger, etc.).
 
     Args:
         text:           The Pango-formatted message string.
         newline_str:    The newline placeholder used in the message
                         (e.g., '\\n' or '<br>').
+
+    Returns:
+        str:            The ANSI-rendered, tag-stripped output string.
     """
 
     # ANSI escape codes
@@ -151,4 +154,22 @@ def print_pango_text(text, newline_str='\n'):
     output = output.replace('&gt;', '>')
     output = output.replace('&amp;', '&')
 
-    print(output)
+    return output
+
+
+def print_pango_text(text, newline_str='\n'):
+    """Print a Pango-formatted dialog message to the terminal.
+
+    Thin wrapper around render_pango_text() that prints the result.
+    Intended as a terminal fallback when a GUI dialog is unavailable
+    or broken.
+
+    Args:
+        text:           The Pango-formatted message string.
+        newline_str:    The newline placeholder used in the message
+                        (e.g., '\\n' or '<br>').
+    """
+
+    print(render_pango_text(text, newline_str))
+
+# End of File #

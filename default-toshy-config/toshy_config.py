@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260614'
+__version__ = '20260615'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -212,7 +212,7 @@ from toshy_common.overlay_context       import OverlayFlag as OFlag
 from toshy_common.proc_launcher         import launch_detached
 from toshy_common.runtime_utils         import sanitize_text
 from toshy_common.settings_class        import Settings
-from toshy_common.terminal_utils        import print_pango_text
+from toshy_common.terminal_utils        import render_pango_text
 
 # Start up the mechanism that optionally auto-corrects keycodes that
 # differ from the standard US-default key definitions in kernel/keymapper.
@@ -1296,12 +1296,12 @@ def notify_context():
             _ctx_dlgs        = False
 
         # ------ following are all True/False
-        ctx_term        = '[X]' if hmp_is_terminal(ctx)         else '[ ]'
-        ctx_rmte        = '[X]' if hmp_is_remote(ctx)           else '[ ]'
-        ctx_fmgr        = '[X]' if hmp_is_filemanager(ctx)      else '[ ]'
-        ctx_brws        = '[X]' if hmp_is_browser(ctx)          else '[ ]'
-        ctx_vscd        = '[X]' if hmp_is_vscode(ctx)           else '[ ]'
-        ctx_dlgs        = '[X]' if _ctx_dlgs                    else '[ ]'
+        ctx_term        = '[ X ]' if hmp_is_terminal(ctx)         else '[   ]'
+        ctx_rmte        = '[ X ]' if hmp_is_remote(ctx)           else '[   ]'
+        ctx_fmgr        = '[ X ]' if hmp_is_filemanager(ctx)      else '[   ]'
+        ctx_brws        = '[ X ]' if hmp_is_browser(ctx)          else '[   ]'
+        ctx_vscd        = '[ X ]' if hmp_is_vscode(ctx)           else '[   ]'
+        ctx_dlgs        = '[ X ]' if _ctx_dlgs                    else '[   ]'
 
         message         = (
             f"<tt>"
@@ -1359,14 +1359,16 @@ def notify_context():
             # subprocess.Popen(zenity_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
             launch_detached(zenity_cmd_lst, cwd=icons_dir, stderr=DEVNULL, stdout=DEVNULL)
 
-        # Also print out the diagnostics to the terminal, in case the dialog doesn't work.
+        # Also send diagnostics to verbose debug logging, in case the dialog doesn't work.
         # Trim the last 4 lines (dialog-only hints) for terminal output
         term_message = nwln_str.join(message.split(nwln_str)[:-4])
-        print(f"\n{'=' * 50}")
-        print(f"  Toshy Context Info (diagnostic dialog content)")
-        print(f"{'=' * 50}")
-        print_pango_text(term_message, nwln_str)
-        print()     # separate from following lines
+        rendered_message = render_pango_text(term_message, nwln_str)
+        debug(
+            f"\n{'=' * 50}\n"
+            f"  Toshy Context Info (diagnostic dialog content)\n"
+            f"{'=' * 50}\n"
+            f"{rendered_message}\n"
+        )
 
         # Optionally, also send a system notification:
         # ntfy.send_notification(message)
