@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260611'
+__version__ = '20260614'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -973,28 +973,6 @@ def getKBtype(ctx: KeyContext):
     error(f"KBTYPE: '{KBTYPE}' | Dev fell through all checks: '{kbd_dev_name}'")
 
 
-# ─── Add to existing module-level ctx_* globals ────────────────────
-# Place after the ctx_kbd_is_* block.
-
-# Built-in overlay flag states
-ctx_ovl_macos_globals           = False
-ctx_ovl_terminal_ergo           = False
-ctx_ovl_finder_mods             = False
-ctx_ovl_enter_to_rename         = False
-ctx_ovl_browser_shortcuts       = False
-ctx_ovl_vscode_shortcuts        = False
-ctx_ovl_dialog_ergo             = False
-ctx_ovl_level3_left_alt         = False
-
-# User overlay flag states
-ctx_ovl_user_flag_a             = False
-ctx_ovl_user_flag_b             = False
-ctx_ovl_user_flag_c             = False
-ctx_ovl_user_flag_d             = False
-ctx_ovl_user_flag_e             = False
-ctx_ovl_user_flag_f             = False
-
-
 def _context_pre_check(ctx: KeyContext):
     """Side-effect trigger: pre-computes per-event context once at the
     top of the event chain, so downstream keymaps and modmaps can read
@@ -1045,21 +1023,22 @@ def _context_pre_check(ctx: KeyContext):
     # clause evaluations downstream.
     mask = cnfg.overlay_mask
 
-    ctx_ovl_macos_globals       = mask & OFlag.MACOS_GLOBALS
-    ctx_ovl_terminal_ergo       = mask & OFlag.TERMINAL_ERGO
-    ctx_ovl_finder_mods         = mask & OFlag.FINDER_MODS
-    ctx_ovl_enter_to_rename     = mask & OFlag.ENTER_TO_RENAME
-    ctx_ovl_browser_shortcuts   = mask & OFlag.BROWSER_SHORTCUTS
-    ctx_ovl_vscode_shortcuts    = mask & OFlag.VSCODE_SHORTCUTS
-    ctx_ovl_dialog_ergo         = mask & OFlag.DIALOG_ERGO
-    ctx_ovl_level3_left_alt     = mask & OFlag.LEVEL3_LEFT_ALT
-
-    ctx_ovl_user_flag_a         = mask & OFlag.USER_FLAG_A
-    ctx_ovl_user_flag_b         = mask & OFlag.USER_FLAG_B
-    ctx_ovl_user_flag_c         = mask & OFlag.USER_FLAG_C
-    ctx_ovl_user_flag_d         = mask & OFlag.USER_FLAG_D
-    ctx_ovl_user_flag_e         = mask & OFlag.USER_FLAG_E
-    ctx_ovl_user_flag_f         = mask & OFlag.USER_FLAG_F
+    # Wrapping with bool() just to convert to from overlay values to True/False for
+    # consistency with other ctx_* variables and safe usage in "when" conditions.
+    ctx_ovl_macos_globals       = bool(mask & OFlag.MACOS_GLOBALS)
+    ctx_ovl_terminal_ergo       = bool(mask & OFlag.TERMINAL_ERGO)
+    ctx_ovl_finder_mods         = bool(mask & OFlag.FINDER_MODS)
+    ctx_ovl_enter_to_rename     = bool(mask & OFlag.ENTER_TO_RENAME)
+    ctx_ovl_browser_shortcuts   = bool(mask & OFlag.BROWSER_SHORTCUTS)
+    ctx_ovl_vscode_shortcuts    = bool(mask & OFlag.VSCODE_SHORTCUTS)
+    ctx_ovl_dialog_ergo         = bool(mask & OFlag.DIALOG_ERGO)
+    ctx_ovl_level3_left_alt     = bool(mask & OFlag.LEVEL3_LEFT_ALT)
+    ctx_ovl_user_flag_a         = bool(mask & OFlag.USER_FLAG_A)
+    ctx_ovl_user_flag_b         = bool(mask & OFlag.USER_FLAG_B)
+    ctx_ovl_user_flag_c         = bool(mask & OFlag.USER_FLAG_C)
+    ctx_ovl_user_flag_d         = bool(mask & OFlag.USER_FLAG_D)
+    ctx_ovl_user_flag_e         = bool(mask & OFlag.USER_FLAG_E)
+    ctx_ovl_user_flag_f         = bool(mask & OFlag.USER_FLAG_F)
 
     # Maintain the Enter-to-rename latch (resets when focus leaves a file manager)
     _get_iEF2_context(ctx)
@@ -2030,6 +2009,21 @@ multipurpose_modmap("Caps2Esc - Chromebook kbd", {
     not ctx_app_is_remote
 )
 
+multipurpose_modmap("Cond multi-modmap - Alt_Gr on Menu key", {
+    # Only gets to level 3/4 special characters on a layout that has "Level3 Shift" on
+    # the right-side Alt (Alt_Gr) key. Won't really do anything on layouts where
+    # that key is just Alt_R. Compose/Menu key will just become another Alt_R key.
+    # But this means there will be an Option/Alt key equivalent on the correct
+    # key position on many PC laptop keyboards.
+    # As a multipurpose modmap, the Menu/Compose key can continue to activate context
+    # menus like it normally does, when tapped alone.
+    Key.COMPOSE:                [Key.COMPOSE, Key.RIGHT_ALT],                  # Menu/Compose → Alt_Gr (Level3/4)
+}, when = lambda ctx:
+    cnfg.altgr_on_menu_key and
+    cnfg.screen_has_focus and
+    not ctx_app_is_remote
+)
+
 
 # THIS IS ALL SUPERCEDED BY THE NEW SOLUTION OF MONITORING THE SYNERGY LOG FILE!
 # Fix for avoiding modmapping when using Synergy keyboard/mouse sharing.
@@ -2050,21 +2044,239 @@ multipurpose_modmap("Caps2Esc - Chromebook kbd", {
 # PROBLEM: When GNOME desktop has focus, it sets no window info at all (no class, no name/title)
 
 
-# [Global GUI conditional modmaps] Change modifier keys as in xmodmap
-multipurpose_modmap("Cond multi-modmap - Alt_Gr on Menu key", {
-    # Only gets to level 3/4 special characters on a layout that has "Level3 Shift" on
-    # the right-side Alt (Alt_Gr) key. Won't really do anything on layouts where
-    # that key is just Alt_R. Compose/Menu key will just become another Alt_R key.
-    # But this means there will be an Option/Alt key equivalent on the correct
-    # key position on many PC laptop keyboards.
-    # As a multipurpose modmap, the Menu/Compose key can continue to activate context
-    # menus like it normally does, when tapped alone.
-    Key.COMPOSE:                [Key.COMPOSE, Key.RIGHT_ALT],                  # Menu/Compose → Alt_Gr (Level3/4)
+# # [Global GUI conditional modmaps] Change modifier keys as in xmodmap
+# modmap("Cond modmap - GUI - Caps2Cmd - not Cbk kdb", {
+#     Key.CAPSLOCK:               Key.RIGHT_CTRL,                 # Caps2Cmd
+# }, when = lambda ctx:
+#     cnfg.Caps2Cmd and
+#     cnfg.screen_has_focus and
+#     not ctx_kbd_is_chromebook and
+#     not (ctx_app_is_terminal or ctx_app_is_remote)
+# )
+# modmap("Cond modmap - GUI - Caps2Cmd - Cbk kdb", {
+#     Key.LEFT_META:              Key.RIGHT_CTRL,                 # Caps2Cmd - Chromebook
+# }, when = lambda ctx:
+#     cnfg.Caps2Cmd and
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_chromebook and
+#     not (ctx_app_is_terminal or ctx_app_is_remote)
+# )
+# modmap("Cond modmap - GUI - IBM kbd - multi_lang OFF", {
+#     # - IBM
+#     Key.RIGHT_ALT:              Key.RIGHT_CTRL,                 # IBM - Multi-language (Remove)
+#     Key.RIGHT_CTRL:             Key.RIGHT_ALT,                  # IBM - Multi-language (Remove)
+# }, when = lambda ctx:
+#     not cnfg.multi_lang and
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_ibm and
+#     not (ctx_app_is_terminal or ctx_app_is_remote)
+# )
+# modmap("Cond modmap - GUI - IBM kbd", {
+#     # - IBM
+#     Key.CAPSLOCK:               Key.LEFT_META,                  # IBM
+#     Key.LEFT_CTRL:              Key.LEFT_ALT,                   # IBM
+#     Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # IBM
+# }, when = lambda ctx:
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_ibm and
+#     not (ctx_app_is_terminal or ctx_app_is_remote)
+# )
+# modmap("Cond modmap - GUI - Cbk kbd - multi_lang OFF", {
+#     # - Chromebook
+#     Key.RIGHT_ALT:              Key.RIGHT_CTRL,                 # Chromebook - Multi-language (Remove)
+#     Key.RIGHT_CTRL:             Key.RIGHT_ALT,                  # Chromebook - Multi-language (Remove)
+# }, when = lambda ctx:
+#     not cnfg.multi_lang and
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_chromebook and
+#     not (ctx_app_is_terminal or ctx_app_is_remote)
+# )
+# modmap("Cond modmap - GUI - Cbk kbd", {
+#     # - Chromebook
+#     Key.LEFT_CTRL:              Key.LEFT_ALT,                   # Chromebook
+#     Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # Chromebook
+# }, when = lambda ctx:
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_chromebook and
+#     not (ctx_app_is_terminal or ctx_app_is_remote)
+# )
+# modmap("Cond modmap - GUI - Win kbd - multi_lang OFF", {
+#     # - Default Mac/Win
+#     # - Default Win
+#     Key.RIGHT_ALT:              Key.RIGHT_CTRL,                 # WinMac - Multi-language (Remove)
+#     Key.RIGHT_META:             Key.RIGHT_ALT,                  # WinMac - Multi-language (Remove)
+#     Key.RIGHT_CTRL:             Key.RIGHT_META,                 # WinMac - Multi-language (Remove)
+# }, when = lambda ctx:
+#     not cnfg.multi_lang and
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_windows and
+#     not (ctx_app_is_terminal or ctx_app_is_remote)
+# )
+# modmap("Cond modmap - GUI - Win kbd", {
+#     # - Default Mac/Win
+#     # - Default Win
+#     Key.LEFT_CTRL:              Key.LEFT_META,                  # WinMac
+#     Key.LEFT_META:              Key.LEFT_ALT,                   # WinMac
+#     Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # WinMac
+# }, when = lambda ctx:
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_windows and
+#     not (ctx_app_is_terminal or ctx_app_is_remote)
+# )
+# modmap("Cond modmap - GUI - Mac kbd - multi_lang OFF", {
+#     # - Mac Only
+#     Key.RIGHT_META:             Key.RIGHT_CTRL,                 # Mac - Multi-language (Remove)
+#     Key.RIGHT_CTRL:             Key.RIGHT_META,                 # Mac - Multi-language (Remove)
+# }, when = lambda ctx:
+#     not cnfg.multi_lang and
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_apple and
+#     not (ctx_app_is_terminal or ctx_app_is_remote)
+# )
+# modmap("Cond modmap - GUI - Mac kbd", {
+#     # - Mac Only
+#     Key.LEFT_CTRL:              Key.LEFT_META,                  # Mac
+#     Key.LEFT_META:              Key.RIGHT_CTRL,                 # Mac
+# }, when = lambda ctx:
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_apple and
+#     not (ctx_app_is_terminal or ctx_app_is_remote)
+# )
+
+
+# # [Global Terminals conditional modmaps] Change modifier keys in certain applications
+# modmap("Cond modmap - Terms - IBM kbd - multi_lang OFF", {
+#     # - IBM - Multi-language
+#     Key.RIGHT_ALT:              Key.RIGHT_CTRL,                 # IBM - Multi-language (Remove)
+# }, when = lambda ctx:
+#     not cnfg.multi_lang and
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_ibm and
+#     ctx_app_is_terminal
+# )
+# modmap("Cond modmap - Terms - IBM kbd", {
+#     # - IBM
+#     Key.CAPSLOCK:               Key.LEFT_ALT,                   # IBM
+#     # Left Ctrl stays Left Ctrl
+#     Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # IBM
+#     # Right Meta does not exist on IBM keyboards
+#     Key.RIGHT_CTRL:             Key.RIGHT_ALT,                  # IBM
+# }, when = lambda ctx:
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_ibm and
+#     ctx_app_is_terminal
+# )
+# modmap("Cond modmap - Terms - Cbk kbd - multi_lang OFF", {
+#     # - Chromebook
+#     Key.RIGHT_ALT:              Key.RIGHT_CTRL,                 # Chromebook - Multi-language (Remove)
+# }, when = lambda ctx:
+#     not cnfg.multi_lang and
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_chromebook and
+#     ctx_app_is_terminal
+# )
+# modmap("Cond modmap - Terms - Cbk kbd", {
+#     # - Chromebook
+#     # Left Ctrl Stays Left Ctrl
+#     Key.LEFT_META:              Key.LEFT_ALT,                   # Chromebook
+#     Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # Chromebook
+#     # Right Meta does not exist on chromebooks
+#     Key.RIGHT_CTRL:             Key.RIGHT_ALT,                  # Chromebook
+# }, when = lambda ctx:
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_chromebook and
+#     ctx_app_is_terminal
+# )
+# modmap("Cond modmap - Terms - Win kbd - multi_lang OFF", {
+#     # - Default Mac/Win
+#     # - Default Win
+#     Key.RIGHT_ALT:              Key.RIGHT_CTRL,                 # WinMac - Multi-language (Remove)
+#     Key.RIGHT_META:             Key.RIGHT_ALT,                  # WinMac - Multi-language (Remove)
+#     Key.RIGHT_CTRL:             Key.LEFT_CTRL,                  # WinMac - Multi-language (Remove)
+# }, when = lambda ctx:
+#     not cnfg.multi_lang and
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_windows and
+#     ctx_app_is_terminal
+# )
+# modmap("Cond modmap - Terms - Win kbd", {
+#     # - Default Mac/Win
+#     # - Default Win
+#     Key.LEFT_CTRL:              Key.LEFT_CTRL,                  # WinMac
+#     Key.LEFT_META:              Key.LEFT_ALT,                   # WinMac
+#     Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # WinMac
+# }, when = lambda ctx:
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_windows and
+#     ctx_app_is_terminal
+# )
+# modmap("Cond modmap - Terms - Mac kbd - multi_lang OFF", {
+#     # - Mac Only
+#     # Left Ctrl Stays Left Ctrl
+#     Key.RIGHT_META:             Key.RIGHT_CTRL,                 # Mac - Multi-language (Remove)
+#     Key.RIGHT_CTRL:             Key.LEFT_CTRL,                  # Mac - Multi-language (Remove)
+# }, when = lambda ctx:
+#     not cnfg.multi_lang and
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_apple and
+#     ctx_app_is_terminal
+# )
+# modmap("Cond modmap - Terms - Mac kbd", {
+#     # - Mac Only
+#     # Left Ctrl Stays Left Ctrl
+#     Key.LEFT_CTRL:              Key.LEFT_CTRL,                  # Mac (self-modmap)
+#     Key.LEFT_ALT:               Key.LEFT_ALT,                   # Mac (self-modmap)
+#     Key.LEFT_META:              Key.RIGHT_CTRL,                 # Mac
+#     Key.RIGHT_ALT:              Key.RIGHT_ALT,                  # Mac (self-modmap)
+# }, when = lambda ctx:
+#     cnfg.screen_has_focus and
+#     ctx_kbd_is_apple and
+#     ctx_app_is_terminal
+# )
+
+
+# [Super tap passthrough multipurpose modmaps]
+# Place these with the other specialty multipurpose modmaps (Enter2Cmd, Caps2Esc, AltGr-Menu),
+# before the plain modmap sections below. Each pierces the claimed key's normal held mapping with
+# a lone-tap Super event. Off by default. The held mapping for the OFF state lives in the GUI/Terms
+# "<key> held" companions further down; the claimed keys are carved out of the base modmaps so they
+# survive apply_modmap and these multis can fire. Gate: not remote (= GUI + terminals).
+
+multipurpose_modmap("Left Cmd is Sup & Cmd - Mac kbd", {
+    Key.LEFT_META:              [Key.LEFT_META, Key.RIGHT_CTRL],    # tap Super / hold Cmd
 }, when = lambda ctx:
-    cnfg.altgr_on_menu_key and
+    cnfg.l_cmd_is_sup_and_cmd and
     cnfg.screen_has_focus and
+    ctx_kbd_is_apple and
     not ctx_app_is_remote
 )
+multipurpose_modmap("Left Opt is Sup & Opt - Mac kbd", {
+    Key.LEFT_ALT:               [Key.LEFT_META, Key.LEFT_ALT],      # tap Super / hold Opt
+}, when = lambda ctx:
+    cnfg.l_opt_is_sup_and_opt and
+    cnfg.screen_has_focus and
+    ctx_kbd_is_apple and
+    not ctx_app_is_remote
+)
+multipurpose_modmap("Left Cmd is Sup & Cmd - Win kbd", {
+    Key.LEFT_ALT:               [Key.LEFT_META, Key.RIGHT_CTRL],    # tap Super / hold Cmd
+}, when = lambda ctx:
+    cnfg.l_cmd_is_sup_and_cmd and
+    cnfg.screen_has_focus and
+    ctx_kbd_is_windows and
+    not ctx_app_is_remote
+)
+multipurpose_modmap("Left Opt is Sup & Opt - Win kbd", {
+    Key.LEFT_META:              [Key.LEFT_META, Key.LEFT_ALT],      # tap Super / hold Opt
+}, when = lambda ctx:
+    cnfg.l_opt_is_sup_and_opt and
+    cnfg.screen_has_focus and
+    ctx_kbd_is_windows and
+    not ctx_app_is_remote
+)
+
+
+# [Global GUI conditional modmaps] Change modifier keys as in xmodmap
 modmap("Cond modmap - GUI - Caps2Cmd - not Cbk kdb", {
     Key.CAPSLOCK:               Key.RIGHT_CTRL,                 # Caps2Cmd
 }, when = lambda ctx:
@@ -2136,9 +2348,24 @@ modmap("Cond modmap - GUI - Win kbd", {
     # - Default Mac/Win
     # - Default Win
     Key.LEFT_CTRL:              Key.LEFT_META,                  # WinMac
-    Key.LEFT_META:              Key.LEFT_ALT,                   # WinMac
-    Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # WinMac
+    # LEFT_ALT (Cmd) and LEFT_META (Opt) handled by the held companions / Super tap multis
 }, when = lambda ctx:
+    cnfg.screen_has_focus and
+    ctx_kbd_is_windows and
+    not ctx_app_is_terminal and not ctx_app_is_remote
+)
+modmap("Cond modmap - GUI - Win kbd - Cmd held", {
+    Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # WinMac - Cmd (held)
+}, when = lambda ctx:
+    not cnfg.l_cmd_is_sup_and_cmd and
+    cnfg.screen_has_focus and
+    ctx_kbd_is_windows and
+    not ctx_app_is_terminal and not ctx_app_is_remote
+)
+modmap("Cond modmap - GUI - Win kbd - Opt held", {
+    Key.LEFT_META:              Key.LEFT_ALT,                   # WinMac - Opt (held)
+}, when = lambda ctx:
+    not cnfg.l_opt_is_sup_and_opt and
     cnfg.screen_has_focus and
     ctx_kbd_is_windows and
     not ctx_app_is_terminal and not ctx_app_is_remote
@@ -2156,8 +2383,16 @@ modmap("Cond modmap - GUI - Mac kbd - multi_lang OFF", {
 modmap("Cond modmap - GUI - Mac kbd", {
     # - Mac Only
     Key.LEFT_CTRL:              Key.LEFT_META,                  # Mac
-    Key.LEFT_META:              Key.RIGHT_CTRL,                 # Mac
+    # LEFT_META (Cmd) handled by the held companion / Super tap multi; LEFT_ALT (Opt) is passthrough
 }, when = lambda ctx:
+    cnfg.screen_has_focus and
+    ctx_kbd_is_apple and
+    not ctx_app_is_terminal and not ctx_app_is_remote
+)
+modmap("Cond modmap - GUI - Mac kbd - Cmd held", {
+    Key.LEFT_META:              Key.RIGHT_CTRL,                 # Mac - Cmd (held)
+}, when = lambda ctx:
+    not cnfg.l_cmd_is_sup_and_cmd and
     cnfg.screen_has_focus and
     ctx_kbd_is_apple and
     not ctx_app_is_terminal and not ctx_app_is_remote
@@ -2223,9 +2458,24 @@ modmap("Cond modmap - Terms - Win kbd", {
     # - Default Mac/Win
     # - Default Win
     Key.LEFT_CTRL:              Key.LEFT_CTRL,                  # WinMac
-    Key.LEFT_META:              Key.LEFT_ALT,                   # WinMac
-    Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # WinMac
+    # LEFT_ALT (Cmd) and LEFT_META (Opt) handled by the held companions / Super tap multis
 }, when = lambda ctx:
+    cnfg.screen_has_focus and
+    ctx_kbd_is_windows and
+    ctx_app_is_terminal
+)
+modmap("Cond modmap - Terms - Win kbd - Cmd held", {
+    Key.LEFT_ALT:               Key.RIGHT_CTRL,                 # WinMac - Cmd (held)
+}, when = lambda ctx:
+    not cnfg.l_cmd_is_sup_and_cmd and
+    cnfg.screen_has_focus and
+    ctx_kbd_is_windows and
+    ctx_app_is_terminal
+)
+modmap("Cond modmap - Terms - Win kbd - Opt held", {
+    Key.LEFT_META:              Key.LEFT_ALT,                   # WinMac - Opt (held)
+}, when = lambda ctx:
+    not cnfg.l_opt_is_sup_and_opt and
     cnfg.screen_has_focus and
     ctx_kbd_is_windows and
     ctx_app_is_terminal
@@ -2245,15 +2495,21 @@ modmap("Cond modmap - Terms - Mac kbd", {
     # - Mac Only
     # Left Ctrl Stays Left Ctrl
     Key.LEFT_CTRL:              Key.LEFT_CTRL,                  # Mac (self-modmap)
-    Key.LEFT_ALT:               Key.LEFT_ALT,                   # Mac (self-modmap)
-    Key.LEFT_META:              Key.RIGHT_CTRL,                 # Mac
     Key.RIGHT_ALT:              Key.RIGHT_ALT,                  # Mac (self-modmap)
+    # LEFT_META (Cmd) handled by the held companion / Super tap multi; LEFT_ALT (Opt) is passthrough
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     ctx_kbd_is_apple and
     ctx_app_is_terminal
 )
-
+modmap("Cond modmap - Terms - Mac kbd - Cmd held", {
+    Key.LEFT_META:              Key.RIGHT_CTRL,                 # Mac - Cmd (held)
+}, when = lambda ctx:
+    not cnfg.l_cmd_is_sup_and_cmd and
+    cnfg.screen_has_focus and
+    ctx_kbd_is_apple and
+    ctx_app_is_terminal
+)
 
 
 # Suggested location for adding custom modmaps for personal use.
@@ -3578,7 +3834,7 @@ keymap("OptSpecialChars - ABC", {
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     cnfg.optspec_layout == 'ABC' and
-    not ctx_app_is_terminal and not ctx_app_is_remote
+    not (ctx_app_is_terminal or ctx_app_is_remote)
 )
 
 
@@ -3729,7 +3985,7 @@ keymap("OptSpecialChars - US", {
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     cnfg.optspec_layout == 'US' and
-    not ctx_app_is_terminal and not ctx_app_is_remote
+    not (ctx_app_is_terminal or ctx_app_is_remote)
 )
 
 
@@ -3792,6 +4048,16 @@ keymap("User hardware keys", {
 #       ctx_app_is_remote
 # )
 
+
+try:
+    setup_level3_combos_via_left_alt(
+        when = lambda ctx:
+            ctx_ovl_level3_left_alt and
+            cnfg.screen_has_focus and
+            not (ctx_app_is_terminal or ctx_app_is_remote)
+    )
+except NameError:
+    pass
 
 
 #################################  MISC APPS  #####################################
@@ -5371,7 +5637,7 @@ keymap("Cmd+Dot not in terminals", {
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     ctx_ovl_macos_globals and
-    not ctx_app_is_terminal and not ctx_app_is_remote
+    not (ctx_app_is_terminal or ctx_app_is_remote)
 )
 
 
