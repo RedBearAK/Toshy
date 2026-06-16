@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20260520'
+__version__ = '20260614'
 
 # Indicator tray icon menu app for Toshy, using pygobject/gi
 TOSHY_PART      = 'tray'   # CUSTOMIZE TO SPECIFIC TOSHY COMPONENT! (gui, tray, config)
@@ -379,21 +379,28 @@ if not runtime.barebones_config:
     def load_prefs_submenu_settings():
         cnfg.load_settings()
         set_item_active_thread_safe(forced_numpad_item, cnfg.forced_numpad)
+        set_item_active_thread_safe(altgr_on_menu_key_item, cnfg.altgr_on_menu_key)
         set_item_active_thread_safe(media_arrows_fix_item, cnfg.media_arrows_fix)
         set_item_active_thread_safe(multi_lang_item, cnfg.multi_lang)
         set_item_active_thread_safe(ST3_in_VSCode_item, cnfg.ST3_in_VSCode)
         set_item_active_thread_safe(Caps2Cmd_item, cnfg.Caps2Cmd)
         set_item_active_thread_safe(Caps2Esc_Cmd_item, cnfg.Caps2Esc_Cmd)
         set_item_active_thread_safe(Enter2Ent_Cmd_item, cnfg.Enter2Ent_Cmd)
+        set_item_active_thread_safe(l_cmd_is_sup_and_cmd_item, cnfg.l_cmd_is_sup_and_cmd)
+        set_item_active_thread_safe(l_opt_is_sup_and_opt_item, cnfg.l_opt_is_sup_and_opt)
 
     def save_prefs_settings(widget):
-        cnfg.forced_numpad      = forced_numpad_item.get_active()
-        cnfg.media_arrows_fix   = media_arrows_fix_item.get_active()
-        cnfg.multi_lang         = multi_lang_item.get_active()
-        cnfg.ST3_in_VSCode      = ST3_in_VSCode_item.get_active()
-        cnfg.Caps2Cmd           = Caps2Cmd_item.get_active()
-        cnfg.Caps2Esc_Cmd       = Caps2Esc_Cmd_item.get_active()
-        cnfg.Enter2Ent_Cmd      = Enter2Ent_Cmd_item.get_active()
+        cnfg.forced_numpad          = forced_numpad_item.get_active()
+        cnfg.altgr_on_menu_key      = altgr_on_menu_key_item.get_active()
+        cnfg.media_arrows_fix       = media_arrows_fix_item.get_active()
+        cnfg.multi_lang             = multi_lang_item.get_active()
+        cnfg.ST3_in_VSCode          = ST3_in_VSCode_item.get_active()
+        cnfg.Caps2Cmd               = Caps2Cmd_item.get_active()
+        cnfg.Caps2Esc_Cmd           = Caps2Esc_Cmd_item.get_active()
+        cnfg.Enter2Ent_Cmd          = Enter2Ent_Cmd_item.get_active()
+        cnfg.l_cmd_is_sup_and_cmd   = l_cmd_is_sup_and_cmd_item.get_active()
+        cnfg.l_opt_is_sup_and_opt   = l_opt_is_sup_and_opt_item.get_active()
+
         cnfg.save_settings()
         GLib.idle_add(load_prefs_submenu_settings)  # Queue the update to run in GTK's main loop
 
@@ -404,6 +411,11 @@ if not runtime.barebones_config:
     prefs_submenu_item = Gtk.MenuItem(label="Preferences")
     prefs_submenu_item.set_submenu(prefs_submenu)
     menu.append(prefs_submenu_item)
+
+    altgr_on_menu_key_item = Gtk.CheckMenuItem(label='Alt_Gr on Menu key')
+    altgr_on_menu_key_item.set_active(cnfg.altgr_on_menu_key)
+    altgr_on_menu_key_item.connect('toggled', save_prefs_settings)
+    prefs_submenu.append(altgr_on_menu_key_item)
 
     multi_lang_item = Gtk.CheckMenuItem(label='Alt_Gr on Right Cmd')
     multi_lang_item.set_active(cnfg.multi_lang)
@@ -420,7 +432,7 @@ if not runtime.barebones_config:
     Caps2Esc_Cmd_item.connect('toggled', save_prefs_settings)
     prefs_submenu.append(Caps2Esc_Cmd_item)
 
-    Enter2Ent_Cmd_item = Gtk.CheckMenuItem(label='Enter is Ent & Cmd')
+    Enter2Ent_Cmd_item = Gtk.CheckMenuItem(label='Enter is Enter & Cmd')
     Enter2Ent_Cmd_item.set_active(cnfg.Enter2Ent_Cmd)
     Enter2Ent_Cmd_item.connect('toggled', save_prefs_settings)
     prefs_submenu.append(Enter2Ent_Cmd_item)
@@ -439,6 +451,22 @@ if not runtime.barebones_config:
     media_arrows_fix_item.set_active(cnfg.media_arrows_fix)
     media_arrows_fix_item.connect('toggled', save_prefs_settings)
     prefs_submenu.append(media_arrows_fix_item)
+
+    prefs_submenu.append(Gtk.SeparatorMenuItem())
+
+    super_tap_passthru_label_item = Gtk.MenuItem(label='--- Super Tap Passthru ---')
+    super_tap_passthru_label_item.set_sensitive(False)
+    prefs_submenu.append(super_tap_passthru_label_item)
+
+    l_opt_is_sup_and_opt_item = Gtk.CheckMenuItem(label='L_Opt is Super & Opt')
+    l_opt_is_sup_and_opt_item.set_active(cnfg.l_opt_is_sup_and_opt)
+    l_opt_is_sup_and_opt_item.connect('toggled', save_prefs_settings)
+    prefs_submenu.append(l_opt_is_sup_and_opt_item)
+
+    l_cmd_is_sup_and_cmd_item = Gtk.CheckMenuItem(label='L_Cmd is Super & Cmd')
+    l_cmd_is_sup_and_cmd_item.set_active(cnfg.l_cmd_is_sup_and_cmd)
+    l_cmd_is_sup_and_cmd_item.connect('toggled', save_prefs_settings)
+    prefs_submenu.append(l_cmd_is_sup_and_cmd_item)
 
     # End of Preferences submenu
     ###############################################################
@@ -793,3 +821,5 @@ if __name__ == "__main__":
     # debug("")
     # debug(cnfg)       # prints out the __str__ method of Settings class
     main()
+
+# End of File #

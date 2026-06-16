@@ -5,8 +5,9 @@ from gi.repository import Gtk, GLib
 from toshy_common.logger import debug
 
 # Configuration for help button appearance
-HELP_BUTTON_SIZE = 20  # Width and height in pixels - change here to resize all help buttons
-
+HELP_BUTTON_SIZE = 18   # Width and height in pixels - change here to resize all help buttons
+COLUMN_SPACING   = 8    # Vertical gap (px) between rows within each column - lower = more compact
+PANEL_MARGIN     = 12   # Outer top/bottom margin (px) of the whole panel
 
 class SettingsPanel(Gtk.Box):
     """
@@ -31,8 +32,8 @@ class SettingsPanel(Gtk.Box):
         self.setup_ui()
         
         # Add margins
-        self.set_margin_top(20)
-        self.set_margin_bottom(20)
+        self.set_margin_top(PANEL_MARGIN)
+        self.set_margin_bottom(PANEL_MARGIN)
         
         # Connect to realize signal to set up CSS when widget is ready
         self.connect('realize', self.on_realize)
@@ -95,9 +96,9 @@ class SettingsPanel(Gtk.Box):
     def create_left_column(self):
         """Create the left column with modifier key settings"""
         debug("Creating left column...")
-        
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        
+
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=COLUMN_SPACING)
+
         # Don't show these controls if using barebones config
         if self.runtime.barebones_config:
             debug("Barebones config - skipping left column controls")
@@ -105,7 +106,16 @@ class SettingsPanel(Gtk.Box):
             placeholder.add_css_class("dim-label")
             column.append(placeholder)
             return column
-        
+
+        # Alt_Gr on Menu key switch
+        altgr_menu_control = self.create_switch_with_help(
+            "Alt_Gr on Menu key*",
+            "altgr_on_menu_key",
+            "Alt_Gr on Menu key",
+            "Maps the PC laptop context menu key to act as Right Alt (Alt_Gr), recovering Alt_Gr where the keyboard's modifier layout would otherwise lose it"
+        )
+        column.append(altgr_menu_control)
+
         # Multi-language support switch
         multi_lang_control = self.create_switch_with_help(
             "Alt_Gr on Right Cmd key",
@@ -114,16 +124,7 @@ class SettingsPanel(Gtk.Box):
             "Restores access to the Level3/4 additional characters on non-US keyboards/layouts"
         )
         column.append(multi_lang_control)
-        
-        # Sublime Text 3 in VSCode switch
-        st3_control = self.create_switch_with_help(
-            "ST3 shortcuts in VSCode(s)",
-            "ST3_in_VSCode", 
-            "ST3 shortcuts in VSCode(s)",
-            "Use shortcuts from Sublime Text 3 in Visual Studio Code (and variants)"
-        )
-        column.append(st3_control)
-        
+
         # CapsLock as Cmd switch
         caps_cmd_control = self.create_switch_with_help(
             "CapsLock is Cmd key",
@@ -132,7 +133,7 @@ class SettingsPanel(Gtk.Box):
             "Modmap CapsLock to be Command key"
         )
         column.append(caps_cmd_control)
-        
+
         # Multipurpose CapsLock switch
         caps_esc_control = self.create_switch_with_help(
             "Multipurpose CapsLock: Esc, Cmd",
@@ -141,33 +142,25 @@ class SettingsPanel(Gtk.Box):
             "Modmap CapsLock key to be:\n• Escape when tapped\n• Command key for hold/combo"
         )
         column.append(caps_esc_control)
-        
+
         # Multipurpose Enter switch
         enter_cmd_control = self.create_switch_with_help(
             "Multipurpose Enter: Enter, Cmd",
             "Enter2Ent_Cmd",
-            "Multipurpose Enter: Enter, Cmd", 
+            "Multipurpose Enter: Enter, Cmd",
             "Modmap Enter key to be:\n• Enter when tapped\n• Command key for hold/combo"
         )
         column.append(enter_cmd_control)
-        
-        debug("Left column created")
-        return column
-        
-    def create_right_column(self):
-        """Create the right column with numpad, media, and option keys"""
-        debug("Creating right column...")
-        
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        
-        # Don't show controls if using barebones config
-        if self.runtime.barebones_config:
-            debug("Barebones config - skipping right column controls")
-            placeholder = Gtk.Label(label="Barebones configuration")
-            placeholder.add_css_class("dim-label")
-            column.append(placeholder)
-            return column
-        
+
+        # Sublime Text 3 in VSCode switch
+        st3_control = self.create_switch_with_help(
+            "ST3 shortcuts in VSCode(s)",
+            "ST3_in_VSCode",
+            "ST3 shortcuts in VSCode(s)",
+            "Use shortcuts from Sublime Text 3 in Visual Studio Code (and variants)"
+        )
+        column.append(st3_control)
+
         # Forced Numpad switch
         numpad_control = self.create_switch_with_help(
             "Forced Numpad*",
@@ -180,7 +173,7 @@ class SettingsPanel(Gtk.Box):
             "Feature is enabled by default."
         )
         column.append(numpad_control)
-        
+
         # Media Arrows Fix switch
         media_control = self.create_switch_with_help(
             "Media Arrows Fix",
@@ -189,14 +182,55 @@ class SettingsPanel(Gtk.Box):
             "Converts arrow keys that have \"media\" functions when used with Fn key, into PgUp/PgDn/Home/End keys"
         )
         column.append(media_control)
-        
+
+        debug("Left column created")
+        return column
+
+    def create_right_column(self):
+        """Create the right column with numpad, media, and option keys"""
+        debug("Creating right column...")
+
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=COLUMN_SPACING)
+
+        # Don't show controls if using barebones config
+        if self.runtime.barebones_config:
+            debug("Barebones config - skipping right column controls")
+            placeholder = Gtk.Label(label="Barebones configuration")
+            placeholder.add_css_class("dim-label")
+            column.append(placeholder)
+            return column
+
         # Option-key special characters radio group
         optspec_control = self.create_optspec_radio_group()
         column.append(optspec_control)
-        
+
+        # Super Tap Passthru section header
+        super_tap_header = Gtk.Label(label="Super Tap Passthru")
+        super_tap_header.add_css_class("control-group-header")
+        super_tap_header.set_halign(Gtk.Align.START)
+        column.append(super_tap_header)
+
+        # Multipurpose Left Opt switch
+        l_opt_control = self.create_switch_with_help(
+            "Multipurpose Left Opt: Super, Opt",
+            "l_opt_is_sup_and_opt",
+            "Multipurpose Left Opt: Super, Opt",
+            "Modmap Left Option position key to be:\n• Super/Meta when tapped\n• Option key for hold/combo"
+        )
+        column.append(l_opt_control)
+
+        # Multipurpose Left Cmd switch
+        l_cmd_control = self.create_switch_with_help(
+            "Multipurpose Left Cmd: Super, Cmd",
+            "l_cmd_is_sup_and_cmd",
+            "Multipurpose Left Cmd: Super, Cmd",
+            "Modmap Left Command positionkey to be:\n• Super/Meta when tapped\n• Command key for hold/combo"
+        )
+        column.append(l_cmd_control)
+
         debug("Right column created")
         return column
-        
+
     def create_bottom_section(self):
         """Create the bottom section with version info and theme control"""
         debug("Creating bottom section...")
@@ -522,8 +556,9 @@ class SettingsPanel(Gtk.Box):
             
         # Update all switches using stored references
         switch_settings = [
-            'multi_lang', 'ST3_in_VSCode', 'Caps2Cmd', 'Caps2Esc_Cmd', 
-            'Enter2Ent_Cmd', 'forced_numpad', 'media_arrows_fix'
+            'altgr_on_menu_key', 'multi_lang', 'ST3_in_VSCode', 'Caps2Cmd', 'Caps2Esc_Cmd',
+            'Enter2Ent_Cmd', 'forced_numpad', 'media_arrows_fix',
+            'l_opt_is_sup_and_opt', 'l_cmd_is_sup_and_cmd'
         ]
         
         for setting_key in switch_settings:
@@ -564,3 +599,5 @@ class SettingsPanel(Gtk.Box):
         from toshy_gui.gui.help_dialog_gtk4 import HelpDialog
         dialog = HelpDialog(self.parent_window, title, text)
         dialog.present()
+
+# End of File #

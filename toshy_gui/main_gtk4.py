@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20260520'
+__version__ = '20260615'
 
 # Preferences app for Toshy, using GTK-4 and Adwaita
 TOSHY_PART      = 'gui-gtk4'  # Different from tkinter version to avoid lockfile conflicts

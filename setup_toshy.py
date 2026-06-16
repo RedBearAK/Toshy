@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260515'                        # CLI option "--version" will print this out.
+__version__ = '20260614'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -211,7 +211,7 @@ class InstallerSettings:
         self.systemctl_present      = shutil.which('systemctl') is not None
         self.init_system            = None
 
-        self.pkgs_for_distro        = None
+        self.pkgs_for_distro: 'list[str] | None'    = None
 
         self.priv_elev_cmd          = None
         self.first_priv_elev_done   = False     # For secondary password prompts after timeouts
@@ -1200,6 +1200,7 @@ pkg_groups_map = {
         'python-pygobject-devel',
         'python-setuptools',
         'python-virtualenv',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1252,7 +1253,7 @@ pkg_groups_map = {
         'git',
         'gobject-introspection-devel',
         'libayatana-appindicator-devel',
-        'libinput-tools',
+        # 'libinput-devel',                 # Not needed for DWT quirks file, toshy-libinput tool
         'libnotify',
         'libxkbcommon-devel',
         'pkgconf',
@@ -1260,6 +1261,7 @@ pkg_groups_map = {
         'python-devel',
         'python-evdev',
         'python-pip',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1291,6 +1293,7 @@ pkg_groups_map = {
         'python3-pip',
         'python3-tk',
         'python3-venv',
+        'libwayland-dev',
         'zenity',
     ],
 
@@ -1385,6 +1388,7 @@ pkg_groups_map = {
         'systemd-devel',
         'tk',
         'typelib-1_0-AyatanaAppIndicator3-0_1',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1459,6 +1463,7 @@ pkg_groups_map = {
         'systemd-devel',
         'tk',
         'typelib-1_0-AyatanaAppIndicator3-0_1',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1509,6 +1514,7 @@ pkg_groups_map = {
         'python3-dbus-devel',
         'python-gobject-devel',
         'systemd-devel',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1537,6 +1543,7 @@ pkg_groups_map = {
         'systemd-devel',
         'tk',
         'typelib-1_0-AyatanaAppIndicator3-0_1',
+        'wayland-devel',
         'zenity',
     ],
 
@@ -1565,6 +1572,7 @@ pkg_groups_map = {
         'python3-pip',
         'python3-tk',
         'python3-venv',
+        'libwayland-dev',
         'zenity',
     ],
 
@@ -1921,6 +1929,60 @@ class DistroQuirksHandler:
             except subprocess.CalledProcessError as e:
                 error(f"Failed to refresh dnf cache: \n\t{e}")
                 safe_shutdown(1)
+
+    @staticmethod
+    def handle_quirks_Arch():
+        print('Doing prep/checks for Arch-based distros...')
+
+        # Make sure we only handle these quirks in the correct distros
+        if cnfg.DISTRO_ID not in distro_groups_map['arch-based']:
+            error('Arch quirks handler called, but this is not Arch-based?')
+            safe_shutdown(1)
+
+        # The libinput CLI tools (libinput list-devices/debug-events and the
+        # 'libinput-quirks' helper) were split out of the base 'libinput' package
+        # into a separate 'libinput-tools' package around libinput 1.30. On a
+        # lagging Arch derivative (e.g. older Manjaro) that package may not exist
+        # as an install target yet, and a missing target aborts the whole batch
+        # install. Pre-split, those same tools still ship inside 'libinput', which
+        # is already present as a dependency of any graphical session. So we try
+        # to install the separate package on its own first; if it can't be
+        # installed, we drop it and continue. The runtime check in
+        # 'toshy-libinput.sh' is the real backstop that warns loudly if the CLI
+        # tools turn out to be genuinely missing later.
+        libinput_tools_pkg = 'libinput-tools'
+
+        if libinput_tools_pkg not in cnfg.pkgs_for_distro:
+            return
+
+        # Already installed? Leave it in the list; the main run skips installed pkgs.
+        is_installed = subprocess.run(
+            ['pacman', '-Q', libinput_tools_pkg], stdout=DEVNULL, stderr=DEVNULL
+        ).returncode == 0
+        if is_installed:
+            return
+
+        print(f"Attempting to install separate '{libinput_tools_pkg}' package...")
+        cmd_lst = [cnfg.priv_elev_cmd, 'pacman', '-S', '--noconfirm', libinput_tools_pkg]
+        result = subprocess.run(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
+
+        if result.returncode == 0:
+            # Installed cleanly; main run excludes it via the installed-pkg check.
+            print(f"Installed '{libinput_tools_pkg}' successfully.")
+            return
+
+        # Could not install it — most likely not packaged yet on a lagging distro.
+        # Drop it so the main batch install does not abort on a missing target.
+        cnfg.pkgs_for_distro.remove(libinput_tools_pkg)
+        print()
+        print(fancy_str(
+            f"  WARNING: Could not install '{libinput_tools_pkg}' — continuing without it.  ",
+            'red', bold=True))
+        print("  This package may not exist yet on a lagging Arch-based distro. The libinput")
+        print("  CLI tools ship inside the base 'libinput' package on such systems (already")
+        print("  present as a dependency). The Toshy libinput script will warn you later if")
+        print("  the tools turn out to be genuinely missing. Continuing the install...")
+        print()
 
     @staticmethod
     def handle_quirks_CentOS_7():
@@ -2740,6 +2802,9 @@ class PackageInstallDispatcher:
         """utility function that gets dispatched for distros that use Pacman package manager"""
         native_pkg_installer.check_for_pkg_mgr_cmd('pacman')
         call_attn_to_pwd_prompt_if_needed()
+
+        # Resolve the libinput-tools / libinput package split before the batch install
+        DistroQuirksHandler.handle_quirks_Arch()
 
         def is_pkg_installed_pacman(package):
             """utility function to help avoid 'reinstalling' existing packages on Arch"""
@@ -3750,8 +3815,10 @@ def install_toshy_files():
                 'LICENSE',
                 'packages.json',
                 'prep_centos_before_setup.sh',
+                'pyrightconfig.json',
                 'README.md',
                 'requirements.txt',
+                'ruff.toml',
                 this_file_name,
         ]
         # must use list unpacking (*) ignore_patterns() requires individual pattern arguments

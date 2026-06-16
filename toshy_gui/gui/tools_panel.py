@@ -144,7 +144,7 @@ class ToolsPanel(Gtk.Box):
 
         # Add spacer between buttons
         spacer = Gtk.Box()
-        spacer.set_size_request(-1, 6)  # 8px vertical spacer
+        spacer.set_size_request(-1, 0)
         column.append(spacer)
 
         # Show services log button
@@ -153,7 +153,7 @@ class ToolsPanel(Gtk.Box):
 
         # Add spacer between buttons
         spacer = Gtk.Box()
-        spacer.set_size_request(-1, 6)  # 8px vertical spacer
+        spacer.set_size_request(-1, 0)
         column.append(spacer)
 
         # Toggle overlays button
@@ -458,20 +458,6 @@ class ToolsPanel(Gtk.Box):
 
         setattr(self.cnfg, 'autostart_services', new_value)
         self.cnfg.save_settings()
-
-    # def on_autoload_tray_toggled(self, checkbox):
-    #     """Handle autoload tray icon checkbox toggle"""
-    #     new_value = checkbox.get_active()
-    #     debug(f"Autoload tray icon changed to: {new_value}")
-
-    #     # Save to settings
-    #     setattr(self.cnfg, 'autoload_tray_icon', new_value)
-    #     self.cnfg.save_settings()
-
-    #     # Show notification
-    #     status_text = "ENABLED" if new_value else "DISABLED"
-    #     self.ntfy.send_notification(f"Autoload tray icon {status_text}")
-
 
     def on_autoload_tray_toggled(self, checkbox):
         """Handle autoload tray icon checkbox toggle"""

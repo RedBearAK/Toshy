@@ -30,6 +30,8 @@ I don't really know many other places where it might be considered appropriate t
 
 # Current status: Stable Beta (Please Read)
 
+**2026-06-15 UPDATE**: Added basic Non-US keyboard layout correction capability (off by default, working in most common desktop environments), optional bare Meta/Super tap passthru on Option or Cmd positions (off by default), Alt_Gr on PC laptop context menu keys (on by default), Level3 Shift from left-side Option position (enabled by default, controlled by overlay flag), hardware quirk handling for T2 Mac Touch Bar Fn key (in keymapper), full touchpad support in suspend/resume logic (in keymapper).
+
 **2026-03-13 UPDATE**: Added support for NebiOS, an Ubuntu-based distro with a Wayfire-based Mac-like desktop environment (NebiDE). 
 
 **2026-02-02 UPDATE**: Finally added official support for installing on Gentoo Linux. Maybe also Calculate Linux and Redcore Linux, but only plain Gentoo is tested. Thanks to user @sazz who proved that it was possible to get Toshy running on Gentoo in issue 775.

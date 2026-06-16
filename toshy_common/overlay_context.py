@@ -27,7 +27,7 @@ than manipulating the mask directly, so bitwise arithmetic stays in one
 place and dependency rules are enforced consistently.
 """
 
-__version__ = '20260429'
+__version__ = '20260611'
 
 from enum import IntFlag
 
@@ -48,7 +48,9 @@ class OverlayFlag(IntFlag):
     BROWSER_SHORTCUTS       = 1 << 4
     VSCODE_SHORTCUTS        = 1 << 5
     DIALOG_ERGO             = 1 << 6
-    # Reserved for future built-in overlays (bits 7-31).
+    LEVEL3_LEFT_ALT         = 1 << 7
+
+    # Reserved for future built-in overlays (bits up to 31).
     # Bit positions are effectively frozen once a stable release ships,
     # since users' saved masks store raw int values. Leaving a wide gap
     # here ensures new built-in overlays can always be added without
@@ -70,13 +72,16 @@ class OverlayFlag(IntFlag):
 # from presets. Users opt into them individually by ticking the relevant
 # entry in the tray/GUI menu.
 
-OVL_PRESET_FULL             = (OverlayFlag.MACOS_GLOBALS |
-                                OverlayFlag.TERMINAL_ERGO |
-                                OverlayFlag.FINDER_MODS |
-                                OverlayFlag.ENTER_TO_RENAME |
-                                OverlayFlag.BROWSER_SHORTCUTS |
-                                OverlayFlag.VSCODE_SHORTCUTS |
-                                OverlayFlag.DIALOG_ERGO)
+OVL_PRESET_FULL             = (
+    OverlayFlag.MACOS_GLOBALS |
+    OverlayFlag.TERMINAL_ERGO |
+    OverlayFlag.FINDER_MODS |
+    OverlayFlag.ENTER_TO_RENAME |
+    OverlayFlag.BROWSER_SHORTCUTS |
+    OverlayFlag.VSCODE_SHORTCUTS |
+    OverlayFlag.DIALOG_ERGO |
+    OverlayFlag.LEVEL3_LEFT_ALT
+)
 OVL_PRESET_MINIMAL          = OverlayFlag.TERMINAL_ERGO
 OVL_PRESET_NONE             = OverlayFlag(0)
 
@@ -106,6 +111,8 @@ OVL_METADATA = [
         "Mac-style remaps in web browsers (Cmd+T, Cmd+W, Cmd+L, etc.)."),
     (OverlayFlag.VSCODE_SHORTCUTS, "VSCode Shortcuts",
         "Mac-style remaps in VSCode, Cursor, VSCodium, and related editors."),
+    (OverlayFlag.LEVEL3_LEFT_ALT, "Level3 via Left Alt",
+        "Reach AltGr/Option character layers from the left Alt key, on layouts that have them."),
     (OverlayFlag.USER_FLAG_A, "User Flag A",
         "Available for custom keymaps in your config."),
     (OverlayFlag.USER_FLAG_B, "User Flag B",
