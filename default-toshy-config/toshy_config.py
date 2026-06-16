@@ -24,6 +24,7 @@ import time
 import shutil
 import asyncio
 import inspect
+import textwrap
 import subprocess
 
 # Removing problematic types before they get deprecated:
@@ -1363,12 +1364,13 @@ def notify_context():
         # Trim the last 4 lines (dialog-only hints) for terminal output
         term_message = nwln_str.join(message.split(nwln_str)[:-4])
         rendered_message = render_pango_text(term_message, nwln_str)
-        debug(
+        diag_block = (
             f"\n{'=' * 50}\n"
             f"  Toshy Context Info (diagnostic dialog content)\n"
             f"{'=' * 50}\n"
             f"{rendered_message}\n"
         )
+        debug(f"\n{textwrap.indent(diag_block, ' ' * 5)}\n")
 
         # Optionally, also send a system notification:
         # ntfy.send_notification(message)
