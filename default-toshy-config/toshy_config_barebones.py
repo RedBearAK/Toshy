@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260615'
+__version__ = '20260619'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -96,11 +96,14 @@ devices_api(
 )
 
 
-# Requires xwaykeyz v1.18.0 or later
+# Requires xwaykeyz v1.22.0 or later
 try:
     keyboard_layout_correction(
-        enabled             = False,
+        correction_enabled  = False,
         correct_number_row  = False,
+        symbol_miss_policy  = 'fold',
+        folding_miss_policy = 'placeholder',
+        symbol_placeholder  = '?'
     )
 except NameError:
     pass
@@ -320,8 +323,9 @@ MACHINE_ID = get_machine_id_hash()
 KBTYPE = None
 
 # Short names for the `xwaykeyz/keyszer` string and Unicode processing helper functions
-ST = to_US_keystrokes           # was 'to_keystrokes' originally
-UC = unicode_keystrokes
+ST      = str_to_keystrokes              # 'to_US_keystrokes' is deprecated
+UC      = unicode_addr_to_keystrokes     # 'unicode_keystrokes' is deprecated
+UCS     = unicode_str_to_keystrokes
 ignore_combo = ComboHint.IGNORE
 
 ###############################################################################
@@ -661,7 +665,9 @@ def macro_tester():
                     ST(f"Keybd: '{ctx.device_name}'"), C("Enter"),
                     ST(f"Keyboard type: '{KBTYPE}'"), C("Enter"),
                     ST("Next test should come out on ONE LINE!"), C("Enter"),
-                    ST("Unicode and Shift Test: 🌹—€—\u2021—ÿ—\U00002021 12345 !@#$% |\\ !!!!!!"),
+                    ST("Unicode and Shift Test: "),
+                    UCS("🌹—€—\u2021—ÿ—\U00002021"),
+                    ST(" 12345 !@#$% |\\ !!!!!!"),
                     C("Enter"), C("Enter"),
         ]
     return _macro_tester
@@ -954,6 +960,13 @@ def multitap_config(tap_interval=None, min_tap_delay=None):
                 f"adjusted to {_MULTITAP_CONFIG['min_tap_delay']:.3f}s")
 
 
+# Grace period (seconds) between tap-sequence finalization and action emission.
+# Long enough for an already-in-flight modifier release to be processed by the
+# loop (so resume_keys lifts the trigger mods before the macro starts), short
+# enough to be imperceptible. Tunable; kept well under min_tap_delay.
+_MULTITAP_EMIT_GRACE = 0.15
+
+
 def isMultiTap( tap_1_action: 'Callable | None' = None,
                 tap_2_action: 'Callable | None' = None,
                 tap_3_action: 'Callable | None' = None,
@@ -1025,23 +1038,31 @@ def isMultiTap( tap_1_action: 'Callable | None' = None,
             debug(f"## isMultiTap: No action defined for {tap_count} taps on {action_key}")
 
     def finalize_taps(action_key: tuple, captured_ctx):
-        """Called when tap sequence is finalized."""
-        if action_key in tap_states:
-            state = tap_states[action_key]
-            tap_count = state['count']
-            debug(f"## isMultiTap: Finalizing {tap_count} taps for {action_key}")
+        """Called when tap sequence is finalized. Defers the actual action
+        emission by a short grace period (via loop.call_later) so the event loop
+        can process any pending modifier-release events first; this lets the
+        keymapper lift the trigger modifiers through its normal resume path
+        before the action emits, avoiding per-character modifier wrapping without
+        touching output or keystate internals."""
+        if action_key not in tap_states:
+            return
 
-            # Get the actions before cleaning up state
-            stored_tap_1_action = state['tap_1_action']
-            stored_tap_2_action = state['tap_2_action']
-            stored_tap_3_action = state['tap_3_action']
-            stored_tap_4_action = state['tap_4_action']
-            stored_tap_5_action = state['tap_5_action']
+        state = tap_states[action_key]
+        tap_count = state['count']
+        debug(f"## isMultiTap: Finalizing {tap_count} taps for {action_key}")
 
-            # Clean up state
-            del tap_states[action_key]
+        # Snapshot the actions before cleaning up state.
+        stored_tap_1_action = state['tap_1_action']
+        stored_tap_2_action = state['tap_2_action']
+        stored_tap_3_action = state['tap_3_action']
+        stored_tap_4_action = state['tap_4_action']
+        stored_tap_5_action = state['tap_5_action']
 
-            # Execute appropriate action with captured context
+        # Clean up state now; the deferred emit below captures everything it
+        # needs, so the per-combo state entry is free to go.
+        del tap_states[action_key]
+
+        def _emit():
             execute_action_for_tap_count(   tap_count,
                                             captured_ctx,
                                             stored_tap_1_action,
@@ -1049,6 +1070,16 @@ def isMultiTap( tap_1_action: 'Callable | None' = None,
                                             stored_tap_3_action,
                                             stored_tap_4_action,
                                             stored_tap_5_action)
+
+        loop = get_loop()
+        if loop is None:
+            # No loop to reschedule on: emit inline rather than drop the action.
+            # Worst case is per-character wrapping (slower), never a lost action.
+            debug("## isMultiTap: no loop for grace delay, emitting inline")
+            _emit()
+            return
+
+        loop.call_later(_MULTITAP_EMIT_GRACE, _emit)
 
     def _isMultiTap(ctx) -> None:
         loop = get_loop()
