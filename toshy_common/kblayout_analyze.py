@@ -49,7 +49,7 @@ A combination that exists on only one side is exactly how a level-count
 mismatch surfaces, so that case needs no special handling.
 """
 
-__version__ = '20260608'
+__version__ = '20260616'
 
 import os
 import sys
@@ -78,34 +78,15 @@ if _toshy_root not in sys.path:
 
 from toshy_common.kblayout_common import (
     LayoutSpec,
+    TYPING_BLOCK_KEYCODES,
+    NUMBER_ROW_KEYCODES,
+    XKB_KEYCODE_OFFSET,
+    _kernel_keycode,
     make_layout_spec,
     variant_to_xkb,
 )
+from toshy_common.kblayout_symtable import build_symbol_table as _build_symbol_table
 
-
-# XKB keycodes are offset from kernel (evdev) keycodes by +8.
-XKB_KEYCODE_OFFSET = 8
-
-# Kernel keycodes of the digit row, KEY_1..KEY_0. Kept positional by default in
-# build_correction_map so Cmd/Ctrl + number shortcuts keep firing from these
-# physical keys even on layouts that hide the digits behind Shift (AZERTY), the
-# way macOS behaves.
-NUMBER_ROW_KEYCODES = frozenset(range(2, 12))
-
-# Kernel keycodes of the main alphanumeric typing block — the letter, digit, and
-# punctuation keys a US-authored config references. Correction is confined to
-# these so it cannot drag in the extended "internet"/media keys that the evdev
-# keymap also defines with duplicate base characters (e.g. a stray base-'$' on a
-# high keycode), nor editing keys like CapsLock or Backspace that carry a control
-# keysym; those are never sensible correction sources or targets.
-TYPING_BLOCK_KEYCODES = frozenset(
-    list(range(2, 14)) +        # KEY_1..KEY_0, KEY_MINUS, KEY_EQUAL
-    list(range(16, 28)) +       # KEY_Q..KEY_RIGHTBRACE
-    list(range(30, 42)) +       # KEY_A..KEY_GRAVE
-    [43] +                      # KEY_BACKSLASH
-    list(range(44, 54)) +       # KEY_Z..KEY_SLASH
-    [86]                        # KEY_102ND (ISO < > key)
-)
 
 # Friendly annotations for the most commonly seen modifier names, used for
 # DISPLAY only. The structured data always carries the raw mod_get_name() names.
@@ -137,11 +118,6 @@ UNSUPPORTED_NOTICE = (
 
 # Tri-state cache for the capability probe: None = not yet probed.
 _MODS_FOR_LEVEL_OK = None
-
-
-def _kernel_keycode(xkb_keycode: int) -> int:
-    """Convert an XKB keycode to its kernel/evdev keycode."""
-    return xkb_keycode - XKB_KEYCODE_OFFSET
 
 
 def _produces_character(keysym: int) -> bool:
@@ -624,6 +600,61 @@ class KeyboardLayoutAnalyzer:
                 correction_dct[kernel] = target_kernel
 
         return correction_dct
+
+    # Add this method to KeyboardLayoutAnalyzer in toshy_common/kblayout_analyze.py,
+    # immediately after build_correction_map. It is the Phase 2 sibling of that
+    # method: where build_correction_map produces the keycode->keycode map for
+    # shortcut matching, this produces the character->keystroke-sequence table for
+    # string/Unicode output. The heavy lifting lives in kblayout_symtable; this is
+    # the thin analyzer-side seam that feeds it the analyzer's held keymap.
+    #
+    # Also add this import near the top of kblayout_analyze.py, with the other
+    # local 'from toshy_common...' imports:
+    #
+    #     from toshy_common.kblayout_symtable import build_symbol_table as _build_symbol_table
+    #
+    # (aliased so the module-level function and this method don't shadow names).
+
+    def build_symbol_table(self, compose_table) -> tuple:
+        """Return the per-layout symbol table for the keymapper's string output.
+
+        Where build_correction_map repositions shortcut keys, this answers a
+        different question: for each character, what keystroke sequence types it
+        on THIS layout. The keymapper's to_US_keystrokes / Unicode output paths
+        assume a US layout and so emit garbage on any other; the table lets them
+        emit the right keys instead. Direct characters get a one-keystroke path,
+        dead-key characters a two-keystroke (dead, base) sequence; characters the
+        layout cannot reach get no entry and fall to the emitter's miss policy.
+
+        compose_table:
+            a compiled xkbcommon ComposeTable for the active LOCALE, owned and
+            constructed by the caller (the coordinator), because compose data is
+            locale-driven, not layout-driven, and has a different lifecycle than
+            the keymap. May be None: the table is then direct-only (no dead-key
+            entries), which is the correct degraded behaviour when no compose
+            table is available — dead-key characters simply become misses.
+
+        Returns (table, miss_info) exactly as kblayout_symtable.build_symbol_table
+        does:
+            table      dict[str, list[(base_keycode, list[modifier_keycode])]],
+                       evdev keycodes throughout (+8 already resolved here, never
+                       re-offset downstream), empty when no keymap is loaded.
+            miss_info  dict with 'dead_miss' (dead keys the locale could not
+                       compose) and 'collisions' (chars reachable both ways,
+                       resolved to direct) — diagnostics the coordinator may log.
+
+        Declines (empty table) when no keymap is loaded or when the libxkbcommon
+        is too old for the level/modifier API, matching how the other analysis
+        methods guard.
+        """
+        if self.keymap is None:
+            print("(EE) build_symbol_table needs a loaded keymap.")
+            return {}, {'dead_miss': [], 'collisions': 0}
+        if not mods_for_level_supported():
+            print(UNSUPPORTED_NOTICE)
+            return {}, {'dead_miss': [], 'collisions': 0}
+        return _build_symbol_table(self.keymap, compose_table)
+
 
     # ── Display ─────────────────────────────────────────────────────────
 

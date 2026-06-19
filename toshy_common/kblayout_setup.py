@@ -17,7 +17,7 @@ reports the feature unavailable and does nothing, so Toshy keeps loading against
 an older keymapper.
 """
 
-__version__ = '20260608'
+__version__ = '20260616'
 
 from xwaykeyz.lib.logger import debug, warn
 
@@ -40,12 +40,18 @@ from toshy_common.kblayout_common import format_layout
 _layout_context = None
 
 
-def _apply_layout_correction(spec, correction_map, symbol_hints):
+def _apply_layout_correction(spec, correction_map, symbol_hints, symbol_table):
     """Coordinator callback; runs on the detector's watcher thread. Names the
-    active layout for the keymapper's logs and installs its correction map plus
-    the active-layout symbol hints used to annotate corrected keycodes in those
-    logs."""
-    set_correction_map(correction_map, label=format_layout(spec), symbol_hints=symbol_hints)
+    active layout for the keymapper's logs and installs its correction map, the
+    active-layout symbol hints used to annotate corrected keycodes in those logs,
+    and the Phase 2 symbol table the string/Unicode output paths consult to type
+    characters correctly on the active layout."""
+    set_correction_map(
+        correction_map,
+        label           = format_layout(spec),
+        symbol_hints    = symbol_hints,
+        symbol_table    = symbol_table,
+    )
 
 
 def start_kblayout_correction() -> bool:
@@ -65,7 +71,7 @@ def start_kblayout_correction() -> bool:
         return False                            # already started
 
     options = layout_correction_options()
-    if not options['enabled']:
+    if not options['correction_enabled']:
         debug("KBLAYOUT_CORRECTION: disabled; coordinator not started.", ctx="LC")
         return False
 

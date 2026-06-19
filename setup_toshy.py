@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260614'                        # CLI option "--version" will print this out.
+__version__ = '20260617'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1688,6 +1688,7 @@ pip_pkgs   = [
     # Everything below here is just to make the keymapper (xwaykeyz) install smoother, preventing
     # any terminal output that the user might mistake for an "error".
 
+    "anyascii",                 # Transliterate Unicode to ASCII for non-US layout output fallback
     "appdirs",                  # Get appropriate platform-specific directories for app data/config
     "evdev",                    # Interface with Linux input system for keyboard/mouse event handling
     "hyprpy",                   # Python binding for Hyprland Wayland compositor
