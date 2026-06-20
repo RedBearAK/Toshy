@@ -3589,7 +3589,7 @@ def verify_user_groups():
 #     show_task_completed_msg()
 
 
-def clone_keymapper_branch(self):
+def clone_keymapper_branch():
     """Clone the keymapper repo and check out the designated ref (branch/tag/commit)"""
     print(f'\n\n§  Cloning keymapper repo...\n{cnfg.separator}')
 
