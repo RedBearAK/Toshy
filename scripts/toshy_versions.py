@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260608'
+__version__ = '20260620'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -59,13 +59,26 @@ show_all_modules = '--all' in sys.argv or '-a' in sys.argv
 # ~/.config/toshy/toshy_common/service_manager.py
 # ~/.config/toshy/toshy_common/settings_class.py
 # ~/.config/toshy/toshy_common/shared_device_context.py
+# ~/.config/toshy/toshy_common/terminal_utils.py
 # ~/.config/toshy/toshy_common/xkb_check.py
 
 # ~/.config/toshy/toshy_common/kblayout_analyze.py
 # ~/.config/toshy/toshy_common/kblayout_common.py
 # ~/.config/toshy/toshy_common/kblayout_context.py
-# ~/.config/toshy/toshy_common/kblayout_detect.py
+
+    # ~/.config/toshy/toshy_common/kblayout_detect/__init__.py
+    # ~/.config/toshy/toshy_common/kblayout_detect/__main__.py
+    # ~/.config/toshy/toshy_common/kblayout_detect/kbld_backend_base.py
+    # ~/.config/toshy/toshy_common/kblayout_detect/kbld_registry.py
+    # ~/.config/toshy/toshy_common/kblayout_detect/kbld_backend_cinnamon.py
+    # ~/.config/toshy/toshy_common/kblayout_detect/kbld_backend_cosmic.py
+    # ~/.config/toshy/toshy_common/kblayout_detect/kbld_backend_gnome.py
+    # ~/.config/toshy/toshy_common/kblayout_detect/kbld_backend_kde.py
+    # ~/.config/toshy/toshy_common/kblayout_detect/kbld_backend_wl_generic.py
+    # ~/.config/toshy/toshy_common/kblayout_detect/kbld_backend_x11.py
+
 # ~/.config/toshy/toshy_common/kblayout_setup.py
+# ~/.config/toshy/toshy_common/kblayout_symtable.py
 
 # These two are shell scripts, not Python scrips
 # ~/.config/toshy/scripts/tshysvc-config
@@ -127,6 +140,8 @@ kblayout_detect_path    = os.path.join(toshy_dir_path,
                             'toshy_common', 'kblayout_detect')      # package dir now
 kblayout_setup_path     = os.path.join(toshy_dir_path,
                             'toshy_common', 'kblayout_setup.py')
+kblayout_symtable_path  = os.path.join(toshy_dir_path,
+                            'toshy_common', 'kblayout_symtable.py')
 
 # These two files are shell scripts, not Python scripts:
 config_svc_path         = os.path.join(toshy_dir_path,'scripts', 'tshysvc-config')
@@ -187,7 +202,8 @@ components = [
     ("  Detector: Wayland-generic", _kbld_module('kbld_backend_wl_generic.py'), True),
     ("  Detector: X11",             _kbld_module('kbld_backend_x11.py'),        True),
     (None, None, True),             # Spacing (detailed output only)
-    ("Keyboard Layout Setup",       kblayout_setup_path),
+    ("Kbd Layout Setup",            kblayout_setup_path),
+    ("Kbd Layout Symbol Table",     kblayout_symtable_path),
     (None, None),                   # Spacing
     ("SysD Svc: Keymapper Config",  config_svc_path),
     ("SysD Svc: Session Monitor",   sessmon_svc_path),
