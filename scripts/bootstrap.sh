@@ -4,6 +4,9 @@
 # Toshy Installation Bootstrap Script
 # https://github.com/RedBearAK/toshy
 
+# shellcheck disable=SC2034
+VERSION='20260620'
+
 set -e  # Exit on error
 
 # Force unbuffered output
@@ -12,7 +15,10 @@ exec > >(cat) 2>&1
 # Store the original directory
 ORIGINAL_DIR="$(pwd)"
 
-# Default branch
+# Toshy repo URL (cloned with git so any branch/tag/commit can be checked out)
+TOSHY_URL="https://github.com/RedBearAK/toshy.git"
+
+# Default ref (the common case is still a branch name)
 DEFAULT_BRANCH="main"
 SUGGESTED_BRANCH="dev_beta"
 
@@ -37,7 +43,7 @@ show_install_options() {
     echo_unbuffered "  --barebones-config        Install with mostly empty/blank keymapper config file"
     echo_unbuffered "  --skip-native             Skip the install of native packages"
     echo_unbuffered "  --no-dbus-python          Avoid installing dbus-python pip package"
-    echo_unbuffered "  --dev-keymapper[=BRANCH]  Install the development branch of the keymapper"
+    echo_unbuffered "  --dev-keymapper[=REF]     Install dev keymapper (branch, tag, or commit SHA)"
     echo_unbuffered "  --fancy-pants             See README for more info on this option"
     echo_unbuffered
 }
@@ -48,15 +54,15 @@ get_install_options() {
     echo_unbuffered "Most users don't need any options."
     echo_unbuffered
     sleep 0.1
-    
+
     read_interactive -p "Options (or Enter for none): " USER_OPTIONS
-    
+
     if [ -n "$USER_OPTIONS" ]; then
         INSTALL_ARGS="install $USER_OPTIONS"
     else
         INSTALL_ARGS="install"
     fi
-    
+
     # Immediate confirmation/edit loop
     echo_unbuffered
     echo_unbuffered "Install command:  ./setup_toshy.py $INSTALL_ARGS"
@@ -65,27 +71,27 @@ get_install_options() {
     echo_unbuffered "  e - Edit options"
     echo_unbuffered "  q - Quit"
     echo_unbuffered
-    
+
     while true; do
         read_interactive -p "Continue? [Y/e/q]: " confirm
-        
+
         # Convert to lowercase
         confirm=$(echo "$confirm" | tr '[:upper:]' '[:lower:]')
-        
+
         # Default to yes if empty
         if [ -z "$confirm" ] || [ "$confirm" = "y" ]; then
             break
         elif [ "$confirm" = "e" ]; then
             show_install_options
-            
+
             read_interactive -p "Options (or Enter for none): " USER_OPTIONS
-            
+
             if [ -n "$USER_OPTIONS" ]; then
                 INSTALL_ARGS="install $USER_OPTIONS"
             else
                 INSTALL_ARGS="install"
             fi
-            
+
             echo_unbuffered
             echo_unbuffered "Install command:  ./setup_toshy.py $INSTALL_ARGS"
             echo_unbuffered
@@ -100,21 +106,21 @@ get_install_options() {
     done
 }
 
-# Get branch from user input
+# Get ref (branch/tag/commit) from user input
 get_branch() {
     local branch
-    
+
     echo_unbuffered
     echo_unbuffered "Which Toshy branch would you like to install?"
     echo_unbuffered "1) $DEFAULT_BRANCH (default/stable)"
     echo_unbuffered "2) $SUGGESTED_BRANCH (development/beta)"
-    echo_unbuffered "3) Enter custom branch name"
+    echo_unbuffered "3) Enter custom ref (branch, tag, or commit SHA)"
     echo_unbuffered
-    
+
     sleep 0.1
-    
+
     read_interactive -p "Branch [1-3, default=1]: " choice
-    
+
     # shellcheck disable=SC2154
     case "$choice" in
         "" | "1")
@@ -124,7 +130,7 @@ get_branch() {
             branch="$SUGGESTED_BRANCH"
             ;;
         "3")
-            read_interactive -p "Enter custom branch name: " custom_branch
+            read_interactive -p "Enter custom ref (branch/tag/commit): " custom_branch
             branch="${custom_branch:-$DEFAULT_BRANCH}"
             ;;
         *)
@@ -132,11 +138,18 @@ get_branch() {
             branch="$DEFAULT_BRANCH"
             ;;
     esac
-    
+
     echo_unbuffered
-    echo_unbuffered "Selected branch: $branch"
+    echo_unbuffered "Selected ref: $branch"
     echo "$branch"
 }
+
+# Confirm git is present before anything else (clone needs it)
+if ! command -v git >/dev/null 2>&1; then
+    echo_unbuffered "ERROR: 'git' is required to fetch Toshy but was not found."
+    echo_unbuffered "       Please install git and run this script again."
+    exit 1
+fi
 
 # Create a unique folder name with timestamp
 FILE_NAME="toshy_$(date +%Y%m%d_%H%M)"
@@ -152,43 +165,45 @@ echo_unbuffered "=== Toshy Bootstrap Installer ==="
 # STEP 1: Get install options FIRST
 get_install_options
 
-# STEP 2: Get branch selection
+# STEP 2: Get ref selection
 echo_unbuffered
 BRANCH=$(get_branch)
 
-# Set up paths
-URL="https://github.com/RedBearAK/toshy/archive/refs/heads/$BRANCH.zip"
-TOSHY_DIR="$DOWNLOAD_DIR/$FILE_NAME/Toshy-$BRANCH"
+# Set up paths. The clone target is a fixed, known directory name (no archive
+# folder-name guessing), so the checked-out ref does not affect the path.
+CLONE_PARENT="$DOWNLOAD_DIR/$FILE_NAME"
+TOSHY_DIR="$CLONE_PARENT/toshy"
 
 echo_unbuffered
-echo_unbuffered "Starting download..."
-echo_unbuffered "Branch: $BRANCH"
+echo_unbuffered "Starting fetch..."
+echo_unbuffered "Ref: $BRANCH"
 
-# Create the Downloads directory if it doesn't exist
-mkdir -p "$DOWNLOAD_DIR"
-cd "$DOWNLOAD_DIR"
+# Create the parent directory if it doesn't exist
+mkdir -p "$CLONE_PARENT"
+cd "$CLONE_PARENT"
 
-# Download the zip file using curl or wget
+# Clone the full repo (full history so any commit/tag/branch can be checked
+# out, including for git-bisect-style installs).
 echo_unbuffered
-echo_unbuffered "Downloading Toshy from GitHub..."
+echo_unbuffered "Cloning Toshy from GitHub..."
 echo_unbuffered
-if ! (curl -L "$URL" -o "$FILE_NAME.zip" || wget "$URL" -O "$FILE_NAME.zip"); then
-    echo_unbuffered "Download failed. Please check your internet connection or verify the branch name exists."
+if ! git clone "$TOSHY_URL" "$TOSHY_DIR"; then
+    echo_unbuffered "Clone failed. Please check your internet connection or repo access."
     exit 1
 fi
 
-# Create directory and extract the zip file
+# Check out the requested ref. Passed as a single argument so a ref containing
+# spaces (e.g. an oddly named tag) survives intact.
 echo_unbuffered
-echo_unbuffered "Extracting files..."
-mkdir -p "$FILE_NAME"
-if ! unzip -q -o "$FILE_NAME.zip" -d "$FILE_NAME"; then
-    echo_unbuffered "Extraction failed. Please make sure 'unzip' is installed."
+echo_unbuffered "Checking out ref: $BRANCH"
+if ! git -C "$TOSHY_DIR" checkout "$BRANCH"; then
+    echo_unbuffered "Checkout failed. Verify the branch, tag, or commit exists: $BRANCH"
     exit 1
 fi
 echo_unbuffered "Done."
 
 # Navigate to the setup directory
-cd "$FILE_NAME/Toshy-$BRANCH"
+cd "$TOSHY_DIR"
 
 # Define the Ctrl+C trap function
 ctrl_c() {
@@ -205,7 +220,7 @@ ctrl_c() {
 trap ctrl_c INT
 
 echo_unbuffered
-echo_unbuffered "Download complete. Toshy extracted to:"
+echo_unbuffered "Clone complete. Toshy checked out to:"
 echo_unbuffered "  $TOSHY_DIR"
 
 # Strong visual separation before setup launches

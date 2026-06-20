@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260617'                        # CLI option "--version" will print this out.
+__version__ = '20260620'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -241,12 +241,9 @@ class InstallerSettings:
 
         self.keymapper_branch       = 'main'        # new branch when switched to 'xwaykeyz'
         self.keymapper_dev_branch   = 'dev_beta'    # branch to test new keymapper features
-        self.keymapper_cust_branch  = None          # Branch name provided by CLI flag argument
+        self.keymapper_cust_branch  = None          # Ref (branch/tag/commit) from CLI flag arg
 
         self.keymapper_url          = 'https://github.com/RedBearAK/xwaykeyz.git'
-
-        # This was changed to a property method that re-evaluates on each access:
-        # self.keymapper_clone_cmd    = f'git clone -b {self.keymapper_branch} {self.keymapper_url}'
 
         self.input_group            = 'input'
         self.user_name              = pwd.getpwuid(os.getuid()).pw_name
@@ -301,22 +298,22 @@ class InstallerSettings:
 
         return [self.py_interp_path, '-m', 'venv', '--copies', self.venv_path]
 
-    @property
-    def keymapper_clone_cmd(self):
-        # Originally a class instance attribute variable:
-        # self.keymapper_clone_cmd    = f'git clone -b {self.keymapper_branch} {self.keymapper_url}'
+    # @property
+    # def keymapper_clone_cmd(self):
+    #     # Originally a class instance attribute variable:
+    #     # self.keymapper_clone_cmd    = f'git clone -b {self.keymapper_branch} {self.keymapper_url}'
 
-        if self.use_dev_keymapper:
-            if self.keymapper_cust_branch:
-                _km_branch = self.keymapper_cust_branch
-            else:
-                _km_branch = self.keymapper_dev_branch
-        else:
-            _km_branch = self.keymapper_branch
+    #     if self.use_dev_keymapper:
+    #         if self.keymapper_cust_branch:
+    #             _km_branch = self.keymapper_cust_branch
+    #         else:
+    #             _km_branch = self.keymapper_dev_branch
+    #     else:
+    #         _km_branch = self.keymapper_branch
 
-        _clone_cmd = f'git clone -b {_km_branch} {self.keymapper_url}'
-        print(f"Keymapper clone command:\n  {_clone_cmd}")
-        return _clone_cmd
+    #     _clone_cmd = f'git clone -b {_km_branch} {self.keymapper_url}'
+    #     print(f"Keymapper clone command:\n  {_clone_cmd}")
+    #     return _clone_cmd
 
     def detect_elevation_command(self):
         """Detect the appropriate privilege elevation command"""
@@ -3567,9 +3564,34 @@ def verify_user_groups():
     show_task_completed_msg()
 
 
-def clone_keymapper_branch():
-    """Clone the designated keymapper branch from GitHub"""
-    print(f'\n\n§  Cloning keymapper branch...\n{cnfg.separator}')
+# def clone_keymapper_branch():
+#     """Clone the designated keymapper branch from GitHub"""
+#     print(f'\n\n§  Cloning keymapper branch...\n{cnfg.separator}')
+
+#     # Check if `git` command exists. If not, exit script with error.
+#     has_git = shutil.which('git')
+#     if not has_git:
+#         print(f'ERROR: "git" is not installed, for some reason. Cannot continue.')
+#         safe_shutdown(1)
+
+#     if os.path.exists(cnfg.keymapper_tmp_path):
+#         # force a fresh copy of keymapper every time script is run
+#         try:
+#             shutil.rmtree(cnfg.keymapper_tmp_path)
+#         except (OSError, PermissionError, FileNotFoundError) as file_err:
+#             error(f"Problem removing existing '{cnfg.keymapper_tmp_path}' folder:\n\t{file_err}")
+#     try:
+#         subprocess.run(cnfg.keymapper_clone_cmd.split() + [cnfg.keymapper_tmp_path], check=True)
+#     except subprocess.CalledProcessError as proc_err:
+#         print()
+#         error(f'Problem while cloning keymapper branch from GitHub:\n\t{proc_err}')
+#         safe_shutdown(1)
+#     show_task_completed_msg()
+
+
+def clone_keymapper_branch(self):
+    """Clone the keymapper repo and check out the designated ref (branch/tag/commit)"""
+    print(f'\n\n§  Cloning keymapper repo...\n{cnfg.separator}')
 
     # Check if `git` command exists. If not, exit script with error.
     has_git = shutil.which('git')
@@ -3583,12 +3605,41 @@ def clone_keymapper_branch():
             shutil.rmtree(cnfg.keymapper_tmp_path)
         except (OSError, PermissionError, FileNotFoundError) as file_err:
             error(f"Problem removing existing '{cnfg.keymapper_tmp_path}' folder:\n\t{file_err}")
+
+    # Resolve which ref to check out. Default is the stable branch. The
+    # '--dev-keymapper' flag selects the dev branch, or any ref (branch,
+    # tag, or commit SHA) when given an explicit value.
+    if cnfg.use_dev_keymapper:
+        if cnfg.keymapper_cust_branch:
+            _km_ref = cnfg.keymapper_cust_branch
+        else:
+            _km_ref = cnfg.keymapper_dev_branch
+    else:
+        _km_ref = cnfg.keymapper_branch
+
+    # Full clone (no '-b'), so any commit in history is reachable for the
+    # checkout. A SHA cannot be supplied to 'git clone -b', and bisect-style
+    # installs need the full history present.
+    _clone_cmd_lst = ['git', 'clone', cnfg.keymapper_url, cnfg.keymapper_tmp_path]
+    print(f"Keymapper clone command:\n  {' '.join(_clone_cmd_lst)}")
     try:
-        subprocess.run(cnfg.keymapper_clone_cmd.split() + [cnfg.keymapper_tmp_path], check=True)
+        subprocess.run(_clone_cmd_lst, check=True)
     except subprocess.CalledProcessError as proc_err:
         print()
-        error(f'Problem while cloning keymapper branch from GitHub:\n\t{proc_err}')
+        error(f'Problem while cloning keymapper repo from GitHub:\n\t{proc_err}')
         safe_shutdown(1)
+
+    # Check out the resolved ref. Passed as a list element (never split), so a
+    # ref containing quotes/spaces survives intact.
+    _checkout_cmd_lst = ['git', 'checkout', _km_ref]
+    print(f"Keymapper checkout command:\n  git checkout {_km_ref}")
+    try:
+        subprocess.run(_checkout_cmd_lst, cwd=cnfg.keymapper_tmp_path, check=True)
+    except subprocess.CalledProcessError as proc_err:
+        print()
+        error(f"Problem checking out keymapper ref '{_km_ref}':\n\t{proc_err}")
+        safe_shutdown(1)
+
     show_task_completed_msg()
 
 
@@ -5479,9 +5530,9 @@ def main():
         nargs='?',          # Makes the argument optional
         const=True,         # Value if flag is present but no branch specified
         default=False,
-        metavar='BRANCH',
+        metavar='REF',
         help='Install the development branch of the keymapper. '
-                'Optionally specify a custom branch name.'
+                'Optionally specify a branch, tag, or commit SHA.'
     )
     subparser_install.add_argument(
         '--fancy-pants',
