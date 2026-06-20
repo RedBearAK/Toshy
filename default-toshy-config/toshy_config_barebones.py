@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260619'
+__version__ = '20260620'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -96,13 +96,13 @@ devices_api(
 )
 
 
-# Requires xwaykeyz v1.22.0 or later
+# Requires xwaykeyz v1.23.0 or later
 try:
     keyboard_layout_correction(
         correction_enabled  = False,
         correct_number_row  = False,
         symbol_miss_policy  = 'fold',
-        folding_miss_policy = 'placeholder',
+        folded_miss_policy  = 'placeholder',
         symbol_placeholder  = '?'
     )
 except NameError:
