@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260620'
+__version__ = '20260621'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -141,7 +141,7 @@ sys.path.insert(0, current_folder_path)
 
 # Local imports after path has been set
 from toshy_common.env_context           import EnvironmentInfo
-from toshy_common.kblayout_setup        import start_kblayout_correction
+from toshy_common.kblayout_setup        import current_layout_name, start_kblayout_correction
 from toshy_common.machine_context       import get_machine_id_hash
 from toshy_common.notification_manager  import NotificationManager
 from toshy_common.overlay_context       import OverlayFlag as OFlag
@@ -656,19 +656,21 @@ def isDoubleTap(dt_combo):
 
 def macro_tester():
     """Type out a macro with useful info and a Unicode test.
-        WARNING: Safe only for use in apps that accept text blocks/typing of many characters."""
+        WARNING: Safe only for use in apps that accept text blocks/typing of many characters.
+        Character marker in front of each line is a canary to see if Combo outputs are 
+        being corrected for the layout, not just strings going through ST()."""
     def _macro_tester(ctx: KeyContext):
         return [
-                    C("Enter"),
-                    ST(f"Class: '{ctx.wm_class}'"), C("Enter"),
-                    ST(f"Title: '{ctx.wm_name}'"), C("Enter"),
-                    ST(f"Keybd: '{ctx.device_name}'"), C("Enter"),
-                    ST(f"Keyboard type: '{KBTYPE}'"), C("Enter"),
-                    ST("Next test should come out on ONE LINE!"), C("Enter"),
-                    ST("Unicode and Shift Test: "),
-                    UCS("🌹—€—\u2021—ÿ—\U00002021"),
-                    ST(" 12345 !@#$% |\\ !!!!!!"),
-                    C("Enter"), C("Enter"),
+            C("Enter"),
+            C("o"), ST(f" Class: '{ctx.wm_class}'"),                                C("Enter"),
+            C("o"), ST(f" Title: '{ctx.wm_name}'"),                                 C("Enter"),
+            C("o"), ST(f" Keybd: '{ctx.device_name}'"),                             C("Enter"),
+            C("o"), ST(f" Keyboard type: '{KBTYPE}'"),                              C("Enter"),
+            C("o"), ST(f" Active Layout: '{current_layout_name()}'"),               C("Enter"),
+            C("o"), ST(f" Shift timing test: 12345 !@#$% |\\ !!!!!!"),              C("Enter"),
+            C("o"), ST(f" Unicode req's Shift+Ctrl+U shortcut (ibus, fcitx5)"),     C("Enter"),
+            C("o"), ST(f" Unicode test: "), UCS("🌹—€—\u2021—ÿ—\U00002021"),        C("Enter"),
+            # C("Enter"),
         ]
     return _macro_tester
 
@@ -858,6 +860,42 @@ def get_output():
     return None
 
 
+def _decorrect_for_multitap(command):
+    """Apply the keymapper's output layout de-correction to a multi-tap command,
+    mirroring what handle_commands does to every command before it reaches output.
+
+    This processor is a parallel reimplementation of handle_commands and so does
+    NOT inherit its de-correction step; without this, a bare Combo/Key emitted by
+    a multi-tap action goes out US-positional and renders the wrong symbol on a
+    non-US layout (e.g. C('Minus') -> ')' on AZERTY), while string-emitter output
+    is unaffected because it is already PreCorrectedCombo.
+
+    The de-correction function and the correction-map probe are read off the live
+    transform module via sys.modules — the same runtime-access pattern get_output
+    uses for _output — so this stays inside toshy_config and adds no import across
+    the keymapper boundary. Gated on a correction map being installed, exactly as
+    handle_commands gates its own call. On any failure, or when no map is present,
+    the command is returned unchanged so multi-tap output is never lost.
+
+    NOTE: this patches the reimplementation. The real fix is to route multi-tap
+    emission through handle_commands so this concern (and any other drift from it)
+    cannot recur; that relocation is tracked separately."""
+    try:
+        transform_module = sys.modules.get('xwaykeyz.transform')
+        if transform_module is None:
+            return command
+        get_correction_map = getattr(transform_module, 'get_correction_map', None)
+        decorrect_command = getattr(transform_module, '_decorrect_output_command', None)
+        if get_correction_map is None or decorrect_command is None:
+            return command
+        if not get_correction_map():
+            return command                  # US-like layout: nothing to de-correct
+        return decorrect_command(command)
+    except Exception as decorrect_err:
+        debug(f"## multitap: de-correction skipped ({decorrect_err})")
+        return command
+
+
 def process_multitap_command(command, ctx):
     """Simplified recursive command processor based on handle_commands logic"""
     debug(f"## multitap: Processing command: {type(command)}")
@@ -889,6 +927,11 @@ def process_multitap_command(command, ctx):
         # Handle direct objects (Combo, Key, etc.)
         output = get_output()
         if output and hasattr(command, '__class__'):
+            # De-correct for the active layout before emitting, the same way
+            # handle_commands does (de-correct, then dispatch). Leaves a
+            # PreCorrectedCombo untouched and returns the same kind of object, so
+            # the class-name dispatch below still classifies it correctly.
+            command = _decorrect_for_multitap(command)
             class_name = command.__class__.__name__
             debug(f"## multitap: Direct object class: {class_name}")
 
