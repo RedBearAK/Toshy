@@ -17,7 +17,7 @@ reports the feature unavailable and does nothing, so Toshy keeps loading against
 an older keymapper.
 """
 
-__version__ = '20260616'
+__version__ = '20260621'
 
 from xwaykeyz.lib.logger import debug, warn
 
@@ -99,6 +99,25 @@ def stop_kblayout_correction():
     if _layout_context is not None:
         _layout_context.stop()
         _layout_context = None
+
+
+def current_layout_name() -> str:
+    """Human-readable name of the active layout as the correction coordinator
+    currently sees it, or a marker string when no live layout is available.
+
+    Reads the coordinator's freshest view (it updates on the detector's watcher
+    thread, upstream of the keymapper install), so this reflects a layout switch
+    as soon as the detector sees it. Intended for diagnostics — e.g. a macro that
+    prints the active layout so output-correction behaviour can be read at a
+    glance. Returns a 'not active' marker when correction is disabled or no
+    detection backend started, and a 'not yet resolved' marker in the brief
+    window before the first layout resolves; both are themselves informative."""
+    if _layout_context is None:
+        return 'layout correction not active'
+    spec = _layout_context.current_layout
+    if spec is None:
+        return 'layout not yet resolved'
+    return format_layout(spec)
 
 
 # End of file #
