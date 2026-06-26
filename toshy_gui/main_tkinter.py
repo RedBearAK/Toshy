@@ -23,7 +23,7 @@ runtime = initialize_toshy_runtime()
 # Local imports
 from toshy_common import logger
 from toshy_common.logger import *
-from toshy_common.settings_class import Settings
+from toshy_common.settings_class import Settings, CAPS_LOCK_EXCLUSIVE_FLAGS
 from toshy_common.process_manager import ProcessManager
 from toshy_common.service_manager import ServiceManager
 from toshy_common.monitoring import SettingsMonitor, ServiceMonitor
@@ -218,6 +218,19 @@ def save_radio_settings(cnfg: Settings, var: tk.StringVar, key: str):
 
 def save_switch_settings(cnfg: Settings, var: tk.BooleanVar, key: str):
     setattr(cnfg, key, var.get())
+
+    # Caps Lock options are mutually exclusive: enabling one clears the others
+    if var.get() and key in CAPS_LOCK_EXCLUSIVE_FLAGS:
+        cnfg.clear_other_caps_flags(key)
+        caps_vars = {
+            'Caps2Cmd':         Caps2Cmd_switch_var,
+            'Caps2Esc_Cmd':     Caps2Esc_Cmd_switch_var,
+            'Caps2Ctrl_Swap':   Caps2Ctrl_Swap_switch_var,
+        }
+        for flag, flag_var in caps_vars.items():
+            if flag != key and flag_var.get():
+                flag_var.set(False)
+
     cnfg.save_settings()
 
 
@@ -233,6 +246,7 @@ def load_switch_settings(cnfg: Settings):
     ST3_in_VSCode_switch_var.set(       cnfg.ST3_in_VSCode)
     Caps2Cmd_switch_var.set(            cnfg.Caps2Cmd)
     Caps2Esc_Cmd_switch_var.set(        cnfg.Caps2Esc_Cmd)
+    Caps2Ctrl_Swap_switch_var.set(      cnfg.Caps2Ctrl_Swap)
     Enter2Ent_Cmd_switch_var.set(       cnfg.Enter2Ent_Cmd)
     theme_switch_var.set(               cnfg.gui_dark_theme)
     update_theme()
@@ -418,6 +432,25 @@ Caps2Esc_Cmd_switch_label = tk.Label(
     fg=sw_lbl_font_color
 )
 
+Caps2Ctrl_Swap_switch_var  = tk.BooleanVar(value=False)
+Caps2Ctrl_Swap_switch      = ttk.Checkbutton(
+    left_column,
+    text='Swap CapsLock and Control',
+    style='Switch.TCheckbutton',
+    variable=Caps2Ctrl_Swap_switch_var
+)
+
+Caps2Ctrl_Swap_switch_label = tk.Label(
+    left_column,
+    justify=tk.LEFT,
+    text=f'Swap physical CapsLock and Left Control keys:\
+        \n  • CapsLock acts as Left Control\
+        \n  • Left Control acts as CapsLock',
+    font=sw_lbl_font,
+    wraplength=wrap_len,
+    fg=sw_lbl_font_color
+)
+
 Enter2Ent_Cmd_switch_var = tk.BooleanVar(value=False)
 Enter2Enter_Cmd_switch = ttk.Checkbutton(
     left_column,
@@ -447,6 +480,8 @@ if not runtime.barebones_config:
     Caps2Cmd_label.pack(            anchor=tk.W,    padx=sw_lbl_indent,    pady=btn_lbl_pady)
     Caps2Esc_Cmd_switch.pack(       anchor=tk.W,    padx=sw_padx,          pady=btn_pady)
     Caps2Esc_Cmd_switch_label.pack( anchor=tk.W,    padx=sw_lbl_indent,    pady=btn_lbl_pady)
+    Caps2Ctrl_Swap_switch.pack(     anchor=tk.W,    padx=sw_padx,          pady=btn_pady)
+    Caps2Ctrl_Swap_switch_label.pack(anchor=tk.W,   padx=sw_lbl_indent,    pady=btn_lbl_pady)
     Enter2Enter_Cmd_switch.pack(    anchor=tk.W,    padx=sw_padx,          pady=btn_pady)
     Enter2Ent_Cmd_label.pack(       anchor=tk.W,    padx=sw_lbl_indent,    pady=btn_lbl_pady)
 
@@ -634,6 +669,9 @@ Caps2Cmd_switch.config(
 Caps2Esc_Cmd_switch.config(
     command=lambda: save_switch_settings(
         cnfg, Caps2Esc_Cmd_switch_var, 'Caps2Esc_Cmd'))
+Caps2Ctrl_Swap_switch.config(
+    command=lambda: save_switch_settings(
+        cnfg, Caps2Ctrl_Swap_switch_var, 'Caps2Ctrl_Swap'))
 Enter2Enter_Cmd_switch.config(
     command=lambda: save_switch_settings(
         cnfg, Enter2Ent_Cmd_switch_var, 'Enter2Ent_Cmd'))

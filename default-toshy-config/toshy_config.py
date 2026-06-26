@@ -2354,6 +2354,47 @@ multipurpose_modmap("Left Opt is Sup & Opt - Win kbd", {
 )
 
 
+# [Swap Caps Lock & Control]
+# True swap: physical CapsLock takes over Toshy's Left Control role, and physical Left Control
+# becomes CapsLock. CapsLock must emit whatever Left Control would emit in the same context, so
+# these mirror the default LEFT_CTRL targets below per keyboard type / context:
+#   - GUI  (Mac/Win kbd):  CapsLock -> LEFT_META  (Super, same as default LEFT_CTRL)
+#   - GUI  (Cbk/IBM kbd):  CapsLock -> LEFT_ALT   (same as default LEFT_CTRL)
+#   - Terms (all kbd):     CapsLock -> LEFT_CTRL  (real Control, same as default LEFT_CTRL)
+#   - All:                 LEFT_CTRL -> CapsLock
+# Registered before all other global conditional modmaps so they win first-match precedence in
+# apply_modmap() and claim LEFT_CTRL before the default LEFT_CTRL modmaps can fire. Modmap output
+# is not re-fed, so CapsLock emits its target literally (no further remapping).
+# NOTE: enabling this removes physical Left Control from Toshy's Cmd/Super scheme (by design).
+# Mutually exclusive with the other Caps Lock options via the Preferences GUI / tray menu.
+modmap("Cond modmap - Caps2Ctrl_Swap - GUI - Mac/Win kbd", {
+    Key.CAPSLOCK:               Key.LEFT_META,                 # Caps2Ctrl_Swap (= default LEFT_CTRL)
+    Key.LEFT_CTRL:              Key.CAPSLOCK,                  # Caps2Ctrl_Swap
+}, when = lambda ctx:
+    cnfg.Caps2Ctrl_Swap and
+    cnfg.screen_has_focus and
+    (ctx_kbd_is_apple or ctx_kbd_is_windows) and
+    not ctx_app_is_terminal and not ctx_app_is_remote
+)
+modmap("Cond modmap - Caps2Ctrl_Swap - GUI - Cbk/IBM kbd", {
+    Key.CAPSLOCK:               Key.LEFT_ALT,                  # Caps2Ctrl_Swap (= default LEFT_CTRL)
+    Key.LEFT_CTRL:              Key.CAPSLOCK,                  # Caps2Ctrl_Swap
+}, when = lambda ctx:
+    cnfg.Caps2Ctrl_Swap and
+    cnfg.screen_has_focus and
+    (ctx_kbd_is_chromebook or ctx_kbd_is_ibm) and
+    not ctx_app_is_terminal and not ctx_app_is_remote
+)
+modmap("Cond modmap - Caps2Ctrl_Swap - Terms - all kbd", {
+    Key.CAPSLOCK:               Key.LEFT_CTRL,                 # Caps2Ctrl_Swap (= default LEFT_CTRL)
+    Key.LEFT_CTRL:              Key.CAPSLOCK,                  # Caps2Ctrl_Swap
+}, when = lambda ctx:
+    cnfg.Caps2Ctrl_Swap and
+    cnfg.screen_has_focus and
+    ctx_app_is_terminal
+)
+
+
 # [Global GUI conditional modmaps] Change modifier keys as in xmodmap
 modmap("Cond modmap - GUI - Caps2Cmd - not Cbk kdb", {
     Key.CAPSLOCK:               Key.RIGHT_CTRL,                 # Caps2Cmd
