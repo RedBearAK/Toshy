@@ -69,6 +69,10 @@ buildPythonPackage rec {
   # Tests require evdev devices and uinput access (not available in sandbox)
   doCheck = false;
 
+  # i3ipc brings in nixpkgs python-xlib 0.33 while we pin 0.31 via overlay.
+  # Both versions coexist safely; suppress the false-positive conflict.
+  catchConflicts = false;
+
   pythonImportsCheck = [
     "xwaykeyz"
   ];
