@@ -115,6 +115,11 @@
 
           doCheck = false;
 
+          # Relax python-xlib pin: overlay provides 0.31 but i3ipc brings 0.33
+          # into the runtime closure. Both work; just suppress the check.
+          pythonRelaxDeps = [ "python-xlib" ];
+          catchConflicts = false;
+
           # Add runtime tools to PATH for all wrapped binaries.
           # wrapGAppsHook3 applies these to every binary it wraps.
           makeWrapperArgs = [
