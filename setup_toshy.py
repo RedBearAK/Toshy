@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260620'                        # CLI option "--version" will print this out.
+__version__ = '20260628'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1103,7 +1103,7 @@ distro_groups_map = {
 
     # Use "tumbleweed-based" entry for Tumbleweed, "microos-based" for Aeon/Kalpa distro types
     'leap-based': [
-        'leap',
+        'leap',                     # in case OpenSUSE distros drop the "opensuse-"
         'opensuse-leap',
     ],
 
@@ -1138,8 +1138,10 @@ distro_groups_map = {
 
     # Use "leap-based" entry for Leap, "microos-based" for Aeon/Kalpa distro types
     'tumbleweed-based': [
+        'opensuse-slowroll',        # minor variation of Tumbleweed with "slow" package updates
         'opensuse-tumbleweed',
-        'tumbleweed',
+        'slowroll',                 # in case OpenSUSE distros drop the "opensuse-"
+        'tumbleweed',               # in case OpenSUSE distros drop the "opensuse-"
     ],
 
     'ubuntu-based': [
@@ -1161,7 +1163,11 @@ distro_groups_map = {
 
 
 # Checklist of distro type representatives with
-# '/usr/bin/gdbus' pre-installed in clean VM:
+# '/usr/bin/gdbus' pre-installed in clean VM.
+# Verification that 'gdbus' is the most reliable
+# alternative for D-Bus commands in terminals,
+# vs using 'qdbus' (name and availability varies),
+# or 'dbus-send' (less capable, difficult to use).
 #
 # - AlmaLinux 8.x                               [Provided by 'glib2']
 # - AlmaLinux 9.x                               [Provided by 'glib2']
