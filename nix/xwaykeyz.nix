@@ -50,7 +50,8 @@ buildPythonPackage rec {
     substituteInPlace pyproject.toml \
       --replace-fail '"dbus-python ~= 1.3.2"' '"dbus-python >= 1.3.2"' \
       --replace-fail '"hyprpy ~= 0.1.5"' '"hyprpy >= 0.1.5"' \
-      --replace-fail '"inotify_simple ~= 1.3"' '"inotify_simple >= 1.3"'
+      --replace-fail '"inotify_simple ~= 1.3"' '"inotify_simple >= 1.3"' \
+      --replace-fail '"python-xlib == 0.31"' '"python-xlib >= 0.31"'
   '';
 
   propagatedBuildInputs = [
