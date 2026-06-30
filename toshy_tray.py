@@ -57,7 +57,7 @@ import toshy_common.terminal_utils as term_utils
 from toshy_common import logger
 from toshy_common.logger import *
 from toshy_common.env_context import EnvironmentInfo
-from toshy_common.settings_class import Settings
+from toshy_common.settings_class import Settings, CAPS_LOCK_EXCLUSIVE_FLAGS
 from toshy_common.process_manager import ProcessManager
 from toshy_common.service_manager import ServiceManager
 from toshy_common.monitoring import SettingsMonitor, ServiceMonitor
@@ -385,6 +385,7 @@ if not runtime.barebones_config:
         set_item_active_thread_safe(ST3_in_VSCode_item, cnfg.ST3_in_VSCode)
         set_item_active_thread_safe(Caps2Cmd_item, cnfg.Caps2Cmd)
         set_item_active_thread_safe(Caps2Esc_Cmd_item, cnfg.Caps2Esc_Cmd)
+        set_item_active_thread_safe(Caps2Ctrl_Swap_item, cnfg.Caps2Ctrl_Swap)
         set_item_active_thread_safe(Enter2Ent_Cmd_item, cnfg.Enter2Ent_Cmd)
         set_item_active_thread_safe(l_cmd_is_sup_and_cmd_item, cnfg.l_cmd_is_sup_and_cmd)
         set_item_active_thread_safe(l_opt_is_sup_and_opt_item, cnfg.l_opt_is_sup_and_opt)
@@ -397,9 +398,23 @@ if not runtime.barebones_config:
         cnfg.ST3_in_VSCode          = ST3_in_VSCode_item.get_active()
         cnfg.Caps2Cmd               = Caps2Cmd_item.get_active()
         cnfg.Caps2Esc_Cmd           = Caps2Esc_Cmd_item.get_active()
+        cnfg.Caps2Ctrl_Swap         = Caps2Ctrl_Swap_item.get_active()
         cnfg.Enter2Ent_Cmd          = Enter2Ent_Cmd_item.get_active()
         cnfg.l_cmd_is_sup_and_cmd   = l_cmd_is_sup_and_cmd_item.get_active()
         cnfg.l_opt_is_sup_and_opt   = l_opt_is_sup_and_opt_item.get_active()
+
+        # Caps Lock options are mutually exclusive: enabling one clears the others.
+        # The widget that fired the toggle wins; load_prefs_submenu_settings() (queued
+        # below) syncs the cleared menu items back from cnfg.
+        caps_items = {
+            'Caps2Cmd':         Caps2Cmd_item,
+            'Caps2Esc_Cmd':     Caps2Esc_Cmd_item,
+            'Caps2Ctrl_Swap':   Caps2Ctrl_Swap_item,
+        }
+        for flag, item in caps_items.items():
+            if item is widget and item.get_active():
+                cnfg.clear_other_caps_flags(flag)
+                break
 
         cnfg.save_settings()
         GLib.idle_add(load_prefs_submenu_settings)  # Queue the update to run in GTK's main loop
@@ -431,6 +446,11 @@ if not runtime.barebones_config:
     Caps2Esc_Cmd_item.set_active(cnfg.Caps2Esc_Cmd)
     Caps2Esc_Cmd_item.connect('toggled', save_prefs_settings)
     prefs_submenu.append(Caps2Esc_Cmd_item)
+
+    Caps2Ctrl_Swap_item = Gtk.CheckMenuItem(label='Swap CapsLock and Control')
+    Caps2Ctrl_Swap_item.set_active(cnfg.Caps2Ctrl_Swap)
+    Caps2Ctrl_Swap_item.connect('toggled', save_prefs_settings)
+    prefs_submenu.append(Caps2Ctrl_Swap_item)
 
     Enter2Ent_Cmd_item = Gtk.CheckMenuItem(label='Enter is Enter & Cmd')
     Enter2Ent_Cmd_item.set_active(cnfg.Enter2Ent_Cmd)

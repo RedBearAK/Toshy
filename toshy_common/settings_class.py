@@ -23,6 +23,10 @@ from toshy_common.overlay_context import (
 )
 
 
+# Caps Lock behavior flags that are mutually exclusive: enabling one clears the others
+CAPS_LOCK_EXCLUSIVE_FLAGS = ('Caps2Cmd', 'Caps2Esc_Cmd', 'Caps2Ctrl_Swap')
+
+
 class Settings:
     def __init__(self, config_dir_path: str = '..') -> None:
         self.config_dir_path        = config_dir_path
@@ -57,6 +61,7 @@ class Settings:
         self.multi_lang             = False                     # Default: False
         self.Caps2Cmd               = False                     # Default: False
         self.Caps2Esc_Cmd           = False                     # Default: False
+        self.Caps2Ctrl_Swap         = False                     # Default: False
         self.Enter2Ent_Cmd          = False                     # Default: False
         self.ST3_in_VSCode          = False                     # Default: False
 
@@ -104,6 +109,15 @@ class Settings:
                 new_mask &= ~child          # parent off, child must be off too
 
         self._overlay_mask = new_mask
+
+    def clear_other_caps_flags(self, keep_flag: str):
+        """Enforce mutual exclusivity of the Caps Lock behavior flags.
+
+        Sets every flag in CAPS_LOCK_EXCLUSIVE_FLAGS to False except `keep_flag`.
+        Does not save; callers persist after updating their UI widgets."""
+        for flag in CAPS_LOCK_EXCLUSIVE_FLAGS:
+            if flag != keep_flag:
+                setattr(self, flag, False)
 
     def ensure_database_setup(self):
         # This will create the database file if it doesn't exist yet
@@ -195,6 +209,7 @@ class Settings:
             ('multi_lang',                  str(self.multi_lang)),
             ('Caps2Cmd',                    str(self.Caps2Cmd)),
             ('Caps2Esc_Cmd',                str(self.Caps2Esc_Cmd)),
+            ('Caps2Ctrl_Swap',              str(self.Caps2Ctrl_Swap)),
             ('Enter2Ent_Cmd',               str(self.Enter2Ent_Cmd)),
             ('l_cmd_is_sup_and_cmd',        str(self.l_cmd_is_sup_and_cmd)),
             ('l_opt_is_sup_and_opt',        str(self.l_opt_is_sup_and_opt)),
@@ -250,6 +265,7 @@ class Settings:
                 elif row[0] == 'multi_lang'             : self.multi_lang           = setting_value
                 elif row[0] == 'Caps2Cmd'               : self.Caps2Cmd             = setting_value
                 elif row[0] == 'Caps2Esc_Cmd'           : self.Caps2Esc_Cmd         = setting_value
+                elif row[0] == 'Caps2Ctrl_Swap'         : self.Caps2Ctrl_Swap       = setting_value
                 elif row[0] == 'Enter2Ent_Cmd'          : self.Enter2Ent_Cmd        = setting_value
                 elif row[0] == 'l_cmd_is_sup_and_cmd'   : self.l_cmd_is_sup_and_cmd = setting_value
                 elif row[0] == 'l_opt_is_sup_and_opt'   : self.l_opt_is_sup_and_opt = setting_value
@@ -401,6 +417,7 @@ class Settings:
         multi_lang              = {self.multi_lang}
         Caps2Cmd                = {self.Caps2Cmd}
         Caps2Esc_Cmd            = {self.Caps2Esc_Cmd}
+        Caps2Ctrl_Swap          = {self.Caps2Ctrl_Swap}
         Enter2Ent_Cmd           = {self.Enter2Ent_Cmd}
         l_cmd_is_sup_and_cmd    = {self.l_cmd_is_sup_and_cmd}
         l_opt_is_sup_and_opt    = {self.l_opt_is_sup_and_opt}

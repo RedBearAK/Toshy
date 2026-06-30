@@ -3,6 +3,7 @@ gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib
 
 from toshy_common.logger import debug
+from toshy_common.settings_class import CAPS_LOCK_EXCLUSIVE_FLAGS
 
 # Configuration for help button appearance
 HELP_BUTTON_SIZE = 18   # Width and height in pixels - change here to resize all help buttons
@@ -142,6 +143,18 @@ class SettingsPanel(Gtk.Box):
             "Modmap CapsLock key to be:\n• Escape when tapped\n• Command key for hold/combo"
         )
         column.append(caps_esc_control)
+
+        # Swap CapsLock and Control switch
+        caps_ctrl_swap_control = self.create_switch_with_help(
+            "Swap CapsLock and Control",
+            "Caps2Ctrl_Swap",
+            "Swap CapsLock and Control",
+            "Swap the physical CapsLock and Left Control keys:\n"
+            "• CapsLock acts as Left Control\n"
+            "• Left Control acts as CapsLock\n\n"
+            "Note: enabling this removes physical Left Control from Toshy's Cmd/Super scheme."
+        )
+        column.append(caps_ctrl_swap_control)
 
         # Multipurpose Enter switch
         enter_cmd_control = self.create_switch_with_help(
@@ -463,9 +476,20 @@ class SettingsPanel(Gtk.Box):
         new_value = switch.get_active()
         
         debug(f"Switch toggled: {setting_key} = {new_value}")
-        
+
         # Save to settings
         setattr(self.cnfg, setting_key, new_value)
+
+        # Caps Lock options are mutually exclusive: enabling one clears the others
+        if new_value and setting_key in CAPS_LOCK_EXCLUSIVE_FLAGS:
+            self.cnfg.clear_other_caps_flags(setting_key)
+            for flag in CAPS_LOCK_EXCLUSIVE_FLAGS:
+                if flag == setting_key:
+                    continue
+                other_switch = getattr(self, f"{flag}_switch", None)
+                if other_switch is not None and other_switch.get_active():
+                    other_switch.set_active(False)
+
         self.cnfg.save_settings()
             
     def on_optspec_toggled(self, radio):
@@ -557,7 +581,7 @@ class SettingsPanel(Gtk.Box):
         # Update all switches using stored references
         switch_settings = [
             'altgr_on_menu_key', 'multi_lang', 'ST3_in_VSCode', 'Caps2Cmd', 'Caps2Esc_Cmd',
-            'Enter2Ent_Cmd', 'forced_numpad', 'media_arrows_fix',
+            'Caps2Ctrl_Swap', 'Enter2Ent_Cmd', 'forced_numpad', 'media_arrows_fix',
             'l_opt_is_sup_and_opt', 'l_cmd_is_sup_and_cmd'
         ]
         
