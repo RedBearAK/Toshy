@@ -49,7 +49,7 @@ A combination that exists on only one side is exactly how a level-count
 mismatch surfaces, so that case needs no special handling.
 """
 
-__version__ = '20260616'
+__version__ = '20260703'
 
 import os
 import sys
@@ -281,7 +281,19 @@ class KeyboardLayoutAnalyzer:
         the string path keeps and the name/spec paths overwrite after this call.
         """
         self.keymap = keymap
-        self.layout_name = keymap.layout_get_name(0)
+        # python-xkbcommon's layout_get_name() hardcodes .decode('ascii'), so a
+        # layout named with any non-ASCII character (e.g. 'Inuktitut \u2013
+        # Nunavik', with an en dash) raises UnicodeDecodeError from inside the
+        # binding -- and this runs during startup priming, where an uncaught
+        # raise killed the whole keymapper. The name is a log label only (never
+        # parsed or acted on), so a placeholder loses nothing but the pretty
+        # string.
+        try:
+            self.layout_name = keymap.layout_get_name(0)
+        except UnicodeDecodeError:
+            self.layout_name = '(layout name not ASCII-decodable)'
+            print("(WW) Active layout's name is not ASCII-decodable "
+                    "(python-xkbcommon limitation); using a placeholder label.")
         self.layout_spec = None
         return True
 

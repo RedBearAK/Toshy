@@ -17,9 +17,11 @@ reports the feature unavailable and does nothing, so Toshy keeps loading against
 an older keymapper.
 """
 
-__version__ = '20260621'
+__version__ = '20260703'
 
-from xwaykeyz.lib.logger import debug, warn
+import traceback
+
+from xwaykeyz.lib.logger import debug, error, warn
 
 # The layout-correction API (the config flags reader and the keymapper's
 # correction-map setter) exists only on keymapper builds that ship it. Import it
@@ -80,11 +82,32 @@ def start_kblayout_correction() -> bool:
     from toshy_common.kblayout_context import KeyboardLayoutContext
 
     number_row = 'glyph' if options['correct_number_row'] else 'positional'
-    _layout_context = KeyboardLayoutContext(
-        apply_correction_map    = _apply_layout_correction,
-        number_row              = number_row,
-    )
-    if _layout_context.start():
+
+    # LAST-DITCH GUARD: start() primes from the ACTIVE layout, so a bad layout
+    # in place (a broken symbols file, a name the xkbcommon binding cannot
+    # decode, anything the analyzer chokes on) used to raise straight up
+    # through config evaluation and kill the keymapper at startup. Whatever
+    # goes wrong below, the invariant is: a bad layout costs layout
+    # correction, never the keyboard.
+    try:
+        _layout_context = KeyboardLayoutContext(
+            apply_correction_map    = _apply_layout_correction,
+            number_row              = number_row,
+        )
+        started = _layout_context.start()
+    except Exception as start_err:
+        if _layout_context is not None:
+            try:
+                _layout_context.stop()
+            except Exception:
+                pass
+        _layout_context = None
+        error(f"Keyboard layout correction failed to start ({start_err}); "
+                f"correction is disabled, the keymapper continues normally.")
+        debug(traceback.format_exc(), ctx="LC")
+        return False
+
+    if started:
         debug(f"KBLAYOUT_CORRECTION: started (number_row={number_row}).", ctx="LC")
         return True
 
