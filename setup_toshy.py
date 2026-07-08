@@ -702,7 +702,7 @@ def ask_is_distro_updated():
     print()
     debug('NOTICE: It is ESSENTIAL to have your system completely updated.', ctx="!!")
     print()
-    response = input('Have you updated your system recently? [y/N]: ')
+    response = input('Have you updated your system recently? [y/n]: ')
     if response not in ['y', 'Y']:
         print()
         error("Try the installer again after you've done a full system update. Exiting.")
@@ -733,19 +733,15 @@ def ask_for_attn_on_info():
     Utility function to request confirmation of attention before
     moving on in the install process.
     """
-    secret_code = generate_secret_code()
-
     print()
-    response = input(
-        f"To show that you read the info just above, enter the secret code '{secret_code}': "
-    )
+    response = input("Did you read the info above? [y/n]: ")
 
-    if response == secret_code:
+    if response in ['y', 'Y']:
         print()
-        info("Good code. User has acknowledged reading the info above. Proceeding...\n")
+        info("User acknowledged reading the info above. Proceeding...\n")
     else:
         print()
-        error("Code does not match! Run the installer again and pay more attention...")
+        error("Installer requires reading the info above. Run it again and pay more attention...")
         safe_shutdown(1)
 
 
