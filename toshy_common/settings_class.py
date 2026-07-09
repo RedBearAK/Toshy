@@ -1,24 +1,72 @@
-__version__ = '20260614'
+"""
+Toshy user-preferences store.
+
+toshy_common/settings_class.py
+
+A single `Settings` object holds every user preference (booleans, a few
+strings, the overlay bitmask, and the most-recently-used keyboard layout) and
+persists them in a small SQLite database, `toshy_user_preferences.sqlite`, kept
+in the config directory. That database is the only bridge between Toshy's
+processes: the config/keymapper process, the tray icon, and the preferences GUI
+each build their own `Settings` instance, and a change written by one is picked
+up live by the others.
+
+Interacting with it:
+  - Construct once with `cnfg = Settings(config_dir_path)`. Construction creates
+    the DB and tables if missing (`ensure_database_setup`) and loads the current
+    values (`load_settings`).
+  - Read and write preferences as plain attributes (e.g. `cnfg.forced_numpad`,
+    `cnfg.mru_layout = ('us', 'default')`).
+  - Call `cnfg.save_settings()` to write the current attribute values back to
+    the database.
+  - Call `cnfg.watch_database()` once to start a watchdog observer on the DB
+    file. When any process writes the DB, `on_database_modified` fires and
+    `_safe_reload` re-reads the values into this instance, so edits apply live
+    without a restart. `_safe_reload` is deliberately crash-proof: it retries a
+    transient "database is locked" (heavy-I/O contention) a few times and
+    otherwise logs and swallows, because an exception escaping the observer
+    thread would silently kill live reload for the rest of the session.
+  - `watch_shared_devices()` (server side only) tracks KVM / screen-sharing
+    focus and is independent of the preference storage described above.
+
+Adding a new preference attribute means updating four places, all keyed by the
+same setting-name string:
+  1. `__init__` — declare the attribute with its default value, in the
+     "settings defaults" block.
+  2. `_save_config_preferences` — add a `(name, str(value))` row to the
+     `settings` list so it is written to the DB. Store enums/ints as a plain
+     string (see the `overlay_mask` `int()` wrapper for the pattern).
+  3. `load_settings` — add an `elif row[0] == 'name'` branch to read it back.
+     Use `setting_value` for booleans, `row[1]` for plain strings, or a custom
+     conversion for anything else (see `overlay_mask`).
+  4. `__str__` — add a line to the settings dump so the value appears in debug
+     output.
+
+The `mru_layouts` table is handled separately (`_save_mru_layouts` plus its own
+query in `load_settings`) and does not follow the four-step pattern above.
+"""
+
+__version__ = '20260707'
 
 import os
+import time
 import inspect
 import sqlite3
 import textwrap
+import traceback
 
 import xwaykeyz.lib.logger
 
-from typing import Optional
-from watchdog.observers import Observer
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
+from watchdog.observers import Observer
 
-from xwaykeyz.lib.logger import debug, error
+from xwaykeyz.lib.logger import debug, error, warn
 
 from toshy_common.shared_device_context import SharedDeviceContext
 from toshy_common.overlay_context import (
     OverlayFlag,
     DEFAULT_OVERLAY_MASK,
     OVL_DEPENDENCIES,
-    apply_dependencies,
     active_flags,
 )
 
@@ -67,7 +115,7 @@ class Settings:
         # Shared device context
         self.screen_has_focus       = True  # True if focus is on the screen, False otherwise
         self.shared_device_context  = None  # Will be initialized later if needed
-        
+
         # Make sure the database and tables are actually existing before trying to load settings
         self.ensure_database_setup()
         # Load user's custom settings from database (defaults will be saved if no DB)
@@ -175,9 +223,55 @@ class Settings:
         observer.schedule(event_handler, path=self.config_dir_path, recursive=False)
         observer.start()
 
-    def on_database_modified(self, event: Optional[FileSystemEvent]):
-        if event.src_path == self.prefs_db_file_path:
-            self.load_settings()
+    def on_database_modified(self, event: 'FileSystemEvent | None'):
+        # Guard first, so `event` is a concrete FileSystemEvent below.
+        if event is None:
+            return
+        if event.src_path != self.prefs_db_file_path:
+            return
+        self._safe_reload()
+
+    def _safe_reload(self, max_attempts=4, backoff_secs=0.25):
+        """Reload settings without ever letting an exception escape.
+
+        The watchdog observer calls this from its dispatch thread, and ANY
+        exception that escapes the handler tears down that thread and silently
+        disables live reload for the rest of the session (the failure that
+        started this). So this boundary must swallow everything.
+
+        Three tiers, most specific first:
+          - OperationalError 'locked'/'busy' is the expected transient: the
+            write that triggered this notification can still hold the lock, and
+            during a heavy I/O storm a writer stalled on fsync can hold it for
+            seconds. A few patient retries clear it (each load_settings() call
+            already waits up to sqlite3's default 5s busy timeout, so the sleeps
+            just add headroom on top).
+          - Any other sqlite3.Error (malformed image, integrity, programming)
+            is not retryable -- log it as a database error and move on.
+          - Anything else is an unexpected bug: log it loudly with a traceback.
+        In every case we return instead of raising, so the observer survives.
+        """
+        for attempt in range(1, max_attempts + 1):
+            try:
+                self.load_settings()
+                return
+            except sqlite3.OperationalError as op_err:
+                err_txt = str(op_err).lower()
+                db_is_busy = 'locked' in err_txt or 'busy' in err_txt
+                if db_is_busy and attempt < max_attempts:
+                    time.sleep(backoff_secs * attempt)
+                    continue
+                warn(f'_safe_reload: settings reload skipped after '
+                     f'{attempt} attempt(s) (DB busy): {op_err}')
+                return
+            except sqlite3.Error as db_err:
+                error(f'_safe_reload: settings reload skipped '
+                      f'(database error): {db_err}')
+                return
+            except Exception:
+                error(f'_safe_reload: settings reload failed; observer kept '
+                      f'alive:\n{traceback.format_exc()}')
+                return
 
     def _save_config_preferences(self, db_cursor: sqlite3.Cursor):
         sql_query = "INSERT OR REPLACE INTO config_preferences (name, value) VALUES (?, ?)"
@@ -221,7 +315,7 @@ class Settings:
             debug("Settings saved in database using Settings class method.")
 
     def load_settings(self):
-        
+
         with sqlite3.connect(self.prefs_db_file_path) as db_connection:
             db_cursor = db_connection.cursor()
 
@@ -410,3 +504,6 @@ class Settings:
         active_monitors         = {active_monitors}
         ------------------------------------------------------------------------------
         """
+
+
+# End of file #
