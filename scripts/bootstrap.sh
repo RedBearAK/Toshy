@@ -5,7 +5,7 @@
 # https://github.com/RedBearAK/toshy
 
 # shellcheck disable=SC2034
-VERSION='20260620'
+VERSION='20260708'
 
 set -e  # Exit on error
 
@@ -46,6 +46,37 @@ show_install_options() {
     echo_unbuffered "  --dev-keymapper[=REF]     Install dev keymapper (branch, tag, or commit SHA)"
     echo_unbuffered "  --fancy-pants             See README for more info on this option"
     echo_unbuffered
+}
+
+# Confirm the system is updated BEFORE any other prompts, but only for a FRESH
+# install. On a reinstall (existing ~/.config/toshy) this is skipped, and the
+# main setup script self-skips on the same folder check.
+#
+# Keep this prompt's wording in sync with ask_is_distro_updated() in setup_toshy.py.
+# Path mirrors cnfg.toshy_dir_path in setup_toshy.py: ~/.config/toshy
+check_system_updated() {
+    if [ -d "$HOME/.config/toshy" ]; then
+        return 0    # reinstall: not pertinent, leave SKIP_UPDATE_CHECK_ARG empty
+    fi
+
+    echo_unbuffered
+    echo_unbuffered "!! NOTICE: It is ESSENTIAL to have your system completely updated."
+    echo_unbuffered
+
+    read_interactive -p "Have you updated your system recently? [y/N]: " update_response
+
+    # shellcheck disable=SC2154
+    case "$update_response" in
+        y|Y)
+            # Fresh install, user confirmed: tell setup_toshy.py not to ask again.
+            SKIP_UPDATE_CHECK_ARG="--skip-update-check"
+            ;;
+        *)
+            echo_unbuffered
+            echo_unbuffered "Try the installer again after you've done a full system update. Exiting."
+            exit 1
+            ;;
+    esac
 }
 
 # Get install options from user with immediate confirmation
@@ -158,12 +189,24 @@ DOWNLOAD_DIR="$HOME/Downloads"
 # Initialize install args
 INSTALL_ARGS="install"
 
+# Set by check_system_updated() only when a FRESH install is confirmed updated,
+# so setup_toshy.py won't re-ask the same question. Empty on reinstalls.
+SKIP_UPDATE_CHECK_ARG=""
+
+
 echo_unbuffered
 echo_unbuffered
 echo_unbuffered "=== Toshy Bootstrap Installer ==="
 
+
+# STEP 0: Confirm system is updated (fresh installs only), before any other prompts
+check_system_updated
+
 # STEP 1: Get install options FIRST
 get_install_options
+
+# Append the update-check latch (empty unless a fresh install was confirmed)
+INSTALL_ARGS="$INSTALL_ARGS $SKIP_UPDATE_CHECK_ARG"
 
 # STEP 2: Get ref selection
 echo_unbuffered

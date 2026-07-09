@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260628'                        # CLI option "--version" will print this out.
+__version__ = '20260708'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -256,7 +256,10 @@ class InstallerSettings:
         # option flags for the "install" command:
         self.override_distro        = None      # will be a string if not None
         self.barebones_config       = None
+
         self.skip_native            = None
+        self.skip_update_check      = None
+
         self.fancy_pants            = None
         self.no_dbus_python         = None
         self.use_dev_keymapper      = None
@@ -5345,7 +5348,17 @@ def run_install_sequence(cnfg: InstallerSettings):
     if not cnfg.prep_only:
         dot_Xmodmap_warning()
 
-    ask_is_distro_updated()
+    # ask_is_distro_updated()
+    #
+    # Skip the "system updated?" prompt when bootstrap already handled it
+    # (--skip-update-check), or on a reinstall (existing ~/.config/toshy folder).
+    # A fresh install run directly from the zip still gets asked.
+    if cnfg.skip_update_check:
+        debug('Skipping "system updated?" prompt: handled by bootstrap (--skip-update-check).')
+    elif os.path.exists(cnfg.toshy_dir_path):
+        debug('Skipping "system updated?" prompt: existing Toshy config found (reinstall).')
+    else:
+        ask_is_distro_updated()
 
     if not cnfg.prep_only:
         ask_add_home_local_bin()
@@ -5545,7 +5558,11 @@ def main():
         action='store_true',
         help='See README for more info on this option.'
     )
-
+    subparser_install.add_argument(
+        '--skip-update-check',
+        action='store_true',
+        help=argparse.SUPPRESS,     # internal handshake from bootstrap.sh (hidden)
+    )
 
     subparser_list_distros      = subparsers.add_parser(
         'list-distros',
@@ -5612,6 +5629,9 @@ def main():
 
         if args.skip_native:
             cnfg.skip_native = True
+
+        if args.skip_update_check:
+            cnfg.skip_update_check = True
 
         if args.no_dbus_python:
             cnfg.no_dbus_python = True
