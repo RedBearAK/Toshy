@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260708'                        # CLI option "--version" will print this out.
+__version__ = '20260710'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -4989,32 +4989,82 @@ def install_coding_font():
     # Created from spinda no-ligatures fork by processing with Nerd Font script.
     # Original repo: https://github.com/spinda/fantasque-sans-ligatures
     font_file               = 'FantasqueSansMNoLig_Nerd_Font.zip'
-    font_url                = 'https://github.com/RedBearAK/FantasqueSansMNoLigNerdFont/raw/main'
+    # Direct raw host avoids the github.com -> raw.githubusercontent.com redirect hop.
+    font_url    = 'https://raw.githubusercontent.com/RedBearAK/FantasqueSansMNoLigNerdFont/main'
     font_link               = f'{font_url}/{font_file}'
     zip_path                = f'{cnfg.run_tmp_dir}/{font_file}'
 
     print(f'  Downloading… ', end='', flush=True)
 
-    cannot_download_font    = False
-    if shutil.which('curl'):
-        subprocess.run(['curl', '-Lo', zip_path, font_link], stdout=DEVNULL, stderr=DEVNULL)
-    elif shutil.which('wget'):
-        subprocess.run(['wget', '-O', zip_path, font_link], stdout=DEVNULL, stderr=DEVNULL)
-    else:
+    curl_path               = shutil.which('curl')
+    wget_path               = shutil.which('wget')
+
+    if not curl_path and not wget_path:
         error("\nERROR: Neither the 'curl' nor 'wget' utils are available. Cannot download font.")
-        cannot_download_font = True
+        return
 
-    if not cannot_download_font and os.path.isfile(zip_path):
+    # Flags below are supported by all curl versions we care about. The newer
+    # '--retry-all-errors' (curl >= 7.71) is added separately so it can be
+    # dropped on older curl. '-f' makes curl fail on HTTP errors instead of
+    # saving an error page that would later crash the zip extractor.
+    curl_base_cmd = [
+        '-fL', '--retry', '5', '--retry-delay', '2',
+        '--connect-timeout', '20', '-o', zip_path, font_link,
+    ]
 
-        print(f'Unzipping… ', end='', flush=True)
+    font_downloaded = False
 
-        final_folder_name       = None
-        fallback_folder_name    = font_file.rsplit('.', 1)[0]
-        local_fonts_dir         = os.path.join(home_dir, '.local', 'share', 'fonts')
-        extract_dir             = f'{local_fonts_dir}/' # extract directly to local fonts folder
+    if curl_path:
+        # curl exits 2 on an unrecognized command-line option, and only then.
+        # Real transfer failures use other codes (22 for HTTP errors under -f,
+        # 6/7/28 for resolve/connect/timeout), so an exit of 2 specifically
+        # means this curl is too old for '--retry-all-errors'; retry without it.
+        curl_result = subprocess.run(
+            [curl_path, '--retry-all-errors', *curl_base_cmd],
+            stdout=DEVNULL, stderr=DEVNULL,
+        )
+        if curl_result.returncode == 2:
+            curl_result = subprocess.run(
+                [curl_path, *curl_base_cmd],
+                stdout=DEVNULL, stderr=DEVNULL,
+            )
+        font_downloaded = curl_result.returncode == 0
 
+    if not font_downloaded and wget_path:
+        wget_result = subprocess.run(
+            [wget_path, '--tries=5', '--waitretry=2', '--timeout=20',
+                '-O', zip_path, font_link],
+            stdout=DEVNULL, stderr=DEVNULL,
+        )
+        font_downloaded = wget_result.returncode == 0
+
+    if not font_downloaded or not os.path.isfile(zip_path):
+        error("\nERROR: Failed to download the coding font. Skipping font install.")
+        return
+
+    # Validate the archive before trusting it. A truncated transfer or an
+    # unexpected error page must never reach the extractor.
+    if not zipfile.is_zipfile(zip_path):
+        error("\nERROR: Downloaded font file is not a valid zip archive. Skipping font install.")
+        return
+
+    print(f'Unzipping… ', end='', flush=True)
+
+    final_folder_name       = None
+    fallback_folder_name    = font_file.rsplit('.', 1)[0]
+    local_fonts_dir         = os.path.join(home_dir, '.local', 'share', 'fonts')
+    extract_dir             = f'{local_fonts_dir}/' # extract directly to local fonts folder
+
+    try:
         # Open the zip file and check if it has a top-level directory
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+
+            # Thorough integrity check: CRC every entry before extracting.
+            first_bad_entry = zip_ref.testzip()
+            if first_bad_entry is not None:
+                error(f"\nERROR: Font archive is corrupt (bad entry: '{first_bad_entry}'). "
+                        f"Skipping font install.")
+                return
 
             # Get the first part of each path in the zip file
             top_dirs = {name.split('/')[0] for name in zip_ref.namelist()}
@@ -5032,19 +5082,23 @@ def install_coding_font():
             os.makedirs(extract_dir, exist_ok=True)
             zip_ref.extractall(extract_dir)
 
-        print(f'Refreshing font cache… ', end='', flush=True)
+    except zipfile.BadZipFile as zip_err:
+        error(f"\nERROR: Could not read the font archive: {zip_err}. Skipping font install.")
+        return
 
-        # Update the font cache after putting the font files in place
-        # Any open applications will still need to be restarted to see a new font
-        cmd_lst = ['fc-cache', '-f', '-v']
-        try:
-            subprocess.run(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
-            print(f'Done.', flush=True)
-        except subprocess.CalledProcessError as proc_err:
-            error(f"\nERROR: Problem while attempting to refresh font cache:\n  {proc_err}")
+    print(f'Refreshing font cache… ', end='', flush=True)
 
-        final_folder_path = os.path.join(extract_dir, final_folder_name)
-        print(f"Installed font into location:\n  '{final_folder_path}'")
+    # Update the font cache after putting the font files in place
+    # Any open applications will still need to be restarted to see a new font
+    cmd_lst = ['fc-cache', '-f', '-v']
+    try:
+        subprocess.run(cmd_lst, stdout=DEVNULL, stderr=DEVNULL)
+        print(f'Done.', flush=True)
+    except subprocess.CalledProcessError as proc_err:
+        error(f"\nERROR: Problem while attempting to refresh font cache:\n  {proc_err}")
+
+    final_folder_path = os.path.join(extract_dir, final_folder_name)
+    print(f"Installed font into location:\n  '{final_folder_path}'")
 
 
 def _show_cinnamon_menu_hotkey_reminder():
