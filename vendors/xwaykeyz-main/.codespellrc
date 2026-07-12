@@ -1,0 +1,3 @@
+[codespell]
+ignore-words-list = msdos
+skip = .venv,.git,build,xwaykeyz.egg-info

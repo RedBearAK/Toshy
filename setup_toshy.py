@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260710'                        # CLI option "--version" will print this out.
+__version__ = '20260712'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -3881,6 +3881,7 @@ def install_toshy_files():
                 'requirements.txt',
                 'ruff.toml',
                 this_file_name,
+                'vendors',
         ]
         # must use list unpacking (*) ignore_patterns() requires individual pattern arguments
         ignore_fn = shutil.ignore_patterns(*patterns_to_ignore)
@@ -4743,7 +4744,7 @@ def autostart_tray_icon():
 def apply_tweaks_Cinnamon():
     """Utility function to add desktop tweaks to Cinnamon"""
 
-    cmd_lst         = ['./install.sh']
+    cmd_lst         = ['bash', './install.sh']
     dir_path        = os.path.join(this_file_dir, 'cinnamon-extension')
 
     try:
@@ -4823,6 +4824,76 @@ def remove_tweaks_GNOME():
     print(f'Removed tweak to enable more Mac-like task switching')
 
 
+def install_app_switcher_kwin_script():
+    """Install the 'Application Switcher' KWin script.
+
+    Prefers the vendored copy that ships inside the Toshy repo (no network),
+    and falls back to cloning the upstream branch only if the vendored copy
+    is missing. The upstream 'install.sh' handles kpackagetool install/upgrade,
+    enabling the script, and its own KWin reconfigure.
+    """
+
+    switcher_title      = 'KWin Application Switcher'
+
+    print(f'Installing "Application Switcher" KWin script...')
+
+    # Vendored copy is the default source. Synced by 'scripts/sync_vendors.sh'
+    # from the 'kde6_kde5_merged' branch of the repo below.
+    switcher_dir_name   = 'kwin-application-switcher'
+    vendored_dir_path   = os.path.join(this_file_dir, 'vendors', switcher_dir_name)
+    vendored_script     = os.path.join(vendored_dir_path, 'install.sh')
+
+    if os.path.isfile(vendored_script):
+        print(f'Using vendored copy of {switcher_title}.')
+        try:
+            subprocess.run(['bash', './install.sh'], cwd=vendored_dir_path, check=True)
+        except subprocess.CalledProcessError as proc_err:
+            warn(f'Something went wrong installing {switcher_title}.\n\t{proc_err}')
+        return
+
+    # Fallback: vendored copy absent (unusual checkout). Clone from upstream.
+    warn(f'Vendored copy of {switcher_title} not found. Falling back to cloning.')
+
+    # TODO: Revert to nclarius repo if/when this branch is merged.
+    # Patched branch that merges API variations for KDE 5 and 6:
+    # 'https://github.com/RedBearAK/kwin-application-switcher/tree/kde6_kde5_merged'
+    # (includes the fixes from 'grouping_fix' branch)
+    switcher_branch     = 'kde6_kde5_merged'
+    switcher_repo       = 'https://github.com/RedBearAK/kwin-application-switcher.git'
+
+    switcher_dir_path   = os.path.join(this_file_dir, switcher_dir_name)
+    switcher_cloned     = False
+
+    git_clone_cmd_lst   = ['git', 'clone', '--branch']
+    branch_args_lst     = [switcher_branch, switcher_repo, switcher_dir_path]
+
+    # git should be installed by this point? Not necessarily.
+    if not shutil.which('git'):
+        error(f"Unable to clone {switcher_title}. Install 'git' and try again.")
+        return
+
+    if os.path.exists(switcher_dir_path):
+        try:
+            shutil.rmtree(switcher_dir_path)
+        except (FileNotFoundError, PermissionError, OSError) as file_err:
+            warn(f'Problem removing existing switcher clone folder:\n\t{file_err}')
+
+    try:
+        subprocess.run(git_clone_cmd_lst + branch_args_lst, check=True)
+        switcher_cloned = True
+    except subprocess.CalledProcessError as proc_err:
+        warn(f'Problem while cloning the {switcher_title} branch:\n\t{proc_err}')
+
+    if not switcher_cloned:
+        warn(f'Unable to install {switcher_title}. Clone did not succeed.')
+        return
+
+    try:
+        subprocess.run(['bash', './install.sh'], cwd=switcher_dir_path, check=True)
+    except subprocess.CalledProcessError as proc_err:
+        warn(f'Something went wrong installing {switcher_title}.\n\t{proc_err}')
+
+
 def apply_tweaks_KDE():
     """Utility function to add desktop tweaks to KDE"""
 
@@ -4866,59 +4937,16 @@ def apply_tweaks_KDE():
     do_kwin_reconfigure()
 
     if cnfg.fancy_pants or cnfg.app_switcher:
-        print(f'Installing "Application Switcher" KWin script...')
-        # How to install nclarius grouped "Application Switcher" KWin script:
-        # git clone https://github.com/nclarius/kwin-application-switcher.git
-        # cd kwin-application-switcher
-        # ./install.sh
-        #
-        # switcher_url        = 'https://github.com/nclarius/kwin-application-switcher.git'
 
-        # TODO: Revert to main repo if/when patch for this is accepted.
-        # Patched branch that fixes some issues with maintaining grouping:
-        # 'https://github.com/RedBearAK/kwin-application-switcher/tree/grouping_fix'
+        install_app_switcher_kwin_script()
 
-        # switcher_branch     = 'grouping_fix'
+        do_kwin_reconfigure()
 
-        # TODO: Revert to nclarius repo if/when this branch is merged.
-        # Patched branch that merges API variations for KDE 5 and 6:
-        # 'https://github.com/RedBearAK/kwin-application-switcher/tree/kde6_kde5_merged'
-        # (includes the fixes from 'grouping_fix' branch)
-
-        switcher_branch     = 'kde6_kde5_merged'
-        switcher_repo       = 'https://github.com/RedBearAK/kwin-application-switcher.git'
-
-        switcher_dir_name   = 'kwin-application-switcher'
-        switcher_dir_path   = os.path.join(this_file_dir, switcher_dir_name)
-        switcher_title      = 'KWin Application Switcher'
-        switcher_cloned     = False
-
-        git_clone_cmd_lst   = ['git', 'clone', '--branch']
-        branch_args_lst     = [switcher_branch, switcher_repo, switcher_dir_path]
-
-        # git should be installed by this point? Not necessarily.
-        if not shutil.which('git'):
-            error(f"Unable to clone {switcher_title}. Install 'git' and try again.")
-        else:
-            if os.path.exists(switcher_dir_path):
-                try:
-                    shutil.rmtree(switcher_dir_path)
-                except (FileNotFoundError, PermissionError, OSError) as file_err:
-                    warn(f'Problem removing existing switcher clone folder:\n\t{file_err}')
-            try:
-                subprocess.run(git_clone_cmd_lst + branch_args_lst, check=True)
-                switcher_cloned = True
-            except subprocess.CalledProcessError as proc_err:
-                warn(f'Problem while cloning the {switcher_title} branch:\n\t{proc_err}')
-            if not switcher_cloned:
-                warn(f'Unable to install {switcher_title}. Clone did not succeed.')
-            else:
-                try:
-                    subprocess.run(["./install.sh"], cwd=switcher_dir_path, check=True) #,
-                                    # stdout=DEVNULL, stderr=DEVNULL)
-                    # print(f'Installed "{switcher_title}" KWin script.')
-                except subprocess.CalledProcessError as proc_err:
-                    warn(f'Something went wrong installing {switcher_title}.\n\t{proc_err}')
+        fix_task_switcher_cmd = ['./scripts/plasma-task-switcher-fixer.sh']
+        try:
+            subprocess.run(fix_task_switcher_cmd, check=True)
+        except subprocess.CalledProcessError as proc_err:
+            error(f'Problem fixing the Plasma task switcher via script.\n\t{proc_err}')
 
         do_kwin_reconfigure()
 
