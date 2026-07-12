@@ -1,0 +1,7 @@
+[flake8]
+per-file-ignores =
+    src/xwaykeyz/models/key.py:E221,E261
+exclude =
+    example
+max-line-length = 85
+ignore = E221 W503

@@ -1,0 +1,5 @@
+[MESSAGES CONTROL]
+disable=global-statement
+
+[BASIC]
+good-names = re, k, v, fn, m

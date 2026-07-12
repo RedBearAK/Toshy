@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Join our friendly Discord community
+    url: https://discord.gg/nX6qSC8mer
+    about: If you'd like to hang out, help out, or need some help - we're here.
+  - name: Read our documentation in the README
+    url: https://github.com/RedBearAK/xwaykeyz/blob/main/README.md
+    about: Sometimes the answers are right there, just waiting to be discovered.
