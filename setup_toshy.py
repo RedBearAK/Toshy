@@ -3574,8 +3574,8 @@ def verify_user_groups():
 
 
 # def clone_keymapper_branch():
-#     """Clone the designated keymapper branch from GitHub"""
-#     print(f'\n\n§  Cloning keymapper branch...\n{cnfg.separator}')
+#     """Clone the keymapper repo and check out the designated ref (branch/tag/commit)"""
+#     print(f'\n\n§  Cloning keymapper repo...\n{cnfg.separator}')
 
 #     # Check if `git` command exists. If not, exit script with error.
 #     has_git = shutil.which('git')
@@ -3589,67 +3589,143 @@ def verify_user_groups():
 #             shutil.rmtree(cnfg.keymapper_tmp_path)
 #         except (OSError, PermissionError, FileNotFoundError) as file_err:
 #             error(f"Problem removing existing '{cnfg.keymapper_tmp_path}' folder:\n\t{file_err}")
+
+#     # Resolve which ref to check out. Default is the stable branch. The
+#     # '--dev-keymapper' flag selects the dev branch, or any ref (branch,
+#     # tag, or commit SHA) when given an explicit value.
+#     if cnfg.use_dev_keymapper:
+#         if cnfg.keymapper_cust_branch:
+#             _km_ref = cnfg.keymapper_cust_branch
+#         else:
+#             _km_ref = cnfg.keymapper_dev_branch
+#     else:
+#         _km_ref = cnfg.keymapper_branch
+
+#     # Full clone (no '-b'), so any commit in history is reachable for the
+#     # checkout. A SHA cannot be supplied to 'git clone -b', and bisect-style
+#     # installs need the full history present.
+#     _clone_cmd_lst = ['git', 'clone', cnfg.keymapper_url, cnfg.keymapper_tmp_path]
+#     print(f"Keymapper clone command:\n  {' '.join(_clone_cmd_lst)}")
 #     try:
-#         subprocess.run(cnfg.keymapper_clone_cmd.split() + [cnfg.keymapper_tmp_path], check=True)
+#         subprocess.run(_clone_cmd_lst, check=True)
 #     except subprocess.CalledProcessError as proc_err:
 #         print()
-#         error(f'Problem while cloning keymapper branch from GitHub:\n\t{proc_err}')
+#         error(f'Problem while cloning keymapper repo from GitHub:\n\t{proc_err}')
 #         safe_shutdown(1)
+
+#     # Check out the resolved ref. Passed as a list element (never split), so a
+#     # ref containing quotes/spaces survives intact.
+#     _checkout_cmd_lst = ['git', 'checkout', _km_ref]
+#     print(f"Keymapper checkout command:\n  git checkout {_km_ref}")
+#     try:
+#         subprocess.run(_checkout_cmd_lst, cwd=cnfg.keymapper_tmp_path, check=True)
+#     except subprocess.CalledProcessError as proc_err:
+#         print()
+#         error(f"Problem checking out keymapper ref '{_km_ref}':\n\t{proc_err}")
+#         safe_shutdown(1)
+
 #     show_task_completed_msg()
 
 
-def clone_keymapper_branch():
-    """Clone the keymapper repo and check out the designated ref (branch/tag/commit)"""
-    print(f'\n\n§  Cloning keymapper repo...\n{cnfg.separator}')
+def prep_keymapper_files():
+    """Stage the keymapper source files that `pip` will install later.
 
-    # Check if `git` command exists. If not, exit script with error.
-    has_git = shutil.which('git')
-    if not has_git:
-        print(f'ERROR: "git" is not installed, for some reason. Cannot continue.')
-        safe_shutdown(1)
+    Prefers the vendored copy of the keymapper that ships inside the Toshy repo,
+    so that installing from a release zip (or any checkout) works with no network
+    access. Falls back to cloning from GitHub only when a custom ref is requested,
+    or when the expected vendored copy is somehow missing.
 
-    if os.path.exists(cnfg.keymapper_tmp_path):
-        # force a fresh copy of keymapper every time script is run
-        try:
-            shutil.rmtree(cnfg.keymapper_tmp_path)
-        except (OSError, PermissionError, FileNotFoundError) as file_err:
-            error(f"Problem removing existing '{cnfg.keymapper_tmp_path}' folder:\n\t{file_err}")
+    Nothing is installed here. The files are staged into 'cnfg.keymapper_tmp_path'
+    for 'install_pip_packages()' to install into the venv.
+    """
+    print(f'\n\n§  Prepping keymapper files...\n{cnfg.separator}')
 
-    # Resolve which ref to check out. Default is the stable branch. The
+    # Resolve which ref to install. Default is the stable branch. The
     # '--dev-keymapper' flag selects the dev branch, or any ref (branch,
     # tag, or commit SHA) when given an explicit value.
     if cnfg.use_dev_keymapper:
         if cnfg.keymapper_cust_branch:
-            _km_ref = cnfg.keymapper_cust_branch
+            keymapper_ref = cnfg.keymapper_cust_branch
         else:
-            _km_ref = cnfg.keymapper_dev_branch
+            keymapper_ref = cnfg.keymapper_dev_branch
     else:
-        _km_ref = cnfg.keymapper_branch
+        keymapper_ref = cnfg.keymapper_branch
+
+    # Map the branches that have vendored copies onto their folder names. Any ref
+    # that is not a key here (an arbitrary branch, tag, or commit SHA) must be
+    # fetched from the remote repo.
+    vendored_folder_for_ref = {
+        cnfg.keymapper_branch:      'xwaykeyz-main',
+        cnfg.keymapper_dev_branch:  'xwaykeyz-dev_beta',
+    }
+
+    vendored_folder_name = vendored_folder_for_ref.get(keymapper_ref)
+
+    # Always start from a clean temp folder, no matter which source is used.
+    remove_keymapper_tmp_folder()
+
+    if vendored_folder_name:
+        vendored_dir_path = os.path.join(this_file_dir, 'vendors', vendored_folder_name)
+
+        if os.path.isfile(os.path.join(vendored_dir_path, 'pyproject.toml')):
+            print(f"Using vendored keymapper source: '{vendored_folder_name}'")
+            try:
+                shutil.copytree(vendored_dir_path, cnfg.keymapper_tmp_path)
+                show_task_completed_msg()
+                return
+            except (OSError, PermissionError, shutil.Error) as file_err:
+                error(f'Problem copying vendored keymapper source:\n\t{file_err}')
+                safe_shutdown(1)
+
+        warn(f"Vendored keymapper source not found: '{vendored_folder_name}'")
+        warn('Falling back to cloning the keymapper repo from GitHub.')
+
+    clone_keymapper_ref(keymapper_ref)
+    show_task_completed_msg()
+
+
+def remove_keymapper_tmp_folder():
+    """Remove any existing temporary keymapper folder, to force a fresh copy."""
+    if not os.path.exists(cnfg.keymapper_tmp_path):
+        return
+    try:
+        shutil.rmtree(cnfg.keymapper_tmp_path)
+    except (OSError, PermissionError, FileNotFoundError) as file_err:
+        error(f"Problem removing existing '{cnfg.keymapper_tmp_path}' folder:\n\t{file_err}")
+
+
+def clone_keymapper_ref(keymapper_ref):
+    """Clone the keymapper repo and check out the given ref (branch/tag/commit)."""
+    print(f'Cloning keymapper repo to get ref: {keymapper_ref}')
+
+    # Check if `git` command exists. If not, exit script with error.
+    if not shutil.which('git'):
+        print(f'ERROR: "git" is not installed, for some reason. Cannot continue.')
+        safe_shutdown(1)
 
     # Full clone (no '-b'), so any commit in history is reachable for the
     # checkout. A SHA cannot be supplied to 'git clone -b', and bisect-style
     # installs need the full history present.
-    _clone_cmd_lst = ['git', 'clone', cnfg.keymapper_url, cnfg.keymapper_tmp_path]
-    print(f"Keymapper clone command:\n  {' '.join(_clone_cmd_lst)}")
+    clone_cmd_lst = ['git', 'clone', cnfg.keymapper_url, cnfg.keymapper_tmp_path]
+    print(f"Keymapper clone command:\n  {' '.join(clone_cmd_lst)}")
+
     try:
-        subprocess.run(_clone_cmd_lst, check=True)
+        subprocess.run(clone_cmd_lst, check=True)
     except subprocess.CalledProcessError as proc_err:
         print()
         error(f'Problem while cloning keymapper repo from GitHub:\n\t{proc_err}')
         safe_shutdown(1)
 
-    # Check out the resolved ref. Passed as a list element (never split), so a
-    # ref containing quotes/spaces survives intact.
-    _checkout_cmd_lst = ['git', 'checkout', _km_ref]
-    print(f"Keymapper checkout command:\n  git checkout {_km_ref}")
+    # Check out the resolved ref.
+    checkout_cmd_lst = ['git', '-C', cnfg.keymapper_tmp_path, 'checkout', keymapper_ref]
+    print(f"Keymapper checkout command:\n  {' '.join(checkout_cmd_lst)}")
+
     try:
-        subprocess.run(_checkout_cmd_lst, cwd=cnfg.keymapper_tmp_path, check=True)
+        subprocess.run(checkout_cmd_lst, check=True)
     except subprocess.CalledProcessError as proc_err:
         print()
-        error(f"Problem checking out keymapper ref '{_km_ref}':\n\t{proc_err}")
+        error(f"Problem checking out keymapper ref '{keymapper_ref}':\n\t{proc_err}")
         safe_shutdown(1)
-
-    show_task_completed_msg()
 
 
 def is_barebones_config_file() -> bool:
@@ -5492,7 +5568,7 @@ def run_install_sequence(cnfg: InstallerSettings):
         safe_shutdown(0)
 
     elif not cnfg.prep_only:
-        clone_keymapper_branch()
+        prep_keymapper_files()
 
         backup_toshy_config()
         install_toshy_files()
