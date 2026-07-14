@@ -5,9 +5,12 @@
 # https://github.com/RedBearAK/toshy
 
 # shellcheck disable=SC2034
-VERSION='20260708'
+VERSION='20260714'
 
-set -e  # Exit on error
+# NOTE: deliberately no 'set -e'. Every command that matters is checked
+# explicitly below. And 'set -e' is silently disabled inside if/&&/||/!
+# conditions anyway, so it provides partial coverage while looking like
+# total coverage.
 
 # Force unbuffered output
 exec > >(cat) 2>&1
@@ -15,8 +18,12 @@ exec > >(cat) 2>&1
 # Store the original directory
 ORIGINAL_DIR="$(pwd)"
 
-# Toshy repo URL (cloned with git so any branch/tag/commit can be checked out)
-TOSHY_URL="https://github.com/RedBearAK/toshy.git"
+# Source archives come from codeload, which serves a tarball for ANY ref: a
+# branch name, a tag, or a commit SHA (full or abbreviated). Fetching an archive
+# means 'git' is NOT required to install Toshy. That matters, because 'git' is
+# not preinstalled on many desktop distros, and it is Toshy's own native package
+# install that puts it there. Requiring it just to bootstrap was backwards.
+TOSHY_ARCHIVE_BASE="https://codeload.github.com/RedBearAK/toshy/tar.gz"
 
 # Default ref (the common case is still a branch name)
 DEFAULT_BRANCH="main"
@@ -175,10 +182,90 @@ get_branch() {
     echo "$branch"
 }
 
-# Confirm git is present before anything else (clone needs it)
-if ! command -v git >/dev/null 2>&1; then
-    echo_unbuffered "ERROR: 'git' is required to fetch Toshy but was not found."
-    echo_unbuffered "       Please install git and run this script again."
+# Download a URL to a local path, using whichever tool was found at startup.
+# The '-f' flag on curl is load-bearing: without it, a 404 error page is written
+# to the destination file and curl still exits 0.
+download_file() {
+    local source_url="$1"
+    local dest_path="$2"
+
+    if [ "$DOWNLOAD_TOOL" = "curl" ]; then
+        curl -fL --retry 5 --retry-delay 2 --connect-timeout 20 \
+                -o "$dest_path" "$source_url"
+        return $?
+    fi
+
+    wget --tries=5 --waitretry=2 --timeout=20 -O "$dest_path" "$source_url"
+    return $?
+}
+
+# Confirm this is real Linux before anything else happens. Toshy depends on the
+# kernel's evdev/uinput interfaces, which exist nowhere else. Doing this first
+# means a wrong OS fails in the first second, instead of after several prompts
+# and a few megabytes of download.
+KERNEL_NAME="$(uname -s 2>/dev/null)"
+
+# Fall back to a Linux-only kernel artifact if 'uname' somehow is not present.
+if [ -z "$KERNEL_NAME" ] && [ -r /proc/version ]; then
+    KERNEL_NAME="Linux"
+fi
+
+case "$KERNEL_NAME" in
+    Linux)
+        : # Carry on. This is the only supported kernel.
+        ;;
+    Darwin)
+        echo_unbuffered
+        echo_unbuffered "ERROR: This is macOS. Toshy only runs on Linux."
+        echo_unbuffered
+        echo_unbuffered "       Toshy exists to bring macOS-style keyboard shortcuts TO Linux."
+        echo_unbuffered "       On macOS you already have them, natively."
+        echo_unbuffered
+        exit 1
+        ;;
+    *)
+        echo_unbuffered
+        echo_unbuffered "ERROR: Toshy only runs on Linux. Detected kernel: '${KERNEL_NAME:-unknown}'"
+        echo_unbuffered
+        echo_unbuffered "       Toshy depends on the Linux kernel's 'evdev' and 'uinput'"
+        echo_unbuffered "       interfaces, which do not exist on other systems."
+        echo_unbuffered
+        exit 1
+        ;;
+esac
+
+# WSL reports itself as Linux, so it sails past the check above. But it has no
+# real input devices, no uinput, and no desktop session, so Toshy cannot work
+# there under any configuration. Hard stop.
+if [ -n "$WSL_DISTRO_NAME" ] || \
+        grep -qiE 'microsoft|wsl' /proc/sys/kernel/osrelease 2>/dev/null; then
+    echo_unbuffered
+    echo_unbuffered "ERROR: This looks like WSL (Windows Subsystem for Linux)."
+    echo_unbuffered
+    echo_unbuffered "       Toshy needs the kernel's 'evdev' and 'uinput' interfaces, real"
+    echo_unbuffered "       input devices, and a desktop session. WSL provides none of"
+    echo_unbuffered "       these, so Toshy cannot work here."
+    echo_unbuffered
+    exit 1
+fi
+
+# Confirm a download tool is present. One of these is almost certainly here
+# already: the quick-install one-liner uses curl or wget to fetch this script.
+DOWNLOAD_TOOL=""
+if command -v curl >/dev/null 2>&1; then
+    DOWNLOAD_TOOL="curl"
+elif command -v wget >/dev/null 2>&1; then
+    DOWNLOAD_TOOL="wget"
+else
+    echo_unbuffered "ERROR: Either 'curl' or 'wget' is required to fetch Toshy."
+    echo_unbuffered "       Please install one of them and run this script again."
+    exit 1
+fi
+
+# Confirm 'tar' is present (used to unpack the source archive).
+if ! command -v tar >/dev/null 2>&1; then
+    echo_unbuffered "ERROR: 'tar' is required to unpack Toshy but was not found."
+    echo_unbuffered "       Please install tar and run this script again."
     exit 1
 fi
 
@@ -212,41 +299,70 @@ INSTALL_ARGS="$INSTALL_ARGS $SKIP_UPDATE_CHECK_ARG"
 echo_unbuffered
 BRANCH=$(get_branch)
 
-# Set up paths. The clone target is a fixed, known directory name (no archive
-# folder-name guessing), so the checked-out ref does not affect the path.
-CLONE_PARENT="$DOWNLOAD_DIR/$FILE_NAME"
-TOSHY_DIR="$CLONE_PARENT/toshy"
+# Set up paths. The archive is unpacked into a fixed, known directory, and the
+# archive's own top-level folder is stripped on extraction. That folder's name
+# varies by ref type ('toshy-main', 'toshy-Toshy_v26.06.0', 'toshy-34bd0ec...'),
+# and having to guess it is what drove the earlier move to a git clone. Stripping
+# it means the requested ref never affects the resulting path, and nothing has to
+# guess anything.
+DOWNLOAD_PARENT="$DOWNLOAD_DIR/$FILE_NAME"
+TOSHY_DIR="$DOWNLOAD_PARENT/toshy"
+TARBALL_PATH="$DOWNLOAD_PARENT/toshy_source.tar.gz"
+
+ARCHIVE_URL="$TOSHY_ARCHIVE_BASE/$BRANCH"
 
 echo_unbuffered
 echo_unbuffered "Starting fetch..."
 echo_unbuffered "Ref: $BRANCH"
 
-# Create the parent directory if it doesn't exist
-mkdir -p "$CLONE_PARENT"
-cd "$CLONE_PARENT"
-
-# Clone the full repo (full history so any commit/tag/branch can be checked
-# out, including for git-bisect-style installs).
-echo_unbuffered
-echo_unbuffered "Cloning Toshy from GitHub..."
-echo_unbuffered
-if ! git clone "$TOSHY_URL" "$TOSHY_DIR"; then
-    echo_unbuffered "Clone failed. Please check your internet connection or repo access."
+if ! mkdir -p "$TOSHY_DIR"; then
+    echo_unbuffered "ERROR: Could not create download folder: $TOSHY_DIR"
     exit 1
 fi
 
-# Check out the requested ref. Passed as a single argument so a ref containing
-# spaces (e.g. an oddly named tag) survives intact.
 echo_unbuffered
-echo_unbuffered "Checking out ref: $BRANCH"
-if ! git -C "$TOSHY_DIR" checkout "$BRANCH"; then
-    echo_unbuffered "Checkout failed. Verify the branch, tag, or commit exists: $BRANCH"
+echo_unbuffered "Downloading Toshy source archive..."
+echo_unbuffered
+if ! download_file "$ARCHIVE_URL" "$TARBALL_PATH"; then
+    echo_unbuffered
+    echo_unbuffered "ERROR: Download failed: $ARCHIVE_URL"
+    echo_unbuffered "       Verify the branch, tag, or commit exists: $BRANCH"
+    echo_unbuffered "       (And check your internet connection.)"
     exit 1
 fi
+
+# A truncated download or a served error page will not list as a gzip tarball.
+if ! tar -tzf "$TARBALL_PATH" >/dev/null 2>&1; then
+    echo_unbuffered "ERROR: Downloaded file is not a valid archive: $TARBALL_PATH"
+    exit 1
+fi
+
+echo_unbuffered
+echo_unbuffered "Unpacking archive..."
+if ! tar -xzf "$TARBALL_PATH" -C "$TOSHY_DIR" --strip-components=1; then
+    echo_unbuffered "ERROR: Could not unpack archive: $TARBALL_PATH"
+    exit 1
+fi
+
+rm -f "$TARBALL_PATH"
+
+# Sanity check: the setup script must exist, or the archive was not what we think.
+if [ ! -f "$TOSHY_DIR/setup_toshy.py" ]; then
+    echo_unbuffered "ERROR: Setup script not found after unpacking: $TOSHY_DIR/setup_toshy.py"
+    echo_unbuffered "       The archive did not contain the expected Toshy source tree."
+    exit 1
+fi
+
+# GitHub archives preserve the executable bit, but do not rely on it.
+chmod +x "$TOSHY_DIR/setup_toshy.py" 2>/dev/null
+
 echo_unbuffered "Done."
 
 # Navigate to the setup directory
-cd "$TOSHY_DIR"
+if ! cd "$TOSHY_DIR"; then
+    echo_unbuffered "ERROR: Could not enter the Toshy folder: $TOSHY_DIR"
+    exit 1
+fi
 
 # Define the Ctrl+C trap function
 ctrl_c() {
@@ -263,7 +379,7 @@ ctrl_c() {
 trap ctrl_c INT
 
 echo_unbuffered
-echo_unbuffered "Clone complete. Toshy checked out to:"
+echo_unbuffered "Download complete. Toshy source unpacked to:"
 echo_unbuffered "  $TOSHY_DIR"
 
 # Strong visual separation before setup launches
@@ -291,6 +407,6 @@ echo_unbuffered "Toshy bootstrap installation completed successfully!"
 echo_unbuffered
 
 # Return to original directory
-cd "$ORIGINAL_DIR"
+cd "$ORIGINAL_DIR" || exit 1
 
 # End of file #
