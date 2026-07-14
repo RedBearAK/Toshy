@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260712'                        # CLI option "--version" will print this out.
+__version__ = '20260714'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -89,16 +89,15 @@ def signal_handler(sig, frame):
         sys.exit(1)
 
 
-if platform.system() != 'Windows':
-    signal.signal(signal.SIGINT,    signal_handler)
-    signal.signal(signal.SIGQUIT,   signal_handler)
-    signal.signal(signal.SIGHUP,    signal_handler)
-    signal.signal(signal.SIGUSR1,   signal_handler)
-    signal.signal(signal.SIGUSR2,   signal_handler)
-else:
-    signal.signal(signal.SIGINT,    signal_handler)
-    error(f'This is only meant to run on Linux. Exiting.')
+if platform.system() != 'Linux':
+    error(f'Toshy is only meant to run on Linux. Detected: {platform.system()}. Exiting.')
     sys.exit(1)
+
+signal.signal(signal.SIGINT,    signal_handler)
+signal.signal(signal.SIGQUIT,   signal_handler)
+signal.signal(signal.SIGHUP,    signal_handler)
+signal.signal(signal.SIGUSR1,   signal_handler)
+signal.signal(signal.SIGUSR2,   signal_handler)
 
 original_PATH_str       = os.getenv('PATH')
 if original_PATH_str is None:
