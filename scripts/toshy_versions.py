@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260620'
+__version__ = '20260714'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -33,12 +33,34 @@ sys.path.insert(0, toshy_dir_path)
 sys.path.insert(0, toshy_common_dir_path)
 # print(sys.path)
 
-if '--help' in sys.argv or '-h' in sys.argv:
-    print('Usage: toshy_versions.py [--all]')
-    print('  --all   also show detector package sub-modules and other detailed entries')
+
+# Hand-rolled arg handling — intentionally NOT argparse. argparse defaults to
+# allow_abbrev=True, which would silently accept '--al' as an abbreviation of
+# '--all', which is the exact typo we want to reject. It would also restyle all
+# of the usage output. For a script this small an explicit known-flag check is
+# clearer and does exactly what we want.
+known_flags         = {'--all', '-a', '--help', '-h'}
+user_args           = sys.argv[1:]
+unknown_args_lst    = [arg for arg in user_args if arg not in known_flags]
+
+
+def _print_usage(out_file=sys.stdout):
+    print('Usage: toshy_versions.py [--all]', file=out_file)
+    print('  --all   also show detector package sub-modules and other detailed entries',
+            file=out_file)
+
+
+if '--help' in user_args or '-h' in user_args:
+    _print_usage()
     sys.exit(0)
 
-show_all_modules = '--all' in sys.argv or '-a' in sys.argv
+if unknown_args_lst:
+    print(f"Error: unknown option(s): {', '.join(unknown_args_lst)}", file=sys.stderr)
+    print(file=sys.stderr)
+    _print_usage(sys.stderr)
+    sys.exit(2)
+
+show_all_modules    = '--all' in user_args or '-a' in user_args
 
 
 # Files to parse for version info:
