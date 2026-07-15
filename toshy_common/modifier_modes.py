@@ -22,6 +22,7 @@ __version__ = '20260715'
 # Valid values for cnfg.capslock_mode, in UI display order.
 CAPSLOCK_MODES = (
     'caps_is_caps',
+    'caps_is_caps_and_cmd',
     'caps_is_cmd',
     'caps_is_esc_and_cmd',
     'caps_is_esc_and_lctrl',
@@ -35,6 +36,7 @@ CAPSLOCK_MODE_DEFAULT = 'caps_is_caps'
 # Trailing '*' marks the default, matching the convention of other items.
 CAPSLOCK_MODE_LABELS = {
     'caps_is_caps':                     'Caps is Caps*',
+    'caps_is_caps_and_cmd':             'Caps is Caps & Cmd',
     'caps_is_cmd':                      'Caps is Cmd',
     'caps_is_esc_and_cmd':              'Caps is Esc & Cmd',
     'caps_is_esc_and_lctrl':            'Caps is Esc & LCtrl always',
@@ -48,6 +50,10 @@ CAPSLOCK_MODE_HELP = {
         'The Caps key keeps its normal identity: a CapsLock toggle. '
         'Physical Left Ctrl keeps its usual Toshy role (Super in GUI apps, '
         'Ctrl in terminals). This is the default.'),
+    'caps_is_caps_and_cmd': (
+        'Tap Caps for the normal CapsLock toggle - useful for international '
+        'layouts with Caps-layer characters. Hold Caps (or use it in combos) '
+        'for the Cmd key equivalent. Works in GUI apps and in terminals.'),
     'caps_is_cmd': (
         'Held Caps acts as the Cmd key equivalent, in GUI apps and in '
         'terminals. No CapsLock toggle is available in this mode.'),

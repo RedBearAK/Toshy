@@ -37,6 +37,13 @@ KNOWN_DEFERRED_NOOP_CELLS = {
     ('caps_is_esc_and_cmd',             'IBM',          'GUI'),
     ('caps_is_esc_and_cmd',             'IBM',          'Terminal'),
     ('caps_is_esc_and_cmd',             'Chromebook',   'Terminal'),
+    ('caps_is_caps_and_cmd',            'IBM',          'GUI'),
+    ('caps_is_caps_and_cmd',            'IBM',          'Terminal'),
+    # Not applicable rather than deferred: Chromebook keyboards have no
+    # CapsLock toggle at all (Caps position reports LEFT_META), so a
+    # "Caps toggle & Cmd" mode is deliberately not registered there.
+    ('caps_is_caps_and_cmd',            'Chromebook',   'GUI'),
+    ('caps_is_caps_and_cmd',            'Chromebook',   'Terminal'),
     # Gap A remains on IBM/Cbk (cmd mode absent in their terminals):
     ('caps_is_cmd',                     'IBM',          'Terminal'),
     ('caps_is_cmd',                     'Chromebook',   'Terminal'),

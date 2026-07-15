@@ -1990,6 +1990,7 @@ def _update_caps_mode_flags():
     (a typo'd mode must never become a silent no-op).
     """
     global ctx_caps_is_caps
+    global ctx_caps_is_caps_and_cmd
     global ctx_caps_is_cmd
     global ctx_caps_is_esc_and_cmd
     global ctx_caps_is_esc_and_lctrl
@@ -2004,6 +2005,7 @@ def _update_caps_mode_flags():
         caps_mode = CAPSLOCK_MODE_DEFAULT
 
     ctx_caps_is_caps                    = (caps_mode == 'caps_is_caps')
+    ctx_caps_is_caps_and_cmd            = (caps_mode == 'caps_is_caps_and_cmd')
     ctx_caps_is_cmd                     = (caps_mode == 'caps_is_cmd')
     ctx_caps_is_esc_and_cmd             = (caps_mode == 'caps_is_esc_and_cmd')
     ctx_caps_is_esc_and_lctrl           = (caps_mode == 'caps_is_esc_and_lctrl')
@@ -2169,6 +2171,19 @@ multipurpose_modmap("Enter2Cmd", {
 # no plain modmap below may claim the same inkey while one of these is live (a plain modmap
 # rewriting keystate.key would silently null the multi - selection is by inkey, application
 # is by key). Design matrix: docs/design/capslock_mode_matrix.md
+
+multipurpose_modmap("Caps mode - caps_and_cmd - not Cbk kbd", {
+    # Tap keeps the normal CapsLock toggle (useful for international layouts
+    # with Caps-layer characters); hold is the Cmd key equivalent. Same shape
+    # as the Enter2Ent_Cmd multi (tap passes the key's own identity through).
+    # Not registered for Chromebook: no Caps toggle exists there at all.
+    Key.CAPSLOCK:               [Key.CAPSLOCK, Key.RIGHT_CTRL]  # tap CapsLock / hold Cmd
+}, when = lambda ctx:
+    ctx_caps_is_caps_and_cmd and
+    cnfg.screen_has_focus and
+    not ctx_kbd_is_chromebook and
+    not ctx_app_is_remote
+)
 
 multipurpose_modmap("Caps mode - esc_and_cmd - not Cbk kbd", {
     Key.CAPSLOCK:               [Key.ESC, Key.RIGHT_CTRL]       # tap Esc / hold Cmd
