@@ -37,9 +37,9 @@ CAPSLOCK_MODE_LABELS = {
     'caps_is_caps':                     'Caps is Caps*',
     'caps_is_cmd':                      'Caps is Cmd',
     'caps_is_esc_and_cmd':              'Caps is Esc & Cmd',
-    'caps_is_esc_and_lctrl':            'Caps is Esc & Ctrl',
-    'caps_is_esc_and_lctrl_role_swap':  'Caps is Esc & swaps roles with L-Ctrl',
-    'caps_is_lctrl_role_swap':          'Caps swaps roles with L-Ctrl',
+    'caps_is_esc_and_lctrl':            'Caps is Esc & LCtrl always',
+    'caps_is_esc_and_lctrl_role_swap':  'Caps is Esc & LCtrl role swap',
+    'caps_is_lctrl_role_swap':          'Caps is LCtrl role swap',
 }
 
 # Short help texts for UIs that can attach per-item help (GTK4 app).
