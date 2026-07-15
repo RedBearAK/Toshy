@@ -70,7 +70,6 @@ logger.FLUSH        = True
 logger.VERBOSE      = False
 
 
-
 ###############################################################################
 # -------- TOSHY TRAY SPECIFIC COMPONENTS -------------------------------------
 ###############################################################################
@@ -131,7 +130,6 @@ def check_environment():
 
 # Populate environment globals at module load time
 check_environment()
-
 
 
 # =============================================================================
@@ -209,7 +207,6 @@ tray_indicator.set_menu(menu)
 tray_indicator.set_title("Toshy Status Indicator") # try to set what might show in tooltip
 
 
-
 # -------- MENU ACTION FUNCTIONS ----------------------------------------------
 
 
@@ -257,7 +254,6 @@ def fn_show_services_log(widget):
         ntfy.send_notification(_ntfy_msg, _ntfy_icon_file)
 
 
-
 def fn_remove_tray_icon(widget):
     global loop
     process_mgr.remove_lockfile()
@@ -281,7 +277,6 @@ def set_item_active_thread_safe(menu_item, state=True):
     else:
         # Schedule for main thread
         GLib.idle_add(do_set_active)
-
 
 
 # -------- MENU ITEMS --------------------------------------------------
@@ -419,6 +414,26 @@ if not runtime.barebones_config:
     multi_lang_item.connect('toggled', save_prefs_settings)
     prefs_submenu.append(multi_lang_item)
 
+    Enter2Ent_Cmd_item = Gtk.CheckMenuItem(label='Enter is Enter & Cmd')
+    Enter2Ent_Cmd_item.set_active(cnfg.Enter2Ent_Cmd)
+    Enter2Ent_Cmd_item.connect('toggled', save_prefs_settings)
+    prefs_submenu.append(Enter2Ent_Cmd_item)
+
+    forced_numpad_item = Gtk.CheckMenuItem(label='Forced Numpad')
+    forced_numpad_item.set_active(cnfg.forced_numpad)
+    forced_numpad_item.connect('toggled', save_prefs_settings)
+    prefs_submenu.append(forced_numpad_item)
+
+    media_arrows_fix_item = Gtk.CheckMenuItem(label='Media Arrows Fix')
+    media_arrows_fix_item.set_active(cnfg.media_arrows_fix)
+    media_arrows_fix_item.connect('toggled', save_prefs_settings)
+    prefs_submenu.append(media_arrows_fix_item)
+
+    ST3_in_VSCode_item = Gtk.CheckMenuItem(label='Sublime3 in VSCode')
+    ST3_in_VSCode_item.set_active(cnfg.ST3_in_VSCode)
+    ST3_in_VSCode_item.connect('toggled', save_prefs_settings)
+    prefs_submenu.append(ST3_in_VSCode_item)
+
     def load_capslock_mode_submenu_settings():
         cnfg.load_settings()
         active_item = capslock_mode_items_dct.get(cnfg.capslock_mode)
@@ -427,6 +442,13 @@ if not runtime.barebones_config:
 
     def save_capslock_mode_setting(menu_item, mode):
         if not menu_item.get_active():
+            return
+
+        # Programmatic updates (settings monitor echoes, startup load) re-fire
+        # 'toggled'; cnfg has already auto-reloaded by then, so a no-change
+        # save here would just write the DB again and double the settings
+        # emission in the config's verbose log.
+        if cnfg.capslock_mode == mode:
             return
 
         cnfg.capslock_mode = mode
@@ -451,25 +473,6 @@ if not runtime.barebones_config:
         if group_capslock_mode is None:
             group_capslock_mode = mode_item.get_group()
 
-    Enter2Ent_Cmd_item = Gtk.CheckMenuItem(label='Enter is Enter & Cmd')
-    Enter2Ent_Cmd_item.set_active(cnfg.Enter2Ent_Cmd)
-    Enter2Ent_Cmd_item.connect('toggled', save_prefs_settings)
-    prefs_submenu.append(Enter2Ent_Cmd_item)
-
-    ST3_in_VSCode_item = Gtk.CheckMenuItem(label='Sublime3 in VSCode')
-    ST3_in_VSCode_item.set_active(cnfg.ST3_in_VSCode)
-    ST3_in_VSCode_item.connect('toggled', save_prefs_settings)
-    prefs_submenu.append(ST3_in_VSCode_item)
-
-    forced_numpad_item = Gtk.CheckMenuItem(label='Forced Numpad')
-    forced_numpad_item.set_active(cnfg.forced_numpad)
-    forced_numpad_item.connect('toggled', save_prefs_settings)
-    prefs_submenu.append(forced_numpad_item)
-
-    media_arrows_fix_item = Gtk.CheckMenuItem(label='Media Arrows Fix')
-    media_arrows_fix_item.set_active(cnfg.media_arrows_fix)
-    media_arrows_fix_item.connect('toggled', save_prefs_settings)
-    prefs_submenu.append(media_arrows_fix_item)
 
     prefs_submenu.append(Gtk.SeparatorMenuItem())
 

@@ -3,7 +3,11 @@ gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib
 
 from toshy_common.logger import debug
-from toshy_common.modifier_modes import CAPSLOCK_MODES, CAPSLOCK_MODE_LABELS
+from toshy_common.modifier_modes import (
+    CAPSLOCK_MODES,
+    CAPSLOCK_MODE_HELP,
+    CAPSLOCK_MODE_LABELS,
+)
 
 # Configuration for help button appearance
 HELP_BUTTON_SIZE = 18   # Width and height in pixels - change here to resize all help buttons
@@ -126,10 +130,6 @@ class SettingsPanel(Gtk.Box):
         )
         column.append(multi_lang_control)
 
-        # CapsLock mode radio group (replaces legacy Caps2Cmd/Caps2Esc_Cmd switches)
-        capslock_mode_control = self.create_capslock_mode_radio_group()
-        column.append(capslock_mode_control)
-
         # Multipurpose Enter switch
         enter_cmd_control = self.create_switch_with_help(
             "Multipurpose Enter: Enter, Cmd",
@@ -170,27 +170,6 @@ class SettingsPanel(Gtk.Box):
         )
         column.append(media_control)
 
-        debug("Left column created")
-        return column
-
-    def create_right_column(self):
-        """Create the right column with numpad, media, and option keys"""
-        debug("Creating right column...")
-
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=COLUMN_SPACING)
-
-        # Don't show controls if using barebones config
-        if self.runtime.barebones_config:
-            debug("Barebones config - skipping right column controls")
-            placeholder = Gtk.Label(label="Barebones configuration")
-            placeholder.add_css_class("dim-label")
-            column.append(placeholder)
-            return column
-
-        # Option-key special characters radio group
-        optspec_control = self.create_optspec_radio_group()
-        column.append(optspec_control)
-
         # Super Tap Passthru section header
         super_tap_header = Gtk.Label(label="Super Tap Passthru")
         super_tap_header.add_css_class("control-group-header")
@@ -214,6 +193,31 @@ class SettingsPanel(Gtk.Box):
             "Modmap Left Command positionkey to be:\n• Super/Meta when tapped\n• Command key for hold/combo"
         )
         column.append(l_cmd_control)
+
+        debug("Left column created")
+        return column
+
+    def create_right_column(self):
+        """Create the right column with numpad, media, and option keys"""
+        debug("Creating right column...")
+
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=COLUMN_SPACING)
+
+        # Don't show controls if using barebones config
+        if self.runtime.barebones_config:
+            debug("Barebones config - skipping right column controls")
+            placeholder = Gtk.Label(label="Barebones configuration")
+            placeholder.add_css_class("dim-label")
+            column.append(placeholder)
+            return column
+
+        # Option-key special characters radio group
+        optspec_control = self.create_optspec_radio_group()
+        column.append(optspec_control)
+
+        # CapsLock mode radio group (replaces legacy Caps2Cmd/Caps2Esc_Cmd switches)
+        capslock_mode_control = self.create_capslock_mode_radio_group()
+        column.append(capslock_mode_control)
 
         debug("Right column created")
         return column
@@ -468,12 +472,10 @@ class SettingsPanel(Gtk.Box):
         if self.parent_window:
             help_title = "CapsLock Mode"
             help_text = (
-                "What the CapsLock key does. Modes with \"swap roles\" also turn the "
-                "physical Left Ctrl key into a literal CapsLock key, and CapsLock takes "
-                "over Left Ctrl's usual role in this config (Super in GUI apps, Ctrl in "
-                "terminals). The \"Esc (tap) and Ctrl (hold)\" mode makes held CapsLock "
-                "a real Ctrl key everywhere, including GUI apps. \n\nDefault is for "
-                "CapsLock to just act like CapsLock."
+                "What the Caps (CapsLock) key does. Each mode has its own help "
+                "button with details. Modes that \"swap roles\" also turn the "
+                "physical Left Ctrl key into a literal CapsLock toggle. "
+                "\n\nDefault (*) is for Caps to just act like CapsLock."
             )
 
             help_button = Gtk.Button(label="?")
@@ -489,11 +491,15 @@ class SettingsPanel(Gtk.Box):
         radio_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         radio_container.set_margin_start(20)  # Indent radio buttons
 
-        # Build data-driven from the canonical mode tuple; first button anchors the group
+        # Build data-driven from the canonical mode tuple; first button anchors the group.
+        # Each row gets its own help button with the mode's help text, matching the
+        # per-item help pattern of create_switch_with_help.
         self.capslock_mode_radios_dct = {}
         group_anchor_radio = None
         for caps_mode in CAPSLOCK_MODES:
             mode_label = CAPSLOCK_MODE_LABELS.get(caps_mode, caps_mode)
+            row_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
             mode_radio = Gtk.CheckButton(label=mode_label)
             mode_radio.add_css_class("radio-control")
             if group_anchor_radio is None:
@@ -502,7 +508,26 @@ class SettingsPanel(Gtk.Box):
                 mode_radio.set_group(group_anchor_radio)  # Join the group
             mode_radio.setting_value = caps_mode
             mode_radio.connect('toggled', self.on_capslock_mode_toggled)
-            radio_container.append(mode_radio)
+            row_container.append(mode_radio)
+
+            # Expandable spacer pushes the help button to the right
+            row_spacer = Gtk.Box()
+            row_spacer.set_hexpand(True)
+            row_container.append(row_spacer)
+
+            if self.parent_window:
+                mode_help_text = CAPSLOCK_MODE_HELP.get(caps_mode, mode_label)
+                mode_help_button = Gtk.Button(label="?")
+                mode_help_button.set_size_request(HELP_BUTTON_SIZE, HELP_BUTTON_SIZE)
+                mode_help_button.set_tooltip_text(f"Show help for: {mode_label}")
+                mode_help_button.add_css_class("settings-help-button")
+                mode_help_button.connect(
+                    'clicked',
+                    lambda btn, t=mode_label, h=mode_help_text:
+                        self.show_help_dialog(t, h))
+                row_container.append(mode_help_button)
+
+            radio_container.append(row_container)
             self.capslock_mode_radios_dct[caps_mode] = mode_radio
 
         # Load initial value
@@ -519,6 +544,14 @@ class SettingsPanel(Gtk.Box):
         """Handle CapsLock mode radio button toggle events"""
         if radio.get_active():  # Only respond to the button being activated
             new_value = radio.setting_value
+
+            # Programmatic updates (settings monitor echoes via load_settings)
+            # re-fire 'toggled'; cnfg has already auto-reloaded by then, so a
+            # no-change save would just write the DB again and double the
+            # settings emission in the config's verbose log.
+            if getattr(self.cnfg, 'capslock_mode', None) == new_value:
+                return
+
             debug(f"CapsLock mode changed to: {new_value}")
 
             # Save to settings
