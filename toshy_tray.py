@@ -384,14 +384,26 @@ if not runtime.barebones_config:
         set_item_active_thread_safe(l_opt_is_sup_and_opt_item, cnfg.l_opt_is_sup_and_opt)
 
     def save_prefs_settings(widget):
-        cnfg.forced_numpad          = forced_numpad_item.get_active()
-        cnfg.altgr_on_menu_key      = altgr_on_menu_key_item.get_active()
-        cnfg.media_arrows_fix       = media_arrows_fix_item.get_active()
-        cnfg.multi_lang             = multi_lang_item.get_active()
-        cnfg.ST3_in_VSCode          = ST3_in_VSCode_item.get_active()
-        cnfg.Enter2Ent_Cmd          = Enter2Ent_Cmd_item.get_active()
-        cnfg.l_cmd_is_sup_and_cmd   = l_cmd_is_sup_and_cmd_item.get_active()
-        cnfg.l_opt_is_sup_and_opt   = l_opt_is_sup_and_opt_item.get_active()
+        new_values_dct = {
+            'forced_numpad':        forced_numpad_item.get_active(),
+            'altgr_on_menu_key':    altgr_on_menu_key_item.get_active(),
+            'media_arrows_fix':     media_arrows_fix_item.get_active(),
+            'multi_lang':           multi_lang_item.get_active(),
+            'ST3_in_VSCode':        ST3_in_VSCode_item.get_active(),
+            'Enter2Ent_Cmd':        Enter2Ent_Cmd_item.get_active(),
+            'l_cmd_is_sup_and_cmd': l_cmd_is_sup_and_cmd_item.get_active(),
+            'l_opt_is_sup_and_opt': l_opt_is_sup_and_opt_item.get_active(),
+        }
+
+        # No-change guard: programmatic updates (settings monitor echoes)
+        # re-fire 'toggled' after cnfg already holds the values; saving
+        # again would rewrite the DB and double the settings emission in
+        # the config's verbose log.
+        if all(getattr(cnfg, key) == value for key, value in new_values_dct.items()):
+            return
+
+        for key, value in new_values_dct.items():
+            setattr(cnfg, key, value)
 
         cnfg.save_settings()
         GLib.idle_add(load_prefs_submenu_settings)  # Queue the update to run in GTK's main loop
@@ -509,14 +521,24 @@ if not runtime.barebones_config:
     def save_overlay_setting(widget, flag):
         """Toggle a single overlay flag bit and save to settings."""
         if widget.get_active():
-            cnfg.overlay_mask = cnfg.overlay_mask | flag
+            new_mask = cnfg.overlay_mask | flag
         else:
-            cnfg.overlay_mask = cnfg.overlay_mask & ~flag
+            new_mask = cnfg.overlay_mask & ~flag
+
+        # No-change guard: see save_prefs_settings.
+        if new_mask == cnfg.overlay_mask:
+            return
+
+        cnfg.overlay_mask = new_mask
         cnfg.save_settings()
         GLib.idle_add(load_overlay_submenu_settings)
 
     def apply_overlay_preset(widget, preset_value):
         """Replace the entire overlay mask with a preset value."""
+        # No-change guard: see save_prefs_settings.
+        if cnfg.overlay_mask == preset_value:
+            return
+
         cnfg.overlay_mask = preset_value
         cnfg.save_settings()
         GLib.idle_add(load_overlay_submenu_settings)
@@ -587,7 +609,14 @@ if not runtime.barebones_config:
     def save_optspec_layout_setting(menu_item, layout):
         if not menu_item.get_active():
             return
-        
+
+        # No-change guard: programmatic updates (startup load, settings
+        # monitor echoes) re-fire 'toggled' after cnfg already holds the
+        # value; saving again would rewrite the DB and double the settings
+        # emission in the config's verbose log.
+        if cnfg.optspec_layout == layout:
+            return
+
         cnfg.optspec_layout = layout
         cnfg.save_settings()
         load_optspec_layout_submenu_settings()
@@ -626,7 +655,12 @@ if not runtime.barebones_config:
     def save_kbtype_setting(menu_item, kbtype):
         if not menu_item.get_active():
             return
-        
+
+        # No-change guard: also prevents the critical notification below
+        # from re-firing on startup load or settings monitor echoes.
+        if cnfg.override_kbtype == kbtype:
+            return
+
         cnfg.override_kbtype = kbtype
         cnfg.save_settings()
 

@@ -56,9 +56,12 @@ class SettingsPanel(Gtk.Box):
             color: alpha(currentColor, 0.7);
         }}
         .control-group-header-bar {{
-            background-color: rgba(0, 0, 0, 0.12);
+            background-color: #757575;
             border-radius: 6px;
             padding: 4px 8px;
+        }}
+        .control-group-header-bar .control-group-header {{
+            color: #ffffff;
         }}
         .settings-help-button {{
             min-width: {HELP_BUTTON_SIZE}px;
@@ -175,13 +178,37 @@ class SettingsPanel(Gtk.Box):
         )
         column.append(media_control)
 
-        # Super Tap Passthru section header
+        # Super Tap Passthru section header (with help button)
+        super_tap_header_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        super_tap_header_container.add_css_class("control-group-header-bar")
+
         super_tap_header = Gtk.Label(label="Super Tap Passthru")
         super_tap_header.add_css_class("control-group-header")
-        super_tap_header.add_css_class("control-group-header-bar")
-        super_tap_header.set_halign(Gtk.Align.FILL)
-        super_tap_header.set_xalign(0)
-        column.append(super_tap_header)
+        super_tap_header_container.append(super_tap_header)
+
+        super_tap_spacer = Gtk.Box()
+        super_tap_spacer.set_hexpand(True)
+        super_tap_header_container.append(super_tap_spacer)
+
+        if self.parent_window:
+            super_tap_help_title = "Super Tap Passthru"
+            super_tap_help_text = (
+                "Makes a modifier key do double duty: a quick tap sends a Super "
+                "(Meta/Win) key tap, useful for opening app launchers or the "
+                "GNOME/KDE overview, while holding it keeps its normal Toshy "
+                "role for shortcut combos.\n\nEnable for the Left Option "
+                "position key, the Left Command position key, or both."
+            )
+            super_tap_help_button = Gtk.Button(label="?")
+            super_tap_help_button.set_size_request(HELP_BUTTON_SIZE, HELP_BUTTON_SIZE)
+            super_tap_help_button.set_tooltip_text("Show help for Super Tap Passthru")
+            super_tap_help_button.add_css_class("settings-help-button")
+            super_tap_help_button.connect(
+                'clicked',
+                lambda btn: self.show_help_dialog(super_tap_help_title, super_tap_help_text))
+            super_tap_header_container.append(super_tap_help_button)
+
+        column.append(super_tap_header_container)
 
         # Multipurpose Left Opt switch
         l_opt_control = self.create_switch_with_help(
@@ -484,8 +511,13 @@ class SettingsPanel(Gtk.Box):
             help_title = "CapsLock Mode"
             help_text = (
                 "What the Caps (CapsLock) key does. Each mode has its own help "
-                "button with details. Modes that \"swap roles\" also turn the "
-                "physical Left Ctrl key into a literal CapsLock toggle. "
+                "button with details."
+                "\n\nIn this config, the physical Left Ctrl key's \"role\" is "
+                "context-dependent: it acts as a real Ctrl key (LEFT_CTRL) in "
+                "terminals, but as Super/Meta (LEFT_META) in GUI apps, where "
+                "the Cmd key equivalent handles most shortcuts. \"Role swap\" "
+                "modes give Caps that same split identity, and turn the "
+                "physical Left Ctrl key into a literal CapsLock toggle."
                 "\n\nDefault (*) is for Caps to just act like CapsLock."
             )
 
@@ -573,7 +605,14 @@ class SettingsPanel(Gtk.Box):
         """Handle switch toggle events"""
         setting_key = switch.setting_key
         new_value = switch.get_active()
-        
+
+        # Programmatic updates (initial load at construction, settings monitor
+        # echoes) re-fire 'toggled' after cnfg already holds the value; saving
+        # again would just rewrite the DB and re-emit settings in the config's
+        # verbose log.
+        if getattr(self.cnfg, setting_key, None) == new_value:
+            return
+
         debug(f"Switch toggled: {setting_key} = {new_value}")
         
         # Save to settings
@@ -584,6 +623,11 @@ class SettingsPanel(Gtk.Box):
         """Handle option-key radio button toggle events"""
         if radio.get_active():  # Only respond to the button being activated
             new_value = radio.setting_value
+
+            # No-change guard: see on_switch_toggled.
+            if getattr(self.cnfg, 'optspec_layout', None) == new_value:
+                return
+
             debug(f"Option-key layout changed to: {new_value}")
             
             # Save to settings
@@ -603,6 +647,11 @@ class SettingsPanel(Gtk.Box):
         else:
             new_theme = 'auto'
             
+        # No-change guard (initial set_selected at construction fires this):
+        # see on_switch_toggled.
+        if getattr(self.cnfg, 'gui_theme_mode', None) == new_theme:
+            return
+
         debug(f"Theme changed to: {new_theme}")
         
         # Save to settings
