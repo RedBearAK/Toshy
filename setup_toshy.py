@@ -3956,6 +3956,7 @@ def install_toshy_files():
             'README.md',
             'requirements.txt',
             'ruff.toml',
+            'sync_vendors.sh',
             this_file_name,
             'tests',
             'vendors',
