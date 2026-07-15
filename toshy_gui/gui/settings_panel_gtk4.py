@@ -55,6 +55,11 @@ class SettingsPanel(Gtk.Box):
             font-weight: bold;
             color: alpha(currentColor, 0.7);
         }}
+        .control-group-header-bar {{
+            background-color: rgba(0, 0, 0, 0.12);
+            border-radius: 6px;
+            padding: 4px 8px;
+        }}
         .settings-help-button {{
             min-width: {HELP_BUTTON_SIZE}px;
             min-height: {HELP_BUTTON_SIZE}px;
@@ -173,7 +178,9 @@ class SettingsPanel(Gtk.Box):
         # Super Tap Passthru section header
         super_tap_header = Gtk.Label(label="Super Tap Passthru")
         super_tap_header.add_css_class("control-group-header")
-        super_tap_header.set_halign(Gtk.Align.START)
+        super_tap_header.add_css_class("control-group-header-bar")
+        super_tap_header.set_halign(Gtk.Align.FILL)
+        super_tap_header.set_xalign(0)
         column.append(super_tap_header)
 
         # Multipurpose Left Opt switch
@@ -380,6 +387,8 @@ class SettingsPanel(Gtk.Box):
         # Header with help button
         header_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         
+        header_container.add_css_class("control-group-header-bar")
+
         header_label = Gtk.Label(label="Option-key Special Characters")
         header_label.add_css_class("control-group-header")
         header_container.append(header_label)
@@ -458,6 +467,8 @@ class SettingsPanel(Gtk.Box):
 
         # Header with help button
         header_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
+        header_container.add_css_class("control-group-header-bar")
 
         header_label = Gtk.Label(label="CapsLock Mode")
         header_label.add_css_class("control-group-header")
