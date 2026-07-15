@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260714'                        # CLI option "--version" will print this out.
+__version__ = '20260715'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -3957,6 +3957,7 @@ def install_toshy_files():
             'requirements.txt',
             'ruff.toml',
             this_file_name,
+            'tests',
             'vendors',
         ]
         # must use list unpacking (*) ignore_patterns() requires individual pattern arguments

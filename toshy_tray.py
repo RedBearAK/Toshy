@@ -58,6 +58,7 @@ from toshy_common import logger
 from toshy_common.logger import *
 from toshy_common.env_context import EnvironmentInfo
 from toshy_common.settings_class import Settings
+from toshy_common.modifier_modes import CAPSLOCK_MODES, CAPSLOCK_MODE_LABELS
 from toshy_common.process_manager import ProcessManager
 from toshy_common.service_manager import ServiceManager
 from toshy_common.monitoring import SettingsMonitor, ServiceMonitor
@@ -383,8 +384,6 @@ if not runtime.barebones_config:
         set_item_active_thread_safe(media_arrows_fix_item, cnfg.media_arrows_fix)
         set_item_active_thread_safe(multi_lang_item, cnfg.multi_lang)
         set_item_active_thread_safe(ST3_in_VSCode_item, cnfg.ST3_in_VSCode)
-        set_item_active_thread_safe(Caps2Cmd_item, cnfg.Caps2Cmd)
-        set_item_active_thread_safe(Caps2Esc_Cmd_item, cnfg.Caps2Esc_Cmd)
         set_item_active_thread_safe(Enter2Ent_Cmd_item, cnfg.Enter2Ent_Cmd)
         set_item_active_thread_safe(l_cmd_is_sup_and_cmd_item, cnfg.l_cmd_is_sup_and_cmd)
         set_item_active_thread_safe(l_opt_is_sup_and_opt_item, cnfg.l_opt_is_sup_and_opt)
@@ -395,8 +394,6 @@ if not runtime.barebones_config:
         cnfg.media_arrows_fix       = media_arrows_fix_item.get_active()
         cnfg.multi_lang             = multi_lang_item.get_active()
         cnfg.ST3_in_VSCode          = ST3_in_VSCode_item.get_active()
-        cnfg.Caps2Cmd               = Caps2Cmd_item.get_active()
-        cnfg.Caps2Esc_Cmd           = Caps2Esc_Cmd_item.get_active()
         cnfg.Enter2Ent_Cmd          = Enter2Ent_Cmd_item.get_active()
         cnfg.l_cmd_is_sup_and_cmd   = l_cmd_is_sup_and_cmd_item.get_active()
         cnfg.l_opt_is_sup_and_opt   = l_opt_is_sup_and_opt_item.get_active()
@@ -422,15 +419,37 @@ if not runtime.barebones_config:
     multi_lang_item.connect('toggled', save_prefs_settings)
     prefs_submenu.append(multi_lang_item)
 
-    Caps2Cmd_item = Gtk.CheckMenuItem(label='CapsLock is Cmd')
-    Caps2Cmd_item.set_active(cnfg.Caps2Cmd)
-    Caps2Cmd_item.connect('toggled', save_prefs_settings)
-    prefs_submenu.append(Caps2Cmd_item)
+    def load_capslock_mode_submenu_settings():
+        cnfg.load_settings()
+        active_item = capslock_mode_items_dct.get(cnfg.capslock_mode)
+        if active_item:
+            set_item_active_thread_safe(active_item, True)
 
-    Caps2Esc_Cmd_item = Gtk.CheckMenuItem(label='CapsLock is Esc & Cmd')
-    Caps2Esc_Cmd_item.set_active(cnfg.Caps2Esc_Cmd)
-    Caps2Esc_Cmd_item.connect('toggled', save_prefs_settings)
-    prefs_submenu.append(Caps2Esc_Cmd_item)
+    def save_capslock_mode_setting(menu_item, mode):
+        if not menu_item.get_active():
+            return
+
+        cnfg.capslock_mode = mode
+        cnfg.save_settings()
+        load_capslock_mode_submenu_settings()
+
+    # CapsLock Mode radio submenu (replaces legacy Caps2Cmd/Caps2Esc_Cmd toggles).
+    # Items built from the canonical mode tuple; radio group provides exclusivity.
+    capslock_mode_submenu = Gtk.Menu()
+    capslock_mode_submenu_item = Gtk.MenuItem(label='CapsLock Mode')
+    capslock_mode_submenu_item.set_submenu(capslock_mode_submenu)
+    prefs_submenu.append(capslock_mode_submenu_item)
+
+    capslock_mode_items_dct = {}
+    group_capslock_mode = None
+    for caps_mode in CAPSLOCK_MODES:
+        mode_label = CAPSLOCK_MODE_LABELS.get(caps_mode, caps_mode)
+        mode_item = Gtk.RadioMenuItem.new_with_label(group_capslock_mode, mode_label)
+        mode_item.connect('toggled', save_capslock_mode_setting, caps_mode)
+        capslock_mode_submenu.append(mode_item)
+        capslock_mode_items_dct[caps_mode] = mode_item
+        if group_capslock_mode is None:
+            group_capslock_mode = mode_item.get_group()
 
     Enter2Ent_Cmd_item = Gtk.CheckMenuItem(label='Enter is Enter & Cmd')
     Enter2Ent_Cmd_item.set_active(cnfg.Enter2Ent_Cmd)
@@ -752,6 +771,7 @@ def main():
         """Callback for when settings change - update GTK UI."""
         if not runtime.barebones_config:
             GLib.idle_add(load_prefs_submenu_settings)
+            GLib.idle_add(load_capslock_mode_submenu_settings)
             GLib.idle_add(load_optspec_layout_submenu_settings)
             GLib.idle_add(load_kbtype_submenu_settings)
             GLib.idle_add(load_autoload_tray_icon_setting)
@@ -802,6 +822,8 @@ def main():
     if not runtime.barebones_config:
         # load the settings for the preferences submenu toggle items
         load_prefs_submenu_settings()
+        # load the setting for the CapsLock mode radio submenu
+        load_capslock_mode_submenu_settings()
         # load the settings for the optspec layout submenu
         load_optspec_layout_submenu_settings()
         # load the settings for the keyboard type submenu

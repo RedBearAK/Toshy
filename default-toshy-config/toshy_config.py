@@ -211,6 +211,7 @@ sys.path.insert(0, current_folder_path)
 from toshy_common.env_context           import EnvironmentInfo
 from toshy_common.kblayout_setup        import current_layout_name, start_kblayout_correction
 from toshy_common.machine_context       import get_machine_id_hash
+from toshy_common.modifier_modes        import CAPSLOCK_MODES, CAPSLOCK_MODE_DEFAULT
 from toshy_common.notification_manager  import NotificationManager
 from toshy_common.overlay_context       import OverlayFlag as OFlag
 from toshy_common.proc_launcher         import launch_detached
@@ -867,6 +868,47 @@ not_win_type_rgx    = re.compile("IBM|Chromebook|Apple", re.I)
 # Instantiate a useful notification object class instance, to make notifications easier
 ntfy = NotificationManager(icon_file_active, title='Toshy Alert (Config)')
 
+
+def _purge_legacy_caps_prefs():
+    """One-shot: legacy Caps2Cmd/Caps2Esc_Cmd booleans were replaced by the
+    string-valued 'capslock_mode' setting, with no automatic migration. If a
+    legacy boolean is found set in the prefs DB, notify the user (critical)
+    to re-select their Caps mode, then delete the stale rows. The DELETE
+    makes this idempotent, so any Toshy component may safely call it.
+    Deletable, along with CAPSLOCK_LEGACY_BOOL_NAMES, after a generous
+    deprecation period.
+    """
+    import sqlite3
+    from toshy_common.modifier_modes import CAPSLOCK_LEGACY_BOOL_NAMES
+    try:
+        with sqlite3.connect(cnfg.prefs_db_file_path) as db_connection:
+            db_cursor = db_connection.cursor()
+            placeholders = ','.join('?' * len(CAPSLOCK_LEGACY_BOOL_NAMES))
+            db_cursor.execute(
+                f'SELECT name, value FROM config_preferences WHERE name IN ({placeholders})',
+                CAPSLOCK_LEGACY_BOOL_NAMES)
+            legacy_rows = db_cursor.fetchall()
+            if not legacy_rows:
+                return
+            if any(row_value == 'True' for _, row_value in legacy_rows):
+                ntfy.send_notification(
+                    message=('CapsLock options were consolidated into a single mode '
+                                'selector. Your previous CapsLock setting is no longer '
+                                'active - re-select it in Toshy Preferences.'),
+                    urgency='critical')
+                debug('Legacy CapsLock boolean prefs found set; user notified.')
+            db_cursor.execute(
+                f'DELETE FROM config_preferences WHERE name IN ({placeholders})',
+                CAPSLOCK_LEGACY_BOOL_NAMES)
+            db_connection.commit()
+            debug('Legacy CapsLock boolean prefs purged from prefs DB.')
+    except sqlite3.Error as db_error:
+        # Non-fatal: worst case the one-shot fires again on next config start.
+        error(f'Problem purging legacy CapsLock prefs: {db_error}')
+
+
+_purge_legacy_caps_prefs()
+
 # Boolean variable to toggle Enter key state between F2 and Enter
 # True = Enter key sends F2, False = Enter key sends Enter
 _enter_is_F2 = True                 # DON'T CHANGE THIS! Must be set to True here.
@@ -1044,6 +1086,12 @@ def _context_pre_check(ctx: KeyContext):
     ctx_ovl_user_flag_d         = bool(mask & OFlag.USER_FLAG_D)
     ctx_ovl_user_flag_e         = bool(mask & OFlag.USER_FLAG_E)
     ctx_ovl_user_flag_f         = bool(mask & OFlag.USER_FLAG_F)
+
+    # Derive the per-mode ctx_caps_is_* booleans from cnfg.capslock_mode.
+    # Defined inside the modmap scan region (defined later in the file, but
+    # only *called* at runtime, after the whole config has executed) so the
+    # modmap region verifier can drive the real derivation.
+    _update_caps_mode_flags()
 
     # Maintain the Enter-to-rename latch (resets when focus leaves a file manager)
     _get_iEF2_context(ctx)
@@ -1923,6 +1971,49 @@ def isMultiTap( tap_1_action: 'Callable | None' = None,
 # DO NOT REMOVE THIS MODMAP AND KEYMAP!
 # Special modmap to trigger the evaluation of the keyboard type when
 # any modifier key is pressed (UPDATE: And some common app class conditions).
+###################################################################################################
+###  SCAN_MARK_START: modmap_region  ###  MACHINE-VERIFIED REGION (see tests/modmap_verifier_*)
+# Everything between the SCAN_MARK lines is exec'd and exhaustively resolved by the modmap
+# region verifier (all capslock_mode values x keyboard types x app contexts). Names referenced
+# by `when` clauses in this region must either be defined inside it or stubbed by the verifier
+# harness. NOTE: "SCAN_MARK" is deliberately not "SLICE_MARK" - the setup script must never
+# harvest this region from an old config during upgrades.
+
+
+def _update_caps_mode_flags():
+    """Derive the per-mode ctx_caps_is_* booleans from cnfg.capslock_mode.
+
+    Called once per event from _context_pre_check(), so the `when` clauses
+    of the capslock_mode modmaps below read cached booleans instead of
+    repeating string comparisons. Validates the mode string against the
+    canonical tuple and degrades loudly to the default on unknown values
+    (a typo'd mode must never become a silent no-op).
+    """
+    global ctx_caps_is_caps
+    global ctx_caps_is_cmd
+    global ctx_caps_is_esc_and_cmd
+    global ctx_caps_is_esc_and_lctrl
+    global ctx_caps_is_esc_and_lctrl_role_swap
+    global ctx_caps_is_lctrl_role_swap
+    global ctx_caps_swaps_lctrl
+
+    caps_mode = cnfg.capslock_mode
+    if caps_mode not in CAPSLOCK_MODES:
+        error(f"Unknown capslock_mode '{caps_mode}', "
+                f"treating as default '{CAPSLOCK_MODE_DEFAULT}'")
+        caps_mode = CAPSLOCK_MODE_DEFAULT
+
+    ctx_caps_is_caps                    = (caps_mode == 'caps_is_caps')
+    ctx_caps_is_cmd                     = (caps_mode == 'caps_is_cmd')
+    ctx_caps_is_esc_and_cmd             = (caps_mode == 'caps_is_esc_and_cmd')
+    ctx_caps_is_esc_and_lctrl           = (caps_mode == 'caps_is_esc_and_lctrl')
+    ctx_caps_is_esc_and_lctrl_role_swap = (caps_mode == 'caps_is_esc_and_lctrl_role_swap')
+    ctx_caps_is_lctrl_role_swap         = (caps_mode == 'caps_is_lctrl_role_swap')
+
+    ctx_caps_swaps_lctrl                = (ctx_caps_is_esc_and_lctrl_role_swap
+                                            or ctx_caps_is_lctrl_role_swap)
+
+
 modmap("Trigger Modmap: Context Pre-Check", {
     # This modmap must have all modifier keys inside it, so they will
     # all trigger the re-evaluation of the keyboard type.
@@ -1937,6 +2028,10 @@ modmap("Trigger Modmap: Context Pre-Check", {
     Key.RIGHT_CTRL:             Key.RIGHT_CTRL,
     Key.LEFT_SHIFT:             Key.LEFT_SHIFT,
     Key.RIGHT_SHIFT:            Key.RIGHT_SHIFT,
+    # CapsLock is not a standard modifier, but capslock_mode features make it act
+    # like one, so a Caps press must also refresh the cached context (fresh
+    # terminal/GUI and keyboard type state) before its modmaps resolve.
+    Key.CAPSLOCK:               Key.CAPSLOCK,
 # }, when = lambda ctx: getKBtype()(ctx) )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
 }, when = _context_pre_check )    # THIS CONDITIONAL MUST NEVER EVALUATE TO TRUE!
 # Special keymap to trigger the evaluation of the keyboard type when
@@ -2069,22 +2164,59 @@ multipurpose_modmap("Enter2Cmd", {
     not ctx_app_is_remote
 )
 
-multipurpose_modmap("Caps2Esc - not Chromebook kbd", {
-    Key.CAPSLOCK:               [Key.ESC, Key.RIGHT_CTRL]       # Caps2Esc - not Chromebook
+# [capslock_mode multipurpose modmaps] Tap-bearing Caps modes. One mode value can ever be
+# active at a time (see _update_caps_mode_flags), so these can never race each other, and
+# no plain modmap below may claim the same inkey while one of these is live (a plain modmap
+# rewriting keystate.key would silently null the multi - selection is by inkey, application
+# is by key). Design matrix: docs/design/capslock_mode_matrix.md
+
+multipurpose_modmap("Caps mode - esc_and_cmd - not Cbk kbd", {
+    Key.CAPSLOCK:               [Key.ESC, Key.RIGHT_CTRL]       # tap Esc / hold Cmd
 }, when = lambda ctx:
-    cnfg.Caps2Esc_Cmd and
+    ctx_caps_is_esc_and_cmd and
     cnfg.screen_has_focus and
     not ctx_kbd_is_chromebook and
     not ctx_app_is_remote
 )
 
-multipurpose_modmap("Caps2Esc - Chromebook kbd", {
-    Key.LEFT_META:               [Key.ESC, Key.RIGHT_CTRL]       # Caps2Esc - Chromebook
+multipurpose_modmap("Caps mode - esc_and_cmd - Cbk kbd", {
+    Key.LEFT_META:              [Key.ESC, Key.RIGHT_CTRL]       # tap Esc / hold Cmd (Cbk Caps position)
 }, when = lambda ctx:
-    cnfg.Caps2Esc_Cmd and
+    ctx_caps_is_esc_and_cmd and
     cnfg.screen_has_focus and
     ctx_kbd_is_chromebook and
     not ctx_app_is_remote
+)
+
+multipurpose_modmap("Caps mode - esc_and_lctrl - Mac/Win kbd", {
+    # Literal Left Ctrl on hold, in GUI apps as well as terminals. First LEFT_CTRL
+    # source in GUI apps; native app Ctrl shortcuts (never remapped by Toshy) respond.
+    Key.CAPSLOCK:               [Key.ESC, Key.LEFT_CTRL]        # tap Esc / hold real Ctrl
+}, when = lambda ctx:
+    ctx_caps_is_esc_and_lctrl and
+    cnfg.screen_has_focus and
+    (ctx_kbd_is_apple or ctx_kbd_is_windows) and
+    not ctx_app_is_remote
+)
+
+multipurpose_modmap("Caps mode - esc_and_lctrl_role_swap - GUI - Mac/Win kbd", {
+    # Hold takes over Left Ctrl's contextual role: Super in GUI apps. The
+    # displaced Left Ctrl key becomes literal CapsLock (companion modmap below).
+    Key.CAPSLOCK:               [Key.ESC, Key.LEFT_META]        # tap Esc / hold Super (L-Ctrl GUI role)
+}, when = lambda ctx:
+    ctx_caps_is_esc_and_lctrl_role_swap and
+    cnfg.screen_has_focus and
+    (ctx_kbd_is_apple or ctx_kbd_is_windows) and
+    not ctx_app_is_terminal and not ctx_app_is_remote
+)
+
+multipurpose_modmap("Caps mode - esc_and_lctrl_role_swap - Terms - Mac/Win kbd", {
+    Key.CAPSLOCK:               [Key.ESC, Key.LEFT_CTRL]        # tap Esc / hold real Ctrl (L-Ctrl Terms role)
+}, when = lambda ctx:
+    ctx_caps_is_esc_and_lctrl_role_swap and
+    cnfg.screen_has_focus and
+    (ctx_kbd_is_apple or ctx_kbd_is_windows) and
+    ctx_app_is_terminal
 )
 
 multipurpose_modmap("Cond multi-modmap - Alt_Gr on Menu key", {
@@ -2354,23 +2486,68 @@ multipurpose_modmap("Left Opt is Sup & Opt - Win kbd", {
 )
 
 
-# [Global GUI conditional modmaps] Change modifier keys as in xmodmap
-modmap("Cond modmap - GUI - Caps2Cmd - not Cbk kdb", {
-    Key.CAPSLOCK:               Key.RIGHT_CTRL,                 # Caps2Cmd
+# [capslock_mode plain modmaps] Registered ahead of the base GUI/Terms modmaps below, so a
+# live Caps mode claims CAPSLOCK (and the swap companion claims LEFT_CTRL) before the base
+# entries can (apply_modmap is first-match-wins per inkey). Only one mode value can ever be
+# active (see _update_caps_mode_flags). Design matrix: docs/design/capslock_mode_matrix.md
+
+modmap("Caps mode - L-Ctrl displacement - Mac/Win kbd", {
+    # Shared companion for both *_role_swap modes: the displaced Left Ctrl key becomes a
+    # literal CapsLock. Must contain ONLY Left Ctrl - adding CAPSLOCK here would rewrite
+    # keystate.key ahead of apply_multi_modmap and silently null the tap-bearing swap mode.
+    # Output is CAPSLOCK in both contexts, so no GUI/Terms split is needed.
+    Key.LEFT_CTRL:              Key.CAPSLOCK,                   # displaced L-Ctrl is CapsLock
 }, when = lambda ctx:
-    cnfg.Caps2Cmd and
+    ctx_caps_swaps_lctrl and
+    cnfg.screen_has_focus and
+    (ctx_kbd_is_apple or ctx_kbd_is_windows) and
+    not ctx_app_is_remote
+)
+modmap("Caps mode - lctrl_role_swap - GUI - Mac/Win kbd", {
+    Key.CAPSLOCK:               Key.LEFT_META,                  # L-Ctrl's GUI role (Super)
+}, when = lambda ctx:
+    ctx_caps_is_lctrl_role_swap and
+    cnfg.screen_has_focus and
+    (ctx_kbd_is_apple or ctx_kbd_is_windows) and
+    not ctx_app_is_terminal and not ctx_app_is_remote
+)
+modmap("Caps mode - lctrl_role_swap - Terms - Mac/Win kbd", {
+    Key.CAPSLOCK:               Key.LEFT_CTRL,                  # L-Ctrl's Terms role (real Ctrl)
+}, when = lambda ctx:
+    ctx_caps_is_lctrl_role_swap and
+    cnfg.screen_has_focus and
+    (ctx_kbd_is_apple or ctx_kbd_is_windows) and
+    ctx_app_is_terminal
+)
+modmap("Caps mode - cmd - GUI - not Cbk kbd", {
+    Key.CAPSLOCK:               Key.RIGHT_CTRL,                 # Caps is Cmd
+}, when = lambda ctx:
+    ctx_caps_is_cmd and
     cnfg.screen_has_focus and
     not ctx_kbd_is_chromebook and
     not ctx_app_is_terminal and not ctx_app_is_remote
 )
-modmap("Cond modmap - GUI - Caps2Cmd - Cbk kdb", {
-    Key.LEFT_META:              Key.RIGHT_CTRL,                 # Caps2Cmd - Chromebook
+modmap("Caps mode - cmd - GUI - Cbk kbd", {
+    Key.LEFT_META:              Key.RIGHT_CTRL,                 # Caps is Cmd (Cbk Caps position)
 }, when = lambda ctx:
-    cnfg.Caps2Cmd and
+    ctx_caps_is_cmd and
     cnfg.screen_has_focus and
     ctx_kbd_is_chromebook and
     not ctx_app_is_terminal and not ctx_app_is_remote
 )
+modmap("Caps mode - cmd - Terms - Mac/Win kbd", {
+    # Gap A fix: legacy Caps2Cmd was GUI-only, leaving Caps as a live caps-lock
+    # toggle in terminals. The mode now covers terminals on Mac/Win as well.
+    Key.CAPSLOCK:               Key.RIGHT_CTRL,                 # Caps is Cmd
+}, when = lambda ctx:
+    ctx_caps_is_cmd and
+    cnfg.screen_has_focus and
+    (ctx_kbd_is_apple or ctx_kbd_is_windows) and
+    ctx_app_is_terminal
+)
+
+
+# [Global GUI conditional modmaps] Change modifier keys as in xmodmap
 modmap("Cond modmap - GUI - IBM kbd - multi_lang OFF", {
     # - IBM
     Key.RIGHT_ALT:              Key.RIGHT_CTRL,                 # IBM - Multi-language (Remove)
@@ -2588,6 +2765,10 @@ modmap("Cond modmap - Terms - Mac kbd - Cmd held", {
     ctx_kbd_is_apple and
     ctx_app_is_terminal
 )
+
+
+###  SCAN_MARK_END: modmap_region  ###  MACHINE-VERIFIED REGION (see tests/modmap_verifier_*)
+###################################################################################################
 
 
 # Suggested location for adding custom modmaps for personal use.

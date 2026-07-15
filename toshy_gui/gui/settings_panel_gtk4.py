@@ -3,6 +3,7 @@ gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, GLib
 
 from toshy_common.logger import debug
+from toshy_common.modifier_modes import CAPSLOCK_MODES, CAPSLOCK_MODE_LABELS
 
 # Configuration for help button appearance
 HELP_BUTTON_SIZE = 18   # Width and height in pixels - change here to resize all help buttons
@@ -125,23 +126,9 @@ class SettingsPanel(Gtk.Box):
         )
         column.append(multi_lang_control)
 
-        # CapsLock as Cmd switch
-        caps_cmd_control = self.create_switch_with_help(
-            "CapsLock is Cmd key",
-            "Caps2Cmd",
-            "CapsLock is Cmd key",
-            "Modmap CapsLock to be Command key"
-        )
-        column.append(caps_cmd_control)
-
-        # Multipurpose CapsLock switch
-        caps_esc_control = self.create_switch_with_help(
-            "Multipurpose CapsLock: Esc, Cmd",
-            "Caps2Esc_Cmd",
-            "Multipurpose CapsLock: Esc, Cmd",
-            "Modmap CapsLock key to be:\n• Escape when tapped\n• Command key for hold/combo"
-        )
-        column.append(caps_esc_control)
+        # CapsLock mode radio group (replaces legacy Caps2Cmd/Caps2Esc_Cmd switches)
+        capslock_mode_control = self.create_capslock_mode_radio_group()
+        column.append(capslock_mode_control)
 
         # Multipurpose Enter switch
         enter_cmd_control = self.create_switch_with_help(
@@ -457,6 +444,87 @@ class SettingsPanel(Gtk.Box):
         debug("Option-key radio group created")
         return group_container
         
+    def create_capslock_mode_radio_group(self):
+        """Create the CapsLock mode radio button group (canonical modes from
+        toshy_common.modifier_modes; radio group provides exclusivity)"""
+        debug("Creating CapsLock mode radio group...")
+
+        # Container for the whole group
+        group_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+
+        # Header with help button
+        header_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
+        header_label = Gtk.Label(label="CapsLock Mode")
+        header_label.add_css_class("control-group-header")
+        header_container.append(header_label)
+
+        # Add expandable spacer to push help button to the right
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        header_container.append(spacer)
+
+        # Help button for the group
+        if self.parent_window:
+            help_title = "CapsLock Mode"
+            help_text = (
+                "What the CapsLock key does. Modes with \"swap roles\" also turn the "
+                "physical Left Ctrl key into a literal CapsLock key, and CapsLock takes "
+                "over Left Ctrl's usual role in this config (Super in GUI apps, Ctrl in "
+                "terminals). The \"Esc (tap) and Ctrl (hold)\" mode makes held CapsLock "
+                "a real Ctrl key everywhere, including GUI apps. \n\nDefault is for "
+                "CapsLock to just act like CapsLock."
+            )
+
+            help_button = Gtk.Button(label="?")
+            help_button.set_size_request(HELP_BUTTON_SIZE, HELP_BUTTON_SIZE)
+            help_button.set_tooltip_text("Show help for CapsLock modes")
+            help_button.add_css_class("settings-help-button")
+            help_button.connect('clicked', lambda btn: self.show_help_dialog(help_title, help_text))
+            header_container.append(help_button)
+
+        group_container.append(header_container)
+
+        # Radio buttons
+        radio_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        radio_container.set_margin_start(20)  # Indent radio buttons
+
+        # Build data-driven from the canonical mode tuple; first button anchors the group
+        self.capslock_mode_radios_dct = {}
+        group_anchor_radio = None
+        for caps_mode in CAPSLOCK_MODES:
+            mode_label = CAPSLOCK_MODE_LABELS.get(caps_mode, caps_mode)
+            mode_radio = Gtk.CheckButton(label=mode_label)
+            mode_radio.add_css_class("radio-control")
+            if group_anchor_radio is None:
+                group_anchor_radio = mode_radio
+            else:
+                mode_radio.set_group(group_anchor_radio)  # Join the group
+            mode_radio.setting_value = caps_mode
+            mode_radio.connect('toggled', self.on_capslock_mode_toggled)
+            radio_container.append(mode_radio)
+            self.capslock_mode_radios_dct[caps_mode] = mode_radio
+
+        # Load initial value
+        current_mode_radio = self.capslock_mode_radios_dct.get(self.cnfg.capslock_mode)
+        if current_mode_radio:
+            current_mode_radio.set_active(True)
+
+        group_container.append(radio_container)
+
+        debug("CapsLock mode radio group created")
+        return group_container
+
+    def on_capslock_mode_toggled(self, radio):
+        """Handle CapsLock mode radio button toggle events"""
+        if radio.get_active():  # Only respond to the button being activated
+            new_value = radio.setting_value
+            debug(f"CapsLock mode changed to: {new_value}")
+
+            # Save to settings
+            setattr(self.cnfg, 'capslock_mode', new_value)
+            self.cnfg.save_settings()
+
     def on_switch_toggled(self, switch):
         """Handle switch toggle events"""
         setting_key = switch.setting_key
@@ -556,7 +624,7 @@ class SettingsPanel(Gtk.Box):
             
         # Update all switches using stored references
         switch_settings = [
-            'altgr_on_menu_key', 'multi_lang', 'ST3_in_VSCode', 'Caps2Cmd', 'Caps2Esc_Cmd',
+            'altgr_on_menu_key', 'multi_lang', 'ST3_in_VSCode',
             'Enter2Ent_Cmd', 'forced_numpad', 'media_arrows_fix',
             'l_opt_is_sup_and_opt', 'l_cmd_is_sup_and_cmd'
         ]
@@ -571,6 +639,12 @@ class SettingsPanel(Gtk.Box):
                     debug(f"Updating {setting_key} switch to {current_value}")
                     switch.set_active(current_value)
         
+        # Update CapsLock mode radio buttons
+        target_caps_radio = self.capslock_mode_radios_dct.get(self.cnfg.capslock_mode)
+        if target_caps_radio and not target_caps_radio.get_active():
+            debug(f"Updating capslock_mode radio to {self.cnfg.capslock_mode}")
+            target_caps_radio.set_active(True)
+
         # Update option-key radio buttons
         current_optspec = getattr(self.cnfg, 'optspec_layout', 'US')
         
