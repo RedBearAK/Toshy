@@ -225,6 +225,13 @@ class BottomPanel(Gtk.Box):
         else:
             new_theme = 'auto'
             
+        # No-change guard: the initial set_selected at construction and
+        # settings-monitor echoes fire this handler after cnfg already holds
+        # the value; saving again would rewrite the DB and re-emit settings
+        # in the config's verbose log.
+        if getattr(self.cnfg, 'gui_theme_mode', None) == new_theme:
+            return
+
         debug(f"Theme changed to: {new_theme}")
         
         # Save to settings

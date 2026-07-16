@@ -46,7 +46,7 @@ The `mru_layouts` table is handled separately (`_save_mru_layouts` plus its own
 query in `load_settings`) and does not follow the four-step pattern above.
 """
 
-__version__ = '20260707'
+__version__ = '20260714'
 
 import os
 import time
@@ -62,6 +62,7 @@ from watchdog.observers import Observer
 
 from xwaykeyz.lib.logger import debug, error, warn
 
+from toshy_common.modifier_modes import CAPSLOCK_MODES, CAPSLOCK_MODE_DEFAULT
 from toshy_common.shared_device_context import SharedDeviceContext
 from toshy_common.overlay_context import (
     OverlayFlag,
@@ -103,8 +104,7 @@ class Settings:
         self.altgr_on_menu_key      = True                      # Default: True
         self.media_arrows_fix       = False                     # Default: False
         self.multi_lang             = False                     # Default: False
-        self.Caps2Cmd               = False                     # Default: False
-        self.Caps2Esc_Cmd           = False                     # Default: False
+        self.capslock_mode          = CAPSLOCK_MODE_DEFAULT     # Default: 'caps_is_caps'
         self.Enter2Ent_Cmd          = False                     # Default: False
         self.ST3_in_VSCode          = False                     # Default: False
 
@@ -287,8 +287,7 @@ class Settings:
             ('altgr_on_menu_key',           str(self.altgr_on_menu_key)),
             ('media_arrows_fix',            str(self.media_arrows_fix)),
             ('multi_lang',                  str(self.multi_lang)),
-            ('Caps2Cmd',                    str(self.Caps2Cmd)),
-            ('Caps2Esc_Cmd',                str(self.Caps2Esc_Cmd)),
+            ('capslock_mode',               str(self.capslock_mode)),
             ('Enter2Ent_Cmd',               str(self.Enter2Ent_Cmd)),
             ('l_cmd_is_sup_and_cmd',        str(self.l_cmd_is_sup_and_cmd)),
             ('l_opt_is_sup_and_opt',        str(self.l_opt_is_sup_and_opt)),
@@ -342,8 +341,17 @@ class Settings:
                 elif row[0] == 'altgr_on_menu_key'      : self.altgr_on_menu_key    = setting_value
                 elif row[0] == 'media_arrows_fix'       : self.media_arrows_fix     = setting_value
                 elif row[0] == 'multi_lang'             : self.multi_lang           = setting_value
-                elif row[0] == 'Caps2Cmd'               : self.Caps2Cmd             = setting_value
-                elif row[0] == 'Caps2Esc_Cmd'           : self.Caps2Esc_Cmd         = setting_value
+
+                # String-valued mode setting; validate against the canonical tuple so a
+                # corrupted or hand-edited DB row degrades loudly to the default.
+                elif row[0] == 'capslock_mode':
+                    if row[1] in CAPSLOCK_MODES:
+                        self.capslock_mode = row[1]
+                    else:
+                        error(f"Unknown capslock_mode '{row[1]}' in prefs DB, "
+                                f"using default '{CAPSLOCK_MODE_DEFAULT}'")
+                        self.capslock_mode = CAPSLOCK_MODE_DEFAULT
+
                 elif row[0] == 'Enter2Ent_Cmd'          : self.Enter2Ent_Cmd        = setting_value
                 elif row[0] == 'l_cmd_is_sup_and_cmd'   : self.l_cmd_is_sup_and_cmd = setting_value
                 elif row[0] == 'l_opt_is_sup_and_opt'   : self.l_opt_is_sup_and_opt = setting_value
@@ -493,8 +501,7 @@ class Settings:
         altgr_on_menu_key       = {self.altgr_on_menu_key}
         media_arrows_fix        = {self.media_arrows_fix}
         multi_lang              = {self.multi_lang}
-        Caps2Cmd                = {self.Caps2Cmd}
-        Caps2Esc_Cmd            = {self.Caps2Esc_Cmd}
+        capslock_mode           = '{self.capslock_mode}'
         Enter2Ent_Cmd           = {self.Enter2Ent_Cmd}
         l_cmd_is_sup_and_cmd    = {self.l_cmd_is_sup_and_cmd}
         l_opt_is_sup_and_opt    = {self.l_opt_is_sup_and_opt}

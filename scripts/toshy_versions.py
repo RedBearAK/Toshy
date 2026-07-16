@@ -72,6 +72,7 @@ show_all_modules    = '--all' in user_args or '-a' in user_args
 
 # ~/.config/toshy/toshy_common/env_context.py
 # ~/.config/toshy/toshy_common/machine_context.py
+# ~/.config/toshy/toshy_common/modifier_modes.py
 # ~/.config/toshy/toshy_common/monitoring.py            # Monitors settings and services
 # ~/.config/toshy/toshy_common/notification_manager.py
 # ~/.config/toshy/toshy_common/overlay_context.py
@@ -129,6 +130,8 @@ env_context_path        = os.path.join(toshy_dir_path,
                             'toshy_common', 'env_context.py')
 machine_context_path    = os.path.join(toshy_dir_path,
                             'toshy_common', 'machine_context.py')
+modifier_modes_path     = os.path.join(toshy_dir_path,
+                            'toshy_common', 'modifier_modes.py')
 notification_mgr_path   = os.path.join(toshy_dir_path,
                             'toshy_common', 'notification_manager.py')
 overlay_context_path    = os.path.join(toshy_dir_path,
@@ -195,6 +198,7 @@ components = [
     (None, None),                   # Spacing
     ("Environment Context",         env_context_path),
     ("Machine Context",             machine_context_path),
+    ("Modifier Modes",              modifier_modes_path),
     ("Notification Manager",        notification_mgr_path),
     ("Overlay Context",             overlay_context_path),
     ("Process Launcher",            proc_launcher_path),

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20250717'
+__version__ = '20260715'
 
 # Preferences app for Toshy, using tkinter GUI and "Sun Valley" theme
 TOSHY_PART      = 'gui'   # CUSTOMIZE TO SPECIFIC TOSHY COMPONENT! (gui, tray, config)
@@ -24,6 +24,11 @@ runtime = initialize_toshy_runtime()
 from toshy_common import logger
 from toshy_common.logger import *
 from toshy_common.settings_class import Settings
+from toshy_common.modifier_modes import (
+    CAPSLOCK_MODES,
+    CAPSLOCK_MODE_DEFAULT,
+    CAPSLOCK_MODE_LABELS,
+)
 from toshy_common.process_manager import ProcessManager
 from toshy_common.service_manager import ServiceManager
 from toshy_common.monitoring import SettingsMonitor, ServiceMonitor
@@ -82,6 +87,7 @@ def process_gui_queue():
             if item == "update_settings":
                 debug("!!! Processing settings update from queue !!!")
                 load_radio_btn_settings(cnfg, optspec_var, "optspec_layout")
+                load_radio_btn_settings(cnfg, capslock_mode_var, "capslock_mode")
                 load_switch_settings(cnfg)
 
             elif isinstance(item, tuple) and item[0] == "service_status":
@@ -231,8 +237,6 @@ def load_switch_settings(cnfg: Settings):
     media_arrows_fix_switch_var.set(    cnfg.media_arrows_fix)
     multi_lang_switch_var.set(          cnfg.multi_lang)
     ST3_in_VSCode_switch_var.set(       cnfg.ST3_in_VSCode)
-    Caps2Cmd_switch_var.set(            cnfg.Caps2Cmd)
-    Caps2Esc_Cmd_switch_var.set(        cnfg.Caps2Esc_Cmd)
     Enter2Ent_Cmd_switch_var.set(       cnfg.Enter2Ent_Cmd)
     theme_switch_var.set(               cnfg.gui_dark_theme)
     update_theme()
@@ -382,37 +386,27 @@ ST3_in_VSCode_label = tk.Label(
     fg=sw_lbl_font_color
 )
 
-Caps2Cmd_switch_var = tk.BooleanVar(value=False)
-Caps2Cmd_switch     = ttk.Checkbutton(
-    left_column, 
-    text='CapsLock is Cmd key', 
-    style='Switch.TCheckbutton', 
-    variable=Caps2Cmd_switch_var
-)
+# CapsLock mode radio button group (replaces legacy Caps2Cmd/Caps2Esc_Cmd toggles).
+# Buttons built from the canonical mode tuple; shared StringVar provides exclusivity.
+capslock_mode_var = tk.StringVar(value=CAPSLOCK_MODE_DEFAULT)
 
-Caps2Cmd_label = tk.Label(
+capslock_mode_radio_btns_lst = [
+    ttk.Radiobutton(
+        left_column,
+        text=f'  {CAPSLOCK_MODE_LABELS.get(caps_mode, caps_mode)}',
+        style='Switch.TRadiobutton',
+        variable=capslock_mode_var,
+        value=caps_mode
+    )
+    for caps_mode in CAPSLOCK_MODES
+]
+
+capslock_mode_label = tk.Label(
     left_column,
     justify=tk.LEFT,
-    text='Modmap CapsLock to be Command key',
-    font=sw_lbl_font,
-    wraplength=wrap_len,
-    fg=sw_lbl_font_color
-)
-
-Caps2Esc_Cmd_switch_var    = tk.BooleanVar(value=False)
-Caps2Esc_Cmd_switch        = ttk.Checkbutton(
-    left_column,
-    text='Multipurpose CapsLock: Esc, Cmd',
-    style='Switch.TCheckbutton', 
-    variable=Caps2Esc_Cmd_switch_var
-)
-
-Caps2Esc_Cmd_switch_label = tk.Label(
-    left_column,
-    justify=tk.LEFT,
-    text=f'Modmap CapsLock key to be:\
-        \n  • Escape when tapped\
-        \n  • Command key for hold/combo',
+    text=(  'What the CapsLock key does. "Swap roles" modes also turn the physical '
+            'Left Ctrl key into a literal CapsLock key, with CapsLock taking over '
+            'Left Ctrl\'s usual role (Super in GUI apps, Ctrl in terminals).' ),
     font=sw_lbl_font,
     wraplength=wrap_len,
     fg=sw_lbl_font_color
@@ -443,10 +437,9 @@ if not runtime.barebones_config:
     multi_lang_label.pack(          anchor=tk.W,    padx=sw_lbl_indent,    pady=btn_lbl_pady)
     ST3_in_VSCode_switch.pack(      anchor=tk.W,    padx=sw_padx,          pady=btn_pady)
     ST3_in_VSCode_label.pack(       anchor=tk.W,    padx=sw_lbl_indent,    pady=btn_lbl_pady)
-    Caps2Cmd_switch.pack(           anchor=tk.W,    padx=sw_padx,          pady=btn_pady)
-    Caps2Cmd_label.pack(            anchor=tk.W,    padx=sw_lbl_indent,    pady=btn_lbl_pady)
-    Caps2Esc_Cmd_switch.pack(       anchor=tk.W,    padx=sw_padx,          pady=btn_pady)
-    Caps2Esc_Cmd_switch_label.pack( anchor=tk.W,    padx=sw_lbl_indent,    pady=btn_lbl_pady)
+    for capslock_mode_radio_btn in capslock_mode_radio_btns_lst:
+        capslock_mode_radio_btn.pack(anchor=tk.W,   padx=sw_padx + 10,     pady=btn_pady)
+    capslock_mode_label.pack(       anchor=tk.W,    padx=sw_lbl_indent,    pady=btn_lbl_pady)
     Enter2Enter_Cmd_switch.pack(    anchor=tk.W,    padx=sw_padx,          pady=btn_pady)
     Enter2Ent_Cmd_label.pack(       anchor=tk.W,    padx=sw_lbl_indent,    pady=btn_lbl_pady)
 
@@ -628,12 +621,10 @@ multi_lang_switch.config(
 ST3_in_VSCode_switch.config(
     command=lambda: save_switch_settings(
         cnfg, ST3_in_VSCode_switch_var, 'ST3_in_VSCode'))
-Caps2Cmd_switch.config(
-    command=lambda: save_switch_settings(
-        cnfg, Caps2Cmd_switch_var, 'Caps2Cmd'))
-Caps2Esc_Cmd_switch.config(
-    command=lambda: save_switch_settings(
-        cnfg, Caps2Esc_Cmd_switch_var, 'Caps2Esc_Cmd'))
+for capslock_mode_radio_btn in capslock_mode_radio_btns_lst:
+    capslock_mode_radio_btn.config(
+        command=lambda: save_radio_settings(
+            cnfg, capslock_mode_var, 'capslock_mode'))
 Enter2Enter_Cmd_switch.config(
     command=lambda: save_switch_settings(
         cnfg, Enter2Ent_Cmd_switch_var, 'Enter2Ent_Cmd'))
@@ -672,6 +663,7 @@ theme_switch.config(
 
 load_switch_settings(cnfg)
 load_radio_btn_settings(cnfg, optspec_var, "optspec_layout")
+load_radio_btn_settings(cnfg, capslock_mode_var, "capslock_mode")
 
 
 def update_minsize():

@@ -620,7 +620,7 @@ toshy-systemd-remove    (stops and removes the systemd service units)
 toshy-systemd-setup     (installs and starts the systemd service units)
 ```
 
-The following commands are also available, and meant to allow manually running just the Toshy config file, without any reliance on `systemd`. These will automatically stop the `systemd` services so there is no conflict, for instance if you need to run the `-debug` or `-verbose-start` version of the command (same thing) to debug a shortcut that is not working as expected, or find out how you broke the config file.  
+The following commands are also available, and meant to allow manually running just the Toshy config file, without any reliance on `systemd`. These will automatically stop the `systemd` services so there is no conflict, for instance if you need to run the `toshy-debug` command to debug a shortcut that is not working as expected, or find out how you broke the config file.  
 
 Restarting the Toshy services, either with one of the above commands or from the GUI preferences app or tray icon menu, will stop any manual config process and return to running the Toshy config as a `systemd` service. All the commands are designed to work together as conveniently as possible.  
 
@@ -631,9 +631,13 @@ toshy-config-stop
 ```
 
 ```
-toshy-debug                 (newer alias of 'toshy-config-start-verbose')
-toshy-config-verbose-start  (older alias of 'toshy-config-start-verbose')
-toshy-config-start-verbose  (show debugging output in the terminal)
+toshy-debug                 (show verbose debugging output in the terminal)
+```
+
+To check what a specific key is doing, without wading through the full verbose log output, there is a simpler interactive diagnostic screen. It shows the "real" identity of the last key released, along with what the key was remapped to (if anything), and which modmap was responsible. Multi-purpose keys like the `CapsLock` key (depending on preferences) will show both potential identities, and how the key press was resolved (quick tap, hold timeout, or pressing a second key while holding). Like `toshy-debug`, this stops the Toshy services, which need to be restarted after exiting the diagnostic screen with `Ctrl+C`.  
+
+```
+toshy-keycheck              (interactively show key identities/remaps)
 ```
 
 There are some informative commands that will print different kinds of useful output. These commands may be helpful when troubleshooting or making reports:  
