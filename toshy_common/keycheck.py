@@ -90,6 +90,16 @@ _CLEAR_BELOW    = '\x1b[J'
 
 _TAIL_LINES_ON_ERROR = 20
 
+# Printed by the keymapper only after all startup tasks (including device
+# grabs, which can take several seconds on Wayland) have completed.
+_READY_MARKER = 'Ready to process input.'
+
+# Printed by the keymapper's own signal handlers. Present in the output
+# tail only when something OTHER than this tool terminated it (e.g. the
+# services were restarted), since this tool's own kill happens after the
+# reading loop has already exited.
+_EXTERNAL_TERM_MARKERS = ('signal TERM received', 'signal INT received')
+
 _LOCAL_BIN = os.path.join(os.path.expanduser('~'), '.local', 'bin')
 _TOSHY_CFG_DIR = os.path.join(os.path.expanduser('~'), '.config', 'toshy')
 
@@ -316,14 +326,25 @@ def render_card(lines):
     sys.stdout.flush()
 
 
-def render_waiting_card():
+def render_starting_card():
     lines = [
         f'{_BOLD}  TOSHY KEYCHECK{_RESET}'
         f'{_DIM}   (Ctrl+C to quit){_RESET}',
         '',
-        '  Starting keymapper in verbose mode...',
+        '  Starting the keymapper, please wait...',
         '',
-        '  Waiting for the first key press.',
+        f'{_DIM}  Grabbing keyboard devices can take several seconds,{_RESET}',
+        f'{_DIM}  especially in Wayland environments.{_RESET}',
+    ]
+    render_card(lines)
+
+
+def render_ready_card():
+    lines = [
+        f'{_BOLD}  TOSHY KEYCHECK{_RESET}'
+        f'{_DIM}   (Ctrl+C to quit){_RESET}',
+        '',
+        f'  Keymapper is {_BOLD}ready{_RESET}. Waiting for the first key press.',
         '',
         f'{_DIM}  Tap a key to see its identity. For multi-purpose keys,{_RESET}',
         f'{_DIM}  hold past the timeout, or hold and tap a second key.{_RESET}',
@@ -502,7 +523,9 @@ def main() -> int:
             render_card(build_card_lines(parser, record, resolved_name, resolved_mod_role))
 
         parser = LogStreamParser(render_fn)
-        render_waiting_card()
+        render_starting_card()
+
+        keymapper_ready = False
 
         while True:
             line = child.stdout.readline()
@@ -510,6 +533,10 @@ def main() -> int:
                 child_died = True
                 break
             tail_lines.append(line.rstrip('\n'))
+            if not keymapper_ready and _READY_MARKER in line:
+                keymapper_ready = True
+                render_ready_card()
+                continue
             parser.feed_line(line)
 
     except KeyboardInterrupt:
@@ -522,18 +549,38 @@ def main() -> int:
         sys.stdout.flush()
 
     if child_died:
+        externally_stopped = any(
+            marker in line
+            for line in tail_lines
+            for marker in _EXTERNAL_TERM_MARKERS
+        )
+        if externally_stopped:
+            print()
+            print('  The keymapper was stopped by another process. Most likely the')
+            print('  Toshy services were restarted (tray icon, GUI app, or the')
+            print("  'toshy-services-restart' command), which takes over from any")
+            print('  manually running keymapper instance.')
+            print()
+            print("  Check with 'toshy-services-status' if unsure.")
+            print()
+            return 0
         print()
         print('  The keymapper process exited unexpectedly. Last output lines:')
         print()
         for line in tail_lines:
             print(f'    {line}')
+        print()
+        print('  Toshy services are still STOPPED. Run \'toshy-services-restart\'')
+        print('  (or use the tray icon) to resume normal Toshy operation.')
+        print()
+        return 1
 
     print()
     print('  toshy-keycheck exited. Toshy services are still STOPPED.')
     print("  Run 'toshy-services-restart' (or use the tray icon) to")
     print('  resume normal Toshy operation.')
     print()
-    return 1 if child_died else 0
+    return 0
 
 
 if __name__ == '__main__':
