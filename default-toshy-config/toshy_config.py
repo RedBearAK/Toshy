@@ -1503,51 +1503,67 @@ def is_pre_GNOME_45(de_ver):
     return str(de_ver).isdigit() and int(de_ver) in pre_G45_ver_lst
 
 
+def _report_capslock_state(ctx: KeyContext):
+    """Reporter half of toggle_and_show_capslock_state(). Runs after the
+    CapsLock combo has been fully emitted, so the LED read reflects the
+    settled post-toggle state. Not for direct use in keymaps."""
+    message = 'CapsLock is now ON' if ctx.capslock_on else 'CapsLock is now OFF'
+    icon = 'input-caps-on-symbolic' if ctx.capslock_on else 'window-close'
+    ntfy.send_notification(message, icon, 'low', False)
+
+
+def _report_numlock_state(ctx: KeyContext):
+    """Reporter half of toggle_and_show_numlock_state(). Runs after the
+    NumLock combo has been fully emitted, so the LED read reflects the
+    settled post-toggle state. Not for direct use in keymaps."""
+    message = 'NumLock is now ON' if ctx.numlock_on else 'NumLock is now OFF'
+    icon = 'input-num-on' if ctx.numlock_on else 'window-close'
+    ntfy.send_notification(message, icon, 'low', False)
+
+
 def toggle_and_show_capslock_state(ctx: KeyContext):
     """
-    Show the (coming) state of CapsLock LED in a notification pop-up dialog.
-    Then return the CapsLock key combo to toggle the CapsLock LED state.
+    Toggle CapsLock, then show the resulting LED state in a notification.
 
-    No need to return inner closure because not used in conditionals.
+    Returns a list: the CapsLock combo first, then a reporter function.
+    handle_commands() processes list items in order, so the combo (press,
+    release, throttle delay) is fully emitted before the reporter reads
+    the LED. Ordering matters: XKB locks Caps on key press but unlocks it
+    on key release, so a read taken anywhere mid-tap finds the LED lit in
+    BOTH toggle directions. Reading only after the release makes the
+    report correct whether CapsLock is a plain key or the tap identity
+    of a multipurpose key (e.g. 'caps_is_caps_and_cmd' mode).
+
     Do not use () to 'call' the function from output macro. Not needed.
 
     Example usage:
     C("CapsLock"): toggle_and_show_capslock_state, # Toggle CapsLock, show notification
     """
-
-    # Logic reversed because notification is constructed before combo is returned.
-    message = 'CapsLock is ON' if not ctx.capslock_on else 'CapsLock is OFF'
-    icon = 'input-caps-on-symbolic' if not ctx.capslock_on else 'window-close'
-    ntfy.send_notification(message, icon, 'low', False)
-    return C("CapsLock")
+    return [C("CapsLock"), _report_capslock_state]
 
 
 def toggle_and_show_numlock_state(ctx: KeyContext):
     """
-    Show the (coming) state of NumLock LED in a notification pop-up dialog.
-    Then return the NumLock key combo to toggle the NumLock LED state.
+    Toggle NumLock, then show the resulting LED state in a notification.
 
-    Only shows notification and toggles if 'Forced Numpad' pref is disabled.
-    Like the isNumlockClearKey() function, returns Escape combo if 'Forced
+    Same emit-then-report structure as toggle_and_show_capslock_state();
+    see that docstring for why the ordering is load-bearing.
+
+    Only toggles and notifies if 'Forced Numpad' pref is disabled. Like
+    the isNumlockClearKey() function, returns Escape combo if 'Forced
     Numpad' feature is enabled. 'Forced Numpad' must be disabled to use
     NumLock key normally and see the notifications.
 
-    No need to return inner closure because not used in conditionals.
     Do not use () to 'call' the function from output macro. Not needed.
 
     Example usage:
     C("NumLock"): toggle_and_show_numlock_state, # Toggle NumLock, show notification
     """
-
     if cnfg.forced_numpad:
         debug(f'Force Numpad is ON: NumLock key is "Clear" (sends Escape)')
         return C("Esc")
-    else:
-        # Logic reversed because notification is constructed before combo is returned.
-        message = 'NumLock is ON' if not ctx.numlock_on else 'NumLock is OFF'
-        icon = 'input-num-on' if not ctx.numlock_on else 'window-close'
-        ntfy.send_notification(message, icon, 'low', False)
-        return C("NumLock")
+
+    return [C("NumLock"), _report_numlock_state]
 
 
 
