@@ -47,9 +47,8 @@ class ServicePanel(Gtk.Box):
         # Set up the panel layout
         self.setup_ui()
         
-        debug("About to set bottom margin")
-        # Add bottom margin
-        self.set_margin_bottom(20)
+        # No panel-level top/bottom margins here: the main window's section
+        # spacing is the single source of truth for gaps between panels.
         
         debug("About to connect realize signal")
         # Connect to realize signal to set up CSS when widget is ready

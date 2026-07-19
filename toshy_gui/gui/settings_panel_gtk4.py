@@ -12,7 +12,6 @@ from toshy_common.modifier_modes import (
 # Configuration for help button appearance
 HELP_BUTTON_SIZE = 18   # Width and height in pixels - change here to resize all help buttons
 COLUMN_SPACING   = 8    # Vertical gap (px) between rows within each column - lower = more compact
-PANEL_MARGIN     = 12   # Outer top/bottom margin (px) of the whole panel
 
 class SettingsPanel(Gtk.Box):
     """
@@ -36,9 +35,8 @@ class SettingsPanel(Gtk.Box):
         # Set up the panel layout
         self.setup_ui()
         
-        # Add margins
-        self.set_margin_top(PANEL_MARGIN)
-        self.set_margin_bottom(PANEL_MARGIN)
+        # No panel-level top/bottom margins here: the main window's section
+        # spacing is the single source of truth for gaps between panels.
         
         # Connect to realize signal to set up CSS when widget is ready
         self.connect('realize', self.on_realize)
@@ -107,7 +105,7 @@ class SettingsPanel(Gtk.Box):
         debug("=== SettingsPanel.setup_ui completed ===")
         
     def create_left_column(self):
-        """Create the left column with modifier key settings"""
+        """Create the left column with switches and the Option-key characters group"""
         debug("Creating left column...")
 
         column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=COLUMN_SPACING)
@@ -178,61 +176,16 @@ class SettingsPanel(Gtk.Box):
         )
         column.append(media_control)
 
-        # Super Tap Passthru section header (with help button)
-        super_tap_header_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        super_tap_header_container.add_css_class("control-group-header-bar")
-
-        super_tap_header = Gtk.Label(label="Super Tap Passthru")
-        super_tap_header.add_css_class("control-group-header")
-        super_tap_header_container.append(super_tap_header)
-
-        super_tap_spacer = Gtk.Box()
-        super_tap_spacer.set_hexpand(True)
-        super_tap_header_container.append(super_tap_spacer)
-
-        if self.parent_window:
-            super_tap_help_title = "Super Tap Passthru"
-            super_tap_help_text = (
-                "Makes a modifier key do double duty: a quick tap sends a Super "
-                "(Meta/Win) key tap, useful for opening app launchers or the "
-                "GNOME/KDE overview, while holding it keeps its normal Toshy "
-                "role for shortcut combos.\n\nEnable for the Left Option "
-                "position key, the Left Command position key, or both."
-            )
-            super_tap_help_button = Gtk.Button(label="?")
-            super_tap_help_button.set_size_request(HELP_BUTTON_SIZE, HELP_BUTTON_SIZE)
-            super_tap_help_button.set_tooltip_text("Show help for Super Tap Passthru")
-            super_tap_help_button.add_css_class("settings-help-button")
-            super_tap_help_button.connect(
-                'clicked',
-                lambda btn: self.show_help_dialog(super_tap_help_title, super_tap_help_text))
-            super_tap_header_container.append(super_tap_help_button)
-
-        column.append(super_tap_header_container)
-
-        # Multipurpose Left Opt switch
-        l_opt_control = self.create_switch_with_help(
-            "Multipurpose Left Opt: Super, Opt",
-            "l_opt_is_sup_and_opt",
-            "Multipurpose Left Opt: Super, Opt",
-            "Modmap Left Option position key to be:\n• Super/Meta when tapped\n• Option key for hold/combo"
-        )
-        column.append(l_opt_control)
-
-        # Multipurpose Left Cmd switch
-        l_cmd_control = self.create_switch_with_help(
-            "Multipurpose Left Cmd: Super, Cmd",
-            "l_cmd_is_sup_and_cmd",
-            "Multipurpose Left Cmd: Super, Cmd",
-            "Modmap Left Command positionkey to be:\n• Super/Meta when tapped\n• Command key for hold/combo"
-        )
-        column.append(l_cmd_control)
+        # Option-key special characters radio group (swapped over from the
+        # right column to better balance the two column heights)
+        optspec_control = self.create_optspec_radio_group()
+        column.append(optspec_control)
 
         debug("Left column created")
         return column
 
     def create_right_column(self):
-        """Create the right column with numpad, media, and option keys"""
+        """Create the right column with Super Tap Passthru and CapsLock mode groups"""
         debug("Creating right column...")
 
         column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=COLUMN_SPACING)
@@ -245,9 +198,10 @@ class SettingsPanel(Gtk.Box):
             column.append(placeholder)
             return column
 
-        # Option-key special characters radio group
-        optspec_control = self.create_optspec_radio_group()
-        column.append(optspec_control)
+        # Super Tap Passthru group (swapped over from the left column to
+        # better balance the two column heights)
+        super_tap_control = self.create_super_tap_group()
+        column.append(super_tap_control)
 
         # CapsLock mode radio group (replaces legacy Caps2Cmd/Caps2Esc_Cmd switches)
         capslock_mode_control = self.create_capslock_mode_radio_group()
@@ -404,6 +358,66 @@ class SettingsPanel(Gtk.Box):
         
         return container
         
+    def create_super_tap_group(self):
+        """Create the Super Tap Passthru group (header plus two switches)"""
+        debug("Creating Super Tap Passthru group...")
+
+        # Container for the whole group
+        group_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+
+        # Header with help button
+        header_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        header_container.add_css_class("control-group-header-bar")
+
+        header_label = Gtk.Label(label="Super Tap Passthru")
+        header_label.add_css_class("control-group-header")
+        header_container.append(header_label)
+
+        # Add expandable spacer to push help button to the right
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        header_container.append(spacer)
+
+        # Help button for the group
+        if self.parent_window:
+            help_title = "Super Tap Passthru"
+            help_text = (
+                "Makes a modifier key do double duty: a quick tap sends a Super "
+                "(Meta/Win) key tap, useful for opening app launchers or the "
+                "GNOME/KDE overview, while holding it keeps its normal Toshy "
+                "role for shortcut combos.\n\nEnable for the Left Option "
+                "position key, the Left Command position key, or both."
+            )
+            help_button = Gtk.Button(label="?")
+            help_button.set_size_request(HELP_BUTTON_SIZE, HELP_BUTTON_SIZE)
+            help_button.set_tooltip_text("Show help for Super Tap Passthru")
+            help_button.add_css_class("settings-help-button")
+            help_button.connect('clicked', lambda btn: self.show_help_dialog(help_title, help_text))
+            header_container.append(help_button)
+
+        group_container.append(header_container)
+
+        # Multipurpose Left Opt switch
+        l_opt_control = self.create_switch_with_help(
+            "Multipurpose Left Opt: Super, Opt",
+            "l_opt_is_sup_and_opt",
+            "Multipurpose Left Opt: Super, Opt",
+            "Modmap Left Option position key to be:\n• Super/Meta when tapped\n• Option key for hold/combo"
+        )
+        group_container.append(l_opt_control)
+
+        # Multipurpose Left Cmd switch
+        l_cmd_control = self.create_switch_with_help(
+            "Multipurpose Left Cmd: Super, Cmd",
+            "l_cmd_is_sup_and_cmd",
+            "Multipurpose Left Cmd: Super, Cmd",
+            "Modmap Left Command position key to be:\n• Super/Meta when tapped\n• Command key for hold/combo"
+        )
+        group_container.append(l_cmd_control)
+
+        debug("Super Tap Passthru group created")
+        return group_container
+
     def create_optspec_radio_group(self):
         """Create the Option-key special characters radio button group"""
         debug("Creating option-key radio group...")
