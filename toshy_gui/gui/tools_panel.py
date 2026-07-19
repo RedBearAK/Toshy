@@ -48,9 +48,8 @@ class ToolsPanel(Gtk.Box):
         # Set up the panel layout
         self.setup_ui()
 
-        # Add margins
-        self.set_margin_top(20)
-        self.set_margin_bottom(20)
+        # No panel-level top/bottom margins here: the main window's section
+        # spacing is the single source of truth for gaps between panels.
 
         # Connect to realize signal to set up CSS when widget is ready
         self.connect('realize', self.on_realize)
@@ -136,25 +135,25 @@ class ToolsPanel(Gtk.Box):
         """Create the right column with action buttons"""
         debug("Creating right column...")
 
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
 
         # Open config folder button
         config_button = self.create_config_folder_button()
         column.append(config_button)
 
-        # Add spacer between buttons
-        spacer = Gtk.Box()
-        spacer.set_size_request(-1, 0)
-        column.append(spacer)
+        # # Add spacer between buttons
+        # spacer = Gtk.Box()
+        # spacer.set_size_request(-1, 0)
+        # column.append(spacer)
 
         # Show services log button
         log_button = self.create_services_log_button()
         column.append(log_button)
 
-        # Add spacer between buttons
-        spacer = Gtk.Box()
-        spacer.set_size_request(-1, 0)
-        column.append(spacer)
+        # # Add spacer between buttons
+        # spacer = Gtk.Box()
+        # spacer.set_size_request(-1, 0)
+        # column.append(spacer)
 
         # Toggle overlays button
         overlays_button = self.create_overlays_button()

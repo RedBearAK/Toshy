@@ -30,9 +30,8 @@ class BottomPanel(Gtk.Box):
         # Set up the panel layout
         self.setup_ui()
         
-        # Add margins
-        self.set_margin_top(20)
-        self.set_margin_bottom(20)
+        # Add margins (horizontal only - vertical gaps between panel sections
+        # are controlled solely by the main window's section spacing)
         self.set_margin_start(20)
         self.set_margin_end(20)
         
@@ -91,8 +90,8 @@ class BottomPanel(Gtk.Box):
         """Set up the bottom panel user interface"""
         debug("=== BottomPanel.setup_ui called ===")
         
-        # Set minimum height for the bottom panel to make alignment visible
-        self.set_size_request(-1, 60)
+        # Natural height only - no forced minimum. The labels and theme
+        # control define the panel height on their own.
         
         # Left side - Version and app info
         info_box = self.create_info_section()

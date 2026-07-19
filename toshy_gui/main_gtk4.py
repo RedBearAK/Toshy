@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20260715'
+__version__ = '20260719'
 
 # Preferences app for Toshy, using GTK-4 and Adwaita
 TOSHY_PART      = 'gui-gtk4'  # Different from tkinter version to avoid lockfile conflicts
@@ -88,6 +88,12 @@ from toshy_gui.gui.settings_panel_gtk4 import SettingsPanel
 from toshy_gui.gui.tools_panel import ToolsPanel
 from toshy_gui.gui.bottom_panel_gtk4 import BottomPanel
 
+# Vertical layout tuning knobs (single source of truth for section gaps).
+# Individual panels must NOT set their own top/bottom margins; the main_box
+# spacing below is the only thing separating the panel sections vertically.
+SECTION_SPACING = 16    # Vertical gap (px) between panel sections in the main window
+WINDOW_MARGIN   = 20    # Outer margin (px) around all content in the main window
+
 # Make process manager global
 process_mgr = None
 
@@ -147,12 +153,15 @@ class ToshyPreferencesWindow(Gtk.ApplicationWindow):
 
     def setup_ui(self):
         """Set up the user interface"""
-        # Main container with some padding
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        main_box.set_margin_top(20)
-        main_box.set_margin_bottom(20)
-        main_box.set_margin_start(20)
-        main_box.set_margin_end(20)
+        # Main container with some padding.
+        # NOTE: This spacing value and the window margins below are the single
+        # source of truth for vertical gaps between the panel sections. The
+        # individual panels must not add their own top/bottom margins.
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=SECTION_SPACING)
+        main_box.set_margin_top(WINDOW_MARGIN)
+        main_box.set_margin_bottom(WINDOW_MARGIN)
+        main_box.set_margin_start(WINDOW_MARGIN)
+        main_box.set_margin_end(WINDOW_MARGIN)
 
         # Service panel (replaces top section)
         main_box.append(self.service_panel)
@@ -165,12 +174,12 @@ class ToshyPreferencesWindow(Gtk.ApplicationWindow):
 
         main_box.append(self.tools_panel)
 
-        # Add spacer to push bottom panel to actual bottom
-        spacer = Gtk.Box()
-        spacer.set_vexpand(True)
-        main_box.append(spacer)
-
-        # Bottom section for version info and theme control
+        # Bottom section for version info and theme control.
+        # The panel itself absorbs any extra vertical space and pins its
+        # content to the bottom edge, replacing the old vexpand spacer
+        # widget (which added an extra `spacing` gap to the minimum height).
+        self.bottom_panel.set_vexpand(True)
+        self.bottom_panel.set_valign(Gtk.Align.END)
         main_box.append(self.bottom_panel)
 
         # Set the main container as the window's child
