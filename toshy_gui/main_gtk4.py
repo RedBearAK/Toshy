@@ -83,10 +83,11 @@ from toshy_common.service_manager import ServiceManager
 from toshy_common.monitoring import SettingsMonitor, ServiceMonitor
 
 # Local GUI components
-from toshy_gui.gui.service_panel_gtk4 import ServicePanel
-from toshy_gui.gui.settings_panel_gtk4 import SettingsPanel
+from toshy_gui.gui.app_css import apply_app_css
 from toshy_gui.gui.tools_panel import ToolsPanel
 from toshy_gui.gui.bottom_panel_gtk4 import BottomPanel
+from toshy_gui.gui.service_panel_gtk4 import ServicePanel
+from toshy_gui.gui.settings_panel_gtk4 import SettingsPanel
 
 # Vertical layout tuning knobs (single source of truth for section gaps).
 # Individual panels must NOT set their own top/bottom margins; the main_box
@@ -124,8 +125,16 @@ class ToshyPreferencesWindow(Gtk.ApplicationWindow):
         # Create main content
         self.setup_ui()
 
+        # Apply the centralized application stylesheet once the window has
+        # a display. Panels no longer install their own CSS providers.
+        self.connect('realize', self.on_realize)
+
         # Connect window close signal to cleanup
         self.connect('close-request', self.on_close_request)
+
+    def on_realize(self, widget):
+        """Apply the app-wide CSS now that a display is available"""
+        apply_app_css(self.get_display())
 
     def setup_business_logic(self):
         """Set up the same business logic as tkinter version"""

@@ -14,8 +14,7 @@ from toshy_common.service_manager import ServiceManager
 from toshy_common.settings_class import Settings
 from toshy_common.runtime_utils import ToshyRuntime
 
-# Configuration for help button appearance
-HELP_BUTTON_SIZE = 24  # Width and height in pixels - change here to resize all help buttons
+from toshy_gui.gui.app_css import TOOLS_HELP_BTN_SIZE as HELP_BUTTON_SIZE
 
 
 class ToolsPanel(Gtk.Box):
@@ -51,49 +50,7 @@ class ToolsPanel(Gtk.Box):
         # No panel-level top/bottom margins here: the main window's section
         # spacing is the single source of truth for gaps between panels.
 
-        # Connect to realize signal to set up CSS when widget is ready
-        self.connect('realize', self.on_realize)
-
         debug("=== ToolsPanel.__init__ completed ===")
-
-    def on_realize(self, widget):
-        """Set up CSS when widget is realized and has a display"""
-        css_provider = Gtk.CssProvider()
-
-        css_data = f"""
-        .left-column {{
-            margin-top: 10px;
-        }}
-        .tools-help-button {{
-            min-width: {HELP_BUTTON_SIZE}px;
-            min-height: {HELP_BUTTON_SIZE}px;
-            padding: 2px;
-            font-size: 12px;
-            font-weight: bold;
-        }}
-        .control-group-header {{
-            font-size: 14px;
-            font-weight: bold;
-            color: alpha(currentColor, 0.7);
-        }}
-        .control-label {{
-            font-weight: bold;
-            margin-right: 8px;
-        }}
-        .action-button {{
-            min-height: 36px;
-        }}
-        """
-        css_provider.load_from_data(css_data, -1)
-
-        # Apply CSS to the display
-        display = self.get_display()
-        if display:
-            Gtk.StyleContext.add_provider_for_display(
-                display,
-                css_provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-            )
 
     def setup_ui(self):
         """Set up the tools panel user interface"""
