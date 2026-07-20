@@ -9,8 +9,9 @@ from toshy_common.modifier_modes import (
     CAPSLOCK_MODE_LABELS,
 )
 
-# Configuration for help button appearance
-HELP_BUTTON_SIZE = 18   # Width and height in pixels - change here to resize all help buttons
+from toshy_gui.gui.app_css import SETTINGS_HELP_BTN_SIZE as HELP_BUTTON_SIZE
+
+# Configuration for panel layout
 COLUMN_SPACING   = 8    # Vertical gap (px) between rows within each column - lower = more compact
 
 class SettingsPanel(Gtk.Box):
@@ -38,53 +39,7 @@ class SettingsPanel(Gtk.Box):
         # No panel-level top/bottom margins here: the main window's section
         # spacing is the single source of truth for gaps between panels.
         
-        # Connect to realize signal to set up CSS when widget is ready
-        self.connect('realize', self.on_realize)
-        
         debug("=== SettingsPanel.__init__ completed ===")
-        
-    def on_realize(self, widget):
-        """Set up CSS when widget is realized and has a display"""
-        css_provider = Gtk.CssProvider()
-        
-        css_data = f"""
-        .control-group-header {{
-            font-size: 14px;
-            font-weight: bold;
-            color: alpha(currentColor, 0.7);
-        }}
-        .control-group-header-bar {{
-            background-color: #757575;
-            border-radius: 6px;
-            padding: 4px 8px;
-        }}
-        .control-group-header-bar .control-group-header {{
-            color: #ffffff;
-        }}
-        .settings-help-button {{
-            min-width: {HELP_BUTTON_SIZE}px;
-            min-height: {HELP_BUTTON_SIZE}px;
-            padding: 0px;
-            font-size: 14px;
-            font-weight: bold;
-        }}
-        .switch-control {{
-            margin-right: 8px;
-        }}
-        .radio-control {{
-            margin-right: 8px;
-        }}
-        """
-        css_provider.load_from_data(css_data, -1)
-        
-        # Apply CSS to the display
-        display = self.get_display()
-        if display:
-            Gtk.StyleContext.add_provider_for_display(
-                display,
-                css_provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-            )
         
     def setup_ui(self):
         """Set up the settings panel user interface"""

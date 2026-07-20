@@ -4,8 +4,7 @@ from gi.repository import Gtk, GLib
 
 from toshy_common.logger import debug
 
-# Configuration for help button appearance
-HELP_BUTTON_SIZE = 36  # Width and height in pixels - change here to resize all help buttons
+from toshy_gui.gui.app_css import BOTTOM_HELP_BTN_SIZE as HELP_BUTTON_SIZE
 
 
 class BottomPanel(Gtk.Box):
@@ -35,56 +34,10 @@ class BottomPanel(Gtk.Box):
         self.set_margin_start(20)
         self.set_margin_end(20)
         
-        # Connect to realize signal to set up CSS when widget is ready
-        self.connect('realize', self.on_realize)
-        
         # Apply initial theme setting
         self.apply_initial_theme()
         
         debug("=== BottomPanel.__init__ completed ===")
-        
-    def on_realize(self, widget):
-        """Set up CSS when widget is realized and has a display"""
-        css_provider = Gtk.CssProvider()
-        
-        css_data = f"""
-        .debug-border {{
-            border: 2px solid red;
-            background-color: alpha(red, 0.1);
-        }}
-        .bottom-help-button {{
-            min-width: {HELP_BUTTON_SIZE}px;
-            min-height: {HELP_BUTTON_SIZE}px;
-            padding: 0px;
-            font-size: 18px;
-            font-weight: bold;
-        }}
-        .control-label {{
-            font-size: 24px;
-            font-weight: bold;
-            margin-right: 8px;
-        }}
-        .version-info {{
-            font-size: 14px;
-            font-weight: bold;
-            color: alpha(currentColor, 0.8);
-        }}
-        .info-text {{
-            font-size: 20px;
-            font-style: italic;
-            color: alpha(currentColor, 0.6);
-        }}
-        """
-        css_provider.load_from_data(css_data, -1)
-        
-        # Apply CSS to the display
-        display = self.get_display()
-        if display:
-            Gtk.StyleContext.add_provider_for_display(
-                display,
-                css_provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-            )
         
     def setup_ui(self):
         """Set up the bottom panel user interface"""

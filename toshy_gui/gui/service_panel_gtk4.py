@@ -6,9 +6,7 @@ from toshy_common.logger import debug
 from toshy_common.runtime_utils import ToshyRuntime
 from toshy_common.service_manager import ServiceManager
 
-
-# Configuration for help button appearance
-HELP_BUTTON_SIZE = 20  # Width and height in pixels - change here to resize all help buttons
+from toshy_gui.gui.app_css import SERVICE_HELP_BTN_SIZE as HELP_BUTTON_SIZE
 
 # Import help system if available
 try:
@@ -50,71 +48,7 @@ class ServicePanel(Gtk.Box):
         # No panel-level top/bottom margins here: the main window's section
         # spacing is the single source of truth for gaps between panels.
         
-        debug("About to connect realize signal")
-        # Connect to realize signal to set up CSS when widget is ready
-        self.connect('realize', self.on_realize)
         debug("=== ServicePanel.__init__ completed ===")
-        
-    def on_realize(self, widget):
-        """Set up CSS when widget is realized and has a display"""
-        css_provider = Gtk.CssProvider()
-        
-        # CSS configuration variables
-        font_families       = ( '"FantasqueSansMNoLigNerdFont", '
-                                '"JetBrains Mono", "Fira Code", '
-                                '"SF Mono", "Monaco", "Inconsolata", '
-                                '"Roboto Mono", "Ubuntu Mono", '
-                                '"Consolas", "DejaVu Sans Mono", monospace')
-        heading_font_size = 22
-        service_font_size = 18
-        
-        css_data = f"""
-        .heading {{
-            font-size: {heading_font_size}px;
-            font-weight: bold;
-        }}
-        .control-group-header {{
-            font-size: 14px;
-            font-weight: bold;
-            color: alpha(currentColor, 0.7);
-        }}
-        .service-help-button {{
-            min-width: {HELP_BUTTON_SIZE}px;
-            min-height: {HELP_BUTTON_SIZE}px;
-            padding: 0px;
-            font-size: 14px;
-            font-weight: bold;
-        }}
-        .help-text {{
-            font-size: 13px;
-            line-height: 1.4;
-        }}
-        .service-status {{
-            font-family: {font_families};
-            font-size: 12px;
-            font-weight: bold;
-        }}
-        .service-label {{
-            font-family: {font_families};
-            font-size: {service_font_size}px;
-            font-weight: bold;
-        }}
-        .service-value {{
-            font-family: {font_families};
-            font-size: {service_font_size}px;
-            font-weight: bold;
-        }}
-        """
-        css_provider.load_from_data(css_data, -1)
-        
-        # Apply CSS to the display
-        display = self.get_display()
-        if display:
-            Gtk.StyleContext.add_provider_for_display(
-                display,
-                css_provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-            )
         
     def setup_ui(self):
         """Set up the service panel user interface"""
