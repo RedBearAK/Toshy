@@ -28,6 +28,7 @@ from .models.combo import Combo, ComboHint, PreCorrectedCombo
 from .models.trigger import Trigger
 from .models.key import Key, ASCII_TO_KEY
 from .models.keymap import Keymap
+from .models.multitap import MultiTap, MULTITAP_MAX_TAPS
 from .models.timeout_rule import TimeoutRule
 from .models.modifier import Modifier
 from .models.modmap import Modmap, MultiModmap
@@ -54,9 +55,8 @@ _MULTI_MODMAPS: 'list[MultiModmap]' = []
 TIMEOUT_DEFAULTS = {
     "multipurpose":     1.0,
     "suspend":          1.0,
-    # Multi-tap timeouts. Consumed by isMultiTap() in the config today; will be
-    # consumed inside the keymapper once multi-tap moves in. Present here so the
-    # timeouts() API can carry per-condition overrides through one mechanism.
+    # Multi-tap timeouts, consumed by the MultiTap branch in transform.py
+    # (per-sequence resolution honoring conditional overrides).
     "tap_interval":     0.25,
     "min_tap_delay":    0.07,
     # TODO: not implemented yet
@@ -66,10 +66,13 @@ TIMEOUT_DEFAULTS = {
 # All timeout keys that timeouts() accepts and _resolve_timeout() can look up.
 TIMEOUT_KEYS = ("multipurpose", "suspend", "tap_interval", "min_tap_delay")
 
-# Multi-tap keys have no keymapper-side gate yet (they are consumed in the
-# config). A conditional rule that sets only these will register fine but will
-# not take effect until the multi-tap gate lands in the keymapper.
-TIMEOUT_KEYS_WITHOUT_CONSUMER = ("tap_interval", "min_tap_delay")
+# Accepted ranges for the multi-tap timing keys (ported from the config-side
+# multitap_config() validator). Values outside these ranges are rejected with
+# a loud error rather than silently clamped.
+MULTITAP_TIMEOUT_RANGES = {
+    "tap_interval":     (0.15, 1.5),
+    "min_tap_delay":    (0.05, 0.5),
+}
 
 # multipurpose/suspend timeouts (global default instance)
 _TIMEOUTS = dict(TIMEOUT_DEFAULTS)
@@ -1042,9 +1045,13 @@ def timeouts(multipurpose=None, suspend=None, tap_interval=None,
                 min_tap_delay=None, when=None, name="global"):
     """Define timeout values, globally or per-condition.
 
-    Called with no `when` (the default), this sets the global baseline: any
-    key you pass is written into _TIMEOUTS, and any key you omit keeps its
-    TIMEOUT_DEFAULTS value. This preserves the historical single-call usage.
+    Called with no `when` (the default), this updates the global baseline:
+    any key you pass is written into _TIMEOUTS, and any key you omit keeps
+    its CURRENT value (which starts at TIMEOUT_DEFAULTS). Identical to the
+    historical behavior for a single call; for multiple global calls this
+    merges instead of silently resetting omitted keys back to defaults, so
+    a later `timeouts(tap_interval=...)` cannot wipe an earlier
+    `timeouts(multipurpose=..., suspend=...)`.
 
     Called with a `when` predicate (same signature as a keymap/modmap `when`,
     receiving `ctx`), this registers a conditional override. Only the keys you
@@ -1074,20 +1081,39 @@ def timeouts(multipurpose=None, suspend=None, tap_interval=None,
                 f"not allowed: {negative}  ###\n")
         return
 
-    # Multi-tap timeouts have no keymapper-side consumer yet (isMultiTap()
-    # still reads its own config-side values). Note this loudly at load so
-    # setting them here is never a silent no-op.
-    inert_keys = [k for k in values if k in TIMEOUT_KEYS_WITHOUT_CONSUMER]
-    if inert_keys:
-        warn(f"## timeouts: {name!r} sets {inert_keys}, which have no "
-                f"keymapper consumer yet; stored but inert until the "
-                f"multi-tap gate lands")
+    # Multi-tap timing keys carry accepted ranges (ported from the old
+    # config-side multitap_config() validator). Reject out-of-range values
+    # loudly and drop only those keys, keeping the rest of the call live.
+    for mt_key, (range_min, range_max) in MULTITAP_TIMEOUT_RANGES.items():
+        if mt_key in values and not range_min <= values[mt_key] <= range_max:
+            error(f"\n\n###  timeouts(name={name!r}): {mt_key}="
+                    f"{values[mt_key]} outside accepted range "
+                    f"{range_min}-{range_max} sec; ignoring this key  ###\n")
+            del values[mt_key]
 
-    # Global default instance: merge onto the baseline, leaving untouched keys
-    # at their TIMEOUT_DEFAULTS values.
+    # Consistency clamp: repeat protection must be shorter than the tap
+    # interval or every second tap gets rejected as a "repeat". Only
+    # enforceable when both values are known together: always for the
+    # global instance (merged view), and for a conditional rule that sets
+    # both keys itself. A conditional rule setting only one of the two is
+    # compared against nothing (its partner varies by matching rule).
+    def _clamp_min_tap_delay(pair_dct, label):
+        interval = pair_dct.get("tap_interval")
+        min_delay = pair_dct.get("min_tap_delay")
+        if interval is None or min_delay is None:
+            return
+        if min_delay < interval:
+            return
+        adjusted = interval * 0.25
+        warn(f"## timeouts: {label} min_tap_delay ({min_delay}s) >= "
+                f"tap_interval ({interval}s), adjusted to {adjusted:.3f}s")
+        pair_dct["min_tap_delay"] = adjusted
+
+    # Global default instance: merge onto the current values, leaving
+    # untouched keys as they are (starting from TIMEOUT_DEFAULTS).
     if when is None:
-        _TIMEOUTS = dict(TIMEOUT_DEFAULTS)
         _TIMEOUTS.update(values)
+        _clamp_min_tap_delay(_TIMEOUTS, f"global ({name!r})")
         return
 
     # Conditional instance: guard against an empty rule that can never do
@@ -1097,7 +1123,17 @@ def timeouts(multipurpose=None, suspend=None, tap_interval=None,
                 f"values; rule does nothing  ###\n")
         return
 
+    _clamp_min_tap_delay(values, f"rule {name!r}")
     _TIMEOUT_RULES.append(TimeoutRule(name, values, when=when))
+
+
+def isMultiTap(*args, **kwargs) -> MultiTap:
+    """DEPRECATED alias for MultiTap(); kept for compatibility with configs
+    written while multi-tap lived in the Toshy config as isMultiTap().
+    Accepts the identical arguments and returns the same descriptor object.
+    Update keymaps to use MultiTap() directly."""
+    debug("## isMultiTap: deprecated alias, use MultiTap() (same arguments)")
+    return MultiTap(*args, **kwargs)
 
 
 def add_modifier(name, aliases, key=None, keys=None):

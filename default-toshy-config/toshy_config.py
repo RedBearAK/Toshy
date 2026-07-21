@@ -29,7 +29,6 @@ import subprocess
 
 # Removing problematic types before they get deprecated:
 # from typing import Any, Callable, Optional, Union, List, Dict, Tuple
-from typing import Any
 from subprocess import DEVNULL
 from collections.abc import Callable
 
@@ -48,7 +47,7 @@ emergency_eject_key(Key.F16)    # default key: F16
 
 timeouts(
     multipurpose        = 1,        # default: 1 sec
-    suspend             = 1,        # default: 1 sec, try 0.1 sec for touchpads/trackpads
+    suspend             = 0,        # default: 0 sec
     # A `name=` argument exists (default "global") but is intentionally not
     # passed here, so this config still loads on older keymapper versions
     # whose timeouts() signature predates conditional timeout support.
@@ -1216,6 +1215,12 @@ hmp_is_dialog_closewin          = lambda ctx: any(c(ctx) for c in _dialog_closew
 # (globally or conditionally), but multi-tap has no keymapper-side gate yet,
 # so setting them warns at load and stays inert until that gate lands.
 
+# Menu focus-stealing guards: restore a working suspend window for the apps
+# that grab menu focus on a bare modifier press, while the global suspend
+# timeout stays at zero for instant modifier response everywhere else.
+timeouts(suspend = 1, when = hmp_is_firefox_browser,  name = "firefox_menu_guard")
+timeouts(suspend = 1, when = hmp_is_vscode,           name = "vscode_menu_guard")
+
 
 # # Boolean variable to toggle Enter key state between F2 and Enter
 # # True = Enter key sends F2, False = Enter key sends Enter
@@ -1624,383 +1629,31 @@ def toggle_and_show_numlock_state(ctx: KeyContext):
 ###                                                                              ###
 ###                                                                              ###
 ####################################################################################
-# Functions to support proper asyncio time-based multi-tap actions, without
-# blocking the single-tap usage of the same combo (unless desired).
+# Multi-tap combo actions now live inside the keymapper. The MultiTap()
+# descriptor class (and its deprecated isMultiTap() alias) arrives through the
+# `from xwaykeyz.config_api import *` star import at the top of this file, and
+# all tap counting, timing, and action emission happens in xwaykeyz.
 #
-# Until this EXPERIMENTAL feature moves into the keymapper, the API function
-# `multitap_config()` will need to be called from a section lower down, like
-# the "user_apps" editable slice, if user wants custom multi-tap timings.
-
-
-# Multi-tap configuration storage
-_MULTITAP_CONFIG = {
-    'tap_interval': 0.25,     # Default: 250ms between taps
-    'min_tap_delay': 0.07,    # Default: 70ms repeat protection
-}
-
-
-def get_output():
-    """Get the main keymapper's output instance"""
-    try:
-        # Access the transform module's _output at runtime
-        if 'xwaykeyz.transform' in sys.modules:
-            transform_module = sys.modules['xwaykeyz.transform']
-            if hasattr(transform_module, '_output'):
-                debug("## multitap: Using main keymapper's _output instance")
-                return transform_module._output
-    except Exception as e:
-        debug(f"## multitap: Error accessing output: {e}")
-    return None
-
-
-def _decorrect_for_multitap(command):
-    """Apply the keymapper's output layout de-correction to a multi-tap command,
-    mirroring what handle_commands does to every command before it reaches output.
-
-    This processor is a parallel reimplementation of handle_commands and so does
-    NOT inherit its de-correction step; without this, a bare Combo/Key emitted by
-    a multi-tap action goes out US-positional and renders the wrong symbol on a
-    non-US layout (e.g. C('Minus') -> ')' on AZERTY), while string-emitter output
-    is unaffected because it is already PreCorrectedCombo.
-
-    The de-correction function and the correction-map probe are read off the live
-    transform module via sys.modules — the same runtime-access pattern get_output
-    uses for _output — so this stays inside toshy_config and adds no import across
-    the keymapper boundary. Gated on a correction map being installed, exactly as
-    handle_commands gates its own call. On any failure, or when no map is present,
-    the command is returned unchanged so multi-tap output is never lost.
-
-    NOTE: this patches the reimplementation. The real fix is to route multi-tap
-    emission through handle_commands so this concern (and any other drift from it)
-    cannot recur; that relocation is tracked separately."""
-    try:
-        transform_module = sys.modules.get('xwaykeyz.transform')
-        if transform_module is None:
-            return command
-        get_correction_map = getattr(transform_module, 'get_correction_map', None)
-        decorrect_command = getattr(transform_module, '_decorrect_output_command', None)
-        if get_correction_map is None or decorrect_command is None:
-            return command
-        if not get_correction_map():
-            return command                  # US-like layout: nothing to de-correct
-        return decorrect_command(command)
-    except Exception as decorrect_err:
-        debug(f"## multitap: de-correction skipped ({decorrect_err})")
-        return command
-
-
-def process_multitap_command(command, ctx):
-    """Simplified recursive command processor based on handle_commands logic"""
-    debug(f"## multitap: Processing command: {type(command)}")
-
-    if callable(command):
-        # Handle functions like ST(), notify_context, etc.
-        cmd_param_cnt = len(inspect.signature(command).parameters)
-        debug(f"## multitap: Callable with {cmd_param_cnt} parameters")
-
-        if cmd_param_cnt == 0:
-            result = command()
-        else:
-            result = command(ctx)
-
-        debug(f"## multitap: Callable returned: {type(result)}")
-
-        # Recursively process the result
-        if result is not None:
-            process_multitap_command(result, ctx)
-
-    elif isinstance(command, list):
-        # Recursively process each item in the list
-        debug(f"## multitap: Processing list with {len(command)} items")
-        for i, item in enumerate(command):
-            debug(f"## multitap: Processing list item {i+1}: {type(item)}")
-            process_multitap_command(item, ctx)
-
-    else:
-        # Handle direct objects (Combo, Key, etc.)
-        output = get_output()
-        if output and hasattr(command, '__class__'):
-            # De-correct for the active layout before emitting, the same way
-            # handle_commands does (de-correct, then dispatch). Leaves a
-            # PreCorrectedCombo untouched and returns the same kind of object, so
-            # the class-name dispatch below still classifies it correctly.
-            command = _decorrect_for_multitap(command)
-            class_name = command.__class__.__name__
-            debug(f"## multitap: Direct object class: {class_name}")
-
-            if 'Combo' in class_name:
-                output.send_combo(command)
-                debug(f"## multitap: Sent Combo object")
-            elif 'Key' in class_name:
-                output.send_key(command)
-                debug(f"## multitap: Sent Key object")
-            elif command is not None:
-                debug(f"## multitap: Unknown command type: {class_name}")
-        elif not output:
-            debug(f"## multitap: No output available for command: {type(command)}")
-        else:
-            debug(f"## multitap: Command has no __class__: {command}")
-
-
-# Per-combo state tracking using action tuple as key
-tap_states: 'dict[tuple, dict[str, Any]]' = {}
-
-event_loop: 'asyncio.AbstractEventLoop | None' = None
-
-
-def get_loop() -> 'asyncio.AbstractEventLoop | None':
-    global event_loop
-    if event_loop is None or event_loop.is_closed():
-        try:
-            event_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            event_loop = None
-    return event_loop
+# Multi-tap timing values are now ordinary timeout keys. Set them globally or
+# per-condition with the overloaded keymapper API call:
+#
+#   timeouts(tap_interval=0.3, min_tap_delay=0.1)                   # global
+#   timeouts(tap_interval=0.4, when=lambda ctx: ..., name="slower") # per-app
+#
+# Defaults: tap_interval 0.25 sec, min_tap_delay 0.07 sec.
 
 
 def multitap_config(tap_interval=None, min_tap_delay=None):
+    """DEPRECATED shim retained for user config slices that call it.
+
+    Multi-tap timing now goes through the keymapper's timeouts() API; this
+    simply forwards the two values at global scope. The keymapper validates
+    the ranges (tap_interval 0.15-1.5 sec, min_tap_delay 0.05-0.5 sec) and
+    clamps min_tap_delay below tap_interval, as this function used to.
     """
-    Configure global multi-tap timing settings.
-
-    Args:
-        tap_interval: Maximum time between taps in seconds (0.15 to 1.5)
-        min_tap_delay: Minimum time between taps to avoid repeats (0.05 to 0.5)
-
-    Example:
-        multitap_config(
-            tap_interval=0.3,    # 300ms between taps
-            min_tap_delay=0.10   # 100ms repeat protection
-        )
-    """
-    global _MULTITAP_CONFIG
-
-    if tap_interval is not None:
-        if isinstance(tap_interval, (int, float)) and 0.15 <= tap_interval <= 1.5:
-            _MULTITAP_CONFIG['tap_interval'] = float(tap_interval)
-            debug(f"## multitap_config: Set tap_interval to {tap_interval}s")
-        else:
-            debug(f"## multitap_config: Invalid tap_interval {tap_interval}, must be 0.15-1.5 sec")
-
-    if min_tap_delay is not None:
-        if isinstance(min_tap_delay, (int, float)) and 0.05 <= min_tap_delay <= 0.5:
-            _MULTITAP_CONFIG['min_tap_delay'] = float(min_tap_delay)
-            debug(f"## multitap_config: Set min_tap_delay to {min_tap_delay}s")
-        else:
-            debug(f"## multitap_config: Invalid min_tap_delay {min_tap_delay}, must be 0.05-0.5 sec")
-
-    # Ensure ignore time is less than interval time
-    if _MULTITAP_CONFIG['min_tap_delay'] >= _MULTITAP_CONFIG['tap_interval']:
-        original_delay = _MULTITAP_CONFIG['min_tap_delay']
-        _MULTITAP_CONFIG['min_tap_delay'] = _MULTITAP_CONFIG['tap_interval'] * 0.25
-        debug(f"## multitap_config: min_tap_delay ({original_delay}s) >= tap_interval, "
-                f"adjusted to {_MULTITAP_CONFIG['min_tap_delay']:.3f}s")
-
-
-# Grace period (seconds) between tap-sequence finalization and action emission.
-# Long enough for an already-in-flight modifier release to be processed by the
-# loop (so resume_keys lifts the trigger mods before the macro starts), short
-# enough to be imperceptible. Tunable; kept well under min_tap_delay.
-_MULTITAP_EMIT_GRACE = 0.15
-
-
-def isMultiTap( tap_1_action: 'Callable | None' = None,
-                tap_2_action: 'Callable | None' = None,
-                tap_3_action: 'Callable | None' = None,
-                tap_4_action: 'Callable | None' = None,
-                tap_5_action: 'Callable | None' = None,
-                tap_interval: float = None,
-                min_tap_delay: float = None):    # returns Callable
-    """
-    Multi-tap handler that supports 1-5 taps with asyncio.
-
-    Args:
-        tap_1_action: Function to call on single tap (can be None to block single-tap)
-        tap_2_action: Function to call on double tap
-        tap_3_action: Function to call on triple tap
-        tap_4_action: Function to call on quadruple tap
-        tap_5_action: Function to call on quintuple tap
-        tap_interval: Max time between taps (None = use global config)
-        min_tap_delay: Min time between taps to avoid key repeat (None = use global config)
-
-    Returns:
-        Function that handles the tap detection
-    """
-
-    # Use global config values if not explicitly provided
-    if tap_interval is None:
-        tap_interval = _MULTITAP_CONFIG['tap_interval']
-    if min_tap_delay is None:
-        min_tap_delay = _MULTITAP_CONFIG['min_tap_delay']
-
-    # Use action tuple as unique identifier, converting lists to tuples for hashability
-    def make_hashable(action):
-        if isinstance(action, list):
-            return tuple(make_hashable(item) for item in action)
-        return action
-
-    action_key = (
-        make_hashable(tap_1_action),
-        make_hashable(tap_2_action),
-        make_hashable(tap_3_action),
-        make_hashable(tap_4_action),
-        make_hashable(tap_5_action)
-    )
-
-    def execute_action_for_tap_count(   tap_count: int,
-                                        captured_ctx,
-                                        tap_1_action,
-                                        tap_2_action,
-                                        tap_3_action,
-                                        tap_4_action,
-                                        tap_5_action):
-        """Execute the appropriate action based on tap count."""
-        actions = {
-            1: tap_1_action,
-            2: tap_2_action,
-            3: tap_3_action,
-            4: tap_4_action,
-            5: tap_5_action
-        }
-
-        action = actions.get(tap_count)
-        if action is not None:
-            try:
-                debug(f"## isMultiTap: Executing {tap_count}-tap action for {action_key}")
-                process_multitap_command(action, captured_ctx)
-                debug(f"## isMultiTap: Completed {tap_count}-tap action for {action_key}")
-            except Exception as e:
-                debug(f"## isMultiTap: Error executing {tap_count}-tap action: {e}")
-        else:
-            debug(f"## isMultiTap: No action defined for {tap_count} taps on {action_key}")
-
-    def finalize_taps(action_key: tuple, captured_ctx):
-        """Called when tap sequence is finalized. Defers the actual action
-        emission by a short grace period (via loop.call_later) so the event loop
-        can process any pending modifier-release events first; this lets the
-        keymapper lift the trigger modifiers through its normal resume path
-        before the action emits, avoiding per-character modifier wrapping without
-        touching output or keystate internals."""
-        if action_key not in tap_states:
-            return
-
-        state = tap_states[action_key]
-        tap_count = state['count']
-        debug(f"## isMultiTap: Finalizing {tap_count} taps for {action_key}")
-
-        # Snapshot the actions before cleaning up state.
-        stored_tap_1_action = state['tap_1_action']
-        stored_tap_2_action = state['tap_2_action']
-        stored_tap_3_action = state['tap_3_action']
-        stored_tap_4_action = state['tap_4_action']
-        stored_tap_5_action = state['tap_5_action']
-
-        # Clean up state now; the deferred emit below captures everything it
-        # needs, so the per-combo state entry is free to go.
-        del tap_states[action_key]
-
-        def _emit():
-            execute_action_for_tap_count(   tap_count,
-                                            captured_ctx,
-                                            stored_tap_1_action,
-                                            stored_tap_2_action,
-                                            stored_tap_3_action,
-                                            stored_tap_4_action,
-                                            stored_tap_5_action)
-
-        loop = get_loop()
-        if loop is None:
-            # No loop to reschedule on: emit inline rather than drop the action.
-            # Worst case is per-character wrapping (slower), never a lost action.
-            debug("## isMultiTap: no loop for grace delay, emitting inline")
-            _emit()
-            return
-
-        loop.call_later(_MULTITAP_EMIT_GRACE, _emit)
-
-    def _isMultiTap(ctx) -> None:
-        loop = get_loop()
-        if loop is None:
-            debug(f"## isMultiTap: No event loop available for {action_key}")
-            return None
-
-        current_time = time.time()
-
-        # Initialize or get existing state
-        if action_key not in tap_states:
-            tap_states[action_key] = {
-                'count': 0,
-                'last_tap_time': 0.0,
-                'finalize_handle': None,
-                'captured_ctx': ctx,
-                # Store the individual actions in the state
-                'tap_1_action': tap_1_action,
-                'tap_2_action': tap_2_action,
-                'tap_3_action': tap_3_action,
-                'tap_4_action': tap_4_action,
-                'tap_5_action': tap_5_action,
-            }
-
-        state = tap_states[action_key]
-        time_since_last = current_time - state['last_tap_time']
-
-        # Check if this tap is too soon (key repeat protection)
-        if state['count'] > 0 and time_since_last < min_tap_delay:
-            debug(  f"## isMultiTap: Ignoring repeat for {action_key} "
-                    f"(too soon: {time_since_last:.3f}s)")
-            return None
-
-        # Check if this tap is too late (start new sequence)
-        if state['count'] > 0 and time_since_last >= tap_interval:
-            debug(  f"## isMultiTap: Too late for {action_key} "
-                    f"(gap: {time_since_last:.3f}s), finalizing previous")
-            # Finalize the previous sequence with its captured context
-            finalize_taps(action_key, state['captured_ctx'])
-            # Start new sequence with current context
-            tap_states[action_key] = {
-                'count': 0,
-                'last_tap_time': 0.0,
-                'finalize_handle': None,
-                'captured_ctx': ctx,
-                # Store the individual actions in the state
-                'tap_1_action': tap_1_action,
-                'tap_2_action': tap_2_action,
-                'tap_3_action': tap_3_action,
-                'tap_4_action': tap_4_action,
-                'tap_5_action': tap_5_action,
-            }
-            state = tap_states[action_key]
-
-        # Cancel any pending finalization
-        finalize_handle: 'asyncio.Handle | None' = state['finalize_handle']
-        if finalize_handle is not None:
-            finalize_handle.cancel()
-            state['finalize_handle'] = None
-
-        # Increment tap count
-        state['count'] += 1
-        state['last_tap_time'] = current_time
-
-        debug(f"## isMultiTap: Tap #{state['count']} for {action_key}")
-
-        # If we've exceeded max taps (5), ignore subsequent taps
-        if state['count'] > 5:
-            debug(f"## isMultiTap: Ignoring tap beyond maximum (tap #{state['count']})")
-            return None
-
-        # Schedule finalization after the interval for all tap counts
-        if state['tap_1_action'] or state['count'] > 1:
-            captured_ctx = state['captured_ctx']
-            handle: asyncio.Handle = loop.call_later(
-                tap_interval,
-                lambda: finalize_taps(action_key, captured_ctx)  # Pass captured context
-            )
-            state['finalize_handle'] = handle
-            debug(f"## isMultiTap: Scheduled finalization for {action_key} in {tap_interval}s")
-
-        # Return None since we're handling actions asynchronously
-        return None
-
-    return _isMultiTap
+    debug("## multitap_config: DEPRECATED, use "
+            "timeouts(tap_interval=..., min_tap_delay=...) instead")
+    timeouts(tap_interval=tap_interval, min_tap_delay=min_tap_delay)
 
 
 
@@ -6433,21 +6086,21 @@ keymap("General GUI", {
 )
 
 
-keymap("Diagnostics (isMultiTap)", {
+keymap("Diagnostics (MultiTap)", {
 
-    C("Shift-Alt-RC-i"): isMultiTap(
+    C("Shift-Alt-RC-i"): MultiTap(
                             # tap_1_action=None,  # Block single tap
                             tap_1_action=C("Shift-Alt-C-i"),    # Keep original single-tap combo
                             tap_2_action=notify_context,
                         ),
 
-    C("Shift-Alt-RC-h"): isMultiTap(
+    C("Shift-Alt-RC-h"): MultiTap(
                             tap_1_action=C("Shift-Alt-RC-h"),   # Keep original single-tap combo
                             tap_2_action=notify_context,
                             tap_3_action=lambda: print("\nTriple tap!\n"),  # Shows in terminal
                         ),
 
-    C("Shift-Alt-RC-t"): isMultiTap(
+    C("Shift-Alt-RC-t"): MultiTap(
                             tap_1_action=C("C-n"),          # Test single-tap by opening new window
                             tap_2_action=macro_tester,      # Types out a long test macro text
                             tap_3_action=[
