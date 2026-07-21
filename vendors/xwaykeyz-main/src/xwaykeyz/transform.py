@@ -30,6 +30,7 @@ from .models.key import Key
 from .models.keymap import Keymap
 from .models.keystate import Keystate
 from .models.modifier import Modifier
+from .models.multitap import MultiTap, MULTITAP_MAX_TAPS
 from .models.modmap import Modmap, MultiModmap
 from .models.timeout_rule import TimeoutRule
 from .output import Output
@@ -322,6 +323,13 @@ def reset_transform():
     global _awaiting_first_repeat_key
     global _first_repeat_processed
     global _held_combo_ctx
+    global _multitap_states
+    # Cancel in-flight multi-tap sequences so no finalize timer fires into
+    # the freshly reset state.
+    for multitap_state in _multitap_states.values():
+        pending_handle = multitap_state['finalize_handle']
+        if pending_handle is not None:
+            pending_handle.cancel()
     _active_keymaps                     = None
     _output                             = Output()
     _key_states                         = {}
@@ -331,6 +339,7 @@ def reset_transform():
     _awaiting_first_repeat_key          = None
     _first_repeat_processed             = False
     _held_combo_ctx                     = None
+    _multitap_states                    = {}
 
 
 def shutdown():
@@ -1278,6 +1287,167 @@ def _decorrect_output_command(command):
     return command
 
 
+# ─── MULTI-TAP ──────────────────────────────────────────────────────────────
+# Runtime machinery for MultiTap descriptors (models/multitap.py). The
+# descriptor is passive config data; everything stateful lives here. A tap
+# arrives through the MultiTap branch of handle_commands (the keymap matched
+# the trigger combo and its value is a MultiTap object), gets counted against
+# per-descriptor sequence state, and the chosen action is emitted later from
+# a finalize timer through the real handle_commands — inheriting layout
+# de-correction, suspend_when_lifting, and full command-type dispatch that
+# the old config-side reimplementation had to mirror by hand.
+
+# Per-sequence state, keyed by descriptor object identity (MultiTap defines
+# neither __eq__ nor __hash__, so a plain dict keys by identity). Each
+# MultiTap(...) call site in a keymap is one distinct object, so state is
+# one-per-mapping by construction.
+_multitap_states: 'dict[MultiTap, dict]' = {}
+
+# Grace period (seconds) between tap-sequence finalization and action
+# emission. Long enough for an already-in-flight modifier release to be
+# processed by the loop (so resume_keys lifts the trigger mods before the
+# action emits), short enough to be imperceptible. Kept from the config-side
+# implementation for identical timing behavior; evaluate removal separately
+# (suspend_when_lifting may make it redundant now that emission goes through
+# handle_commands).
+_MULTITAP_EMIT_GRACE = 0.15
+
+
+def _multitap_finalize(mtap: MultiTap, captured_ctx):
+    """Finalize a tap sequence: consume its state, pick the action for the
+    tap count reached, and schedule deferred emission through
+    handle_commands after the grace period."""
+    state = _multitap_states.get(mtap)
+    if state is None:
+        return
+
+    tap_count = state['count']
+    debug(f"## multitap: finalizing {tap_count} tap(s) for {mtap!r}")
+
+    # State is consumed now; the deferred emit below captures all it needs.
+    del _multitap_states[mtap]
+
+    tap_action = mtap.tap_actions.get(tap_count)
+    if tap_action is None:
+        debug(f"## multitap: no action defined for {tap_count} tap(s) on {mtap!r}")
+        return
+
+    def _emit():
+        # Deferred emission must be invisible to the repeat-cache tracking:
+        # it can fire between another key's press and first repeat, and the
+        # first-write-wins tracking would otherwise associate this action
+        # with that unrelated key. Snapshot and restore around the call.
+        cache_tracking_snapshot = _output._last_output_for_cache
+        try:
+            # Ignore reset_mode: the reset decision belongs to a pipeline
+            # caller, which does not exist for a timer callback. Intentional
+            # side effects (an action switching keymaps sets _active_keymaps
+            # itself) still apply.
+            handle_commands(tap_action, None, None, captured_ctx)
+        except Exception as emit_err:
+            debug(f"## multitap: error emitting {tap_count}-tap action: {emit_err}")
+        finally:
+            _output._last_output_for_cache = cache_tracking_snapshot
+
+    loop = get_or_create_event_loop()
+    loop.call_later(_MULTITAP_EMIT_GRACE, _emit)
+
+
+def _multitap_fresh_state(mtap: MultiTap, ctx) -> dict:
+    """Build per-sequence state, resolving timing once at sequence start so
+    one sequence uses consistent values even if focus changes mid-sequence.
+    Priority: explicit MultiTap kwargs, then conditional timeouts() rules,
+    then global timeouts() values."""
+    if mtap.tap_interval is not None:
+        tap_interval = mtap.tap_interval
+    else:
+        tap_interval, _ = _resolve_timeout(ctx, "tap_interval")
+
+    if mtap.min_tap_delay is not None:
+        min_tap_delay = mtap.min_tap_delay
+    else:
+        min_tap_delay, _ = _resolve_timeout(ctx, "min_tap_delay")
+
+    # Mixed sources (e.g. explicit interval + rule-resolved delay) can pair
+    # values timeouts() never saw together; enforce the consistency floor
+    # here too, or every second tap gets rejected as a "repeat".
+    if min_tap_delay >= tap_interval:
+        adjusted = tap_interval * 0.25
+        debug(f"## multitap: min_tap_delay ({min_tap_delay}s) >= tap_interval "
+                f"({tap_interval}s) for {mtap!r}, adjusted to {adjusted:.3f}s")
+        min_tap_delay = adjusted
+
+    return {
+        'count':            0,
+        'last_tap_time':    0.0,
+        'finalize_handle':  None,
+        'captured_ctx':     ctx,
+        'tap_interval':     tap_interval,
+        'min_tap_delay':    min_tap_delay,
+    }
+
+
+def _multitap_on_tap(mtap: MultiTap, ctx):
+    """Count one tap of a MultiTap trigger combo, rescheduling finalization.
+    Called from the MultiTap branch of handle_commands on every matching
+    press/repeat event; min_tap_delay filtering handles key autorepeat."""
+    current_time = time.time()
+
+    state = _multitap_states.get(mtap)
+    if state is None:
+        state = _multitap_fresh_state(mtap, ctx)
+        _multitap_states[mtap] = state
+
+    time_since_last = current_time - state['last_tap_time']
+
+    # Too soon: key repeat protection.
+    if state['count'] > 0 and time_since_last < state['min_tap_delay']:
+        debug(f"## multitap: ignoring repeat for {mtap!r} "
+                f"(too soon: {time_since_last:.3f}s)")
+        return
+
+    # Too late: finalize the previous sequence with its captured context,
+    # then start a new sequence with the current context (and freshly
+    # resolved timing).
+    if state['count'] > 0 and time_since_last >= state['tap_interval']:
+        debug(f"## multitap: too late for {mtap!r} "
+                f"(gap: {time_since_last:.3f}s), finalizing previous")
+        _multitap_finalize(mtap, state['captured_ctx'])
+        state = _multitap_fresh_state(mtap, ctx)
+        _multitap_states[mtap] = state
+
+    pending_handle = state['finalize_handle']
+    if pending_handle is not None:
+        pending_handle.cancel()
+        state['finalize_handle'] = None
+
+    state['count'] += 1
+    state['last_tap_time'] = current_time
+
+    debug(f"## multitap: tap #{state['count']} for {mtap!r}")
+
+    # Ignore taps beyond the ceiling (the sequence still finalizes at the
+    # ceiling count when the interval lapses).
+    if state['count'] > MULTITAP_MAX_TAPS:
+        debug(f"## multitap: ignoring tap beyond maximum "
+                f"(tap #{state['count']})")
+        return
+
+    # Schedule finalization. Preserved quirk from the original: a lone first
+    # tap with no tap_1_action schedules nothing — the sequence resolves on
+    # the next tap (continuing it) or a later tap (finalizing it as a no-op
+    # via the too-late branch above).
+    if mtap.tap_actions.get(1) is not None or state['count'] > 1:
+        captured_ctx = state['captured_ctx']
+        loop = get_or_create_event_loop()
+        state['finalize_handle'] = loop.call_later(
+            state['tap_interval'],
+            lambda: _multitap_finalize(mtap, captured_ctx)
+        )
+        debug(f"## multitap: scheduled finalization for {mtap!r} "
+                f"in {state['tap_interval']}s")
+
+
 def handle_commands(commands, key, action, ctx, input_combo=None):
     """
     returns: reset_mode (True/False) if this is True, _active_keymaps will be reset
@@ -1347,6 +1517,14 @@ def handle_commands(commands, key, action, ctx, input_combo=None):
                             debug(f"Held combo setup: {command} (trigger: {key})")
             elif isinstance(command, Key):
                 _output.send_key(command)
+            elif isinstance(command, MultiTap):
+                # Multi-tap descriptor: count this tap now; the chosen action
+                # emits later from the finalize timer through handle_commands.
+                # Mark uncacheable so the repeat cache never replays anything
+                # for the trigger key (autorepeat must keep reaching the
+                # min_tap_delay filter in _multitap_on_tap).
+                _output._last_output_for_cache = ('uncacheable', None)
+                _multitap_on_tap(command, ctx)
             elif command is escape_next_key:
                 _active_keymaps = escape_next_key
                 return False
