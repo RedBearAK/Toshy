@@ -47,7 +47,7 @@ emergency_eject_key(Key.F16)    # default key: F16
 
 timeouts(
     multipurpose        = 1,        # default: 1 sec
-    suspend             = 1,        # default: 1 sec, try 0.1 sec for touchpads/trackpads
+    suspend             = 0,        # default: 0 sec
     # A `name=` argument exists (default "global") but is intentionally not
     # passed here, so this config still loads on older keymapper versions
     # whose timeouts() signature predates conditional timeout support.
@@ -1214,6 +1214,12 @@ hmp_is_dialog_closewin          = lambda ctx: any(c(ctx) for c in _dialog_closew
 # zero. Note that `tap_interval` and `min_tap_delay` are accepted here too
 # (globally or conditionally), but multi-tap has no keymapper-side gate yet,
 # so setting them warns at load and stays inert until that gate lands.
+
+# Menu focus-stealing guards: restore a working suspend window for the apps
+# that grab menu focus on a bare modifier press, while the global suspend
+# timeout stays at zero for instant modifier response everywhere else.
+timeouts(suspend = 1, when = hmp_is_firefox_browser,  name = "firefox_menu_guard")
+timeouts(suspend = 1, when = hmp_is_vscode,           name = "vscode_menu_guard")
 
 
 # # Boolean variable to toggle Enter key state between F2 and Enter
