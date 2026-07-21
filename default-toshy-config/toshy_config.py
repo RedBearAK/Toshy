@@ -49,7 +49,14 @@ emergency_eject_key(Key.F16)    # default key: F16
 timeouts(
     multipurpose        = 1,        # default: 1 sec
     suspend             = 1,        # default: 1 sec, try 0.1 sec for touchpads/trackpads
+    # A `name=` argument exists (default "global") but is intentionally not
+    # passed here, so this config still loads on older keymapper versions
+    # whose timeouts() signature predates conditional timeout support.
 )
+
+# Conditional per-app timeout overrides are registered further down, in the
+# hoisted `hmp_*` matcher block, once the app-class matcher closures exist.
+# See the "CONDITIONAL TIMEOUTS" section below.
 
 # Delays often needed for Wayland and/or virtual machines or slow systems
 throttle_delays(
@@ -1181,6 +1188,34 @@ _dialog_escape_closures         = [matchProps(**dct) for dct in dialogs_Escape_l
 hmp_is_dialog_escape            = lambda ctx: any(c(ctx) for c in _dialog_escape_closures)
 _dialog_closewin_closures       = [matchProps(**dct) for dct in dialogs_CloseWin_lod]
 hmp_is_dialog_closewin          = lambda ctx: any(c(ctx) for c in _dialog_closewin_closures)
+
+
+###################################################################################
+###  CONDITIONAL TIMEOUTS                                                        ###
+###################################################################################
+# The global `timeouts(...)` call near the top sets the baseline. You can also
+# register any number of conditional overrides here, now that the `hmp_*` app
+# matcher closures above exist. Each call takes the same `when=` predicate style
+# as keymaps/modmaps (a callable receiving `ctx`), plus a `name=` used only for
+# logging when that override is applied. First matching rule wins, per key; keys
+# you omit fall through to the global default.
+#
+# Typical use: run a low or zero global `suspend` timeout (best for games and
+# any app that must react the instant a modifier is pressed), then add a longer
+# suspend window back for the few apps that misbehave with a short window (menu
+# focus-stealing in Firefox and VSCode being the classic cases). To do that,
+# set `suspend = 0` in the global `timeouts(...)` call above, then uncomment:
+#
+# timeouts(suspend = 0.3, when = lambda ctx: hmp_is_firefox_browser(ctx),
+#             name = "firefox_menu_guard")
+# timeouts(suspend = 0.3, when = lambda ctx: hmp_is_vscode(ctx),
+#             name = "vscode_menu_guard")
+#
+# The reverse also works: keep a normal global window and drop specific apps to
+# zero. Note that `tap_interval` and `min_tap_delay` are accepted here too
+# (globally or conditionally), but multi-tap has no keymapper-side gate yet,
+# so setting them warns at load and stays inert until that gate lands.
+
 
 # # Boolean variable to toggle Enter key state between F2 and Enter
 # # True = Enter key sends F2, False = Enter key sends Enter

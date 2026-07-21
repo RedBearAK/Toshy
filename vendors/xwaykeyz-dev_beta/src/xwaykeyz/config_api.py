@@ -28,6 +28,7 @@ from .models.combo import Combo, ComboHint, PreCorrectedCombo
 from .models.trigger import Trigger
 from .models.key import Key, ASCII_TO_KEY
 from .models.keymap import Keymap
+from .models.timeout_rule import TimeoutRule
 from .models.modifier import Modifier
 from .models.modmap import Modmap, MultiModmap
 
@@ -51,14 +52,31 @@ _MULTI_MODMAPS: 'list[MultiModmap]' = []
 
 
 TIMEOUT_DEFAULTS = {
-    "multipurpose": 1.0,
-    "suspend": 1.0,
+    "multipurpose":     1.0,
+    "suspend":          1.0,
+    # Multi-tap timeouts. Consumed by isMultiTap() in the config today; will be
+    # consumed inside the keymapper once multi-tap moves in. Present here so the
+    # timeouts() API can carry per-condition overrides through one mechanism.
+    "tap_interval":     0.25,
+    "min_tap_delay":    0.07,
     # TODO: not implemented yet
-    "post_combo": 0.5,
+    "post_combo":       0.5,
 }
 
-# multipurpose timeout
-_TIMEOUTS = TIMEOUT_DEFAULTS
+# All timeout keys that timeouts() accepts and _resolve_timeout() can look up.
+TIMEOUT_KEYS = ("multipurpose", "suspend", "tap_interval", "min_tap_delay")
+
+# Multi-tap keys have no keymapper-side gate yet (they are consumed in the
+# config). A conditional rule that sets only these will register fine but will
+# not take effect until the multi-tap gate lands in the keymapper.
+TIMEOUT_KEYS_WITHOUT_CONSUMER = ("tap_interval", "min_tap_delay")
+
+# multipurpose/suspend timeouts (global default instance)
+_TIMEOUTS = dict(TIMEOUT_DEFAULTS)
+
+# Conditional timeout overrides (modmap-style: default lives in _TIMEOUTS,
+# any number of conditional TimeoutRule instances accumulate here).
+_TIMEOUT_RULES = []
 
 
 LAYOUT_CORRECTION_DEFAULTS = {
@@ -487,13 +505,15 @@ def reset_configuration():
     global _MULTI_MODMAPS
     global _KEYMAPS
     global _TIMEOUTS
+    global _TIMEOUT_RULES
     global _PENDING_HYPER_EXPANSIONS
     global _LAYOUT_CORRECTION
 
     _MODMAPS = []
     _MULTI_MODMAPS = []
     _KEYMAPS = []
-    _TIMEOUTS = TIMEOUT_DEFAULTS
+    _TIMEOUTS = dict(TIMEOUT_DEFAULTS)
+    _TIMEOUT_RULES = []
     _PENDING_HYPER_EXPANSIONS = []
     _LAYOUT_CORRECTION = LAYOUT_CORRECTION_DEFAULTS
 
@@ -536,7 +556,7 @@ def get_configuration():
         keymap("Hyper modifier expansions (auto-gen)",
                 expansion_dict, when = pending['when'])
 
-    return (_MODMAPS, _MULTI_MODMAPS, _KEYMAPS, _TIMEOUTS)
+    return (_MODMAPS, _MULTI_MODMAPS, _KEYMAPS, _TIMEOUTS, _TIMEOUT_RULES)
 
 
 # ─── HOTKEYS ─────────────────────────────────────────────────────────────────
@@ -1018,9 +1038,66 @@ def include(file):
     exec(compile(code, name, "exec"), config_globals)  # nosec
 
 
-def timeouts(multipurpose: float = 1.0, suspend: float = 1.0):
+def timeouts(multipurpose=None, suspend=None, tap_interval=None,
+                min_tap_delay=None, when=None, name="global"):
+    """Define timeout values, globally or per-condition.
+
+    Called with no `when` (the default), this sets the global baseline: any
+    key you pass is written into _TIMEOUTS, and any key you omit keeps its
+    TIMEOUT_DEFAULTS value. This preserves the historical single-call usage.
+
+    Called with a `when` predicate (same signature as a keymap/modmap `when`,
+    receiving `ctx`), this registers a conditional override. Only the keys you
+    pass are stored on the rule; omitted keys stay unset and fall through to
+    the global default at resolution time. First matching rule wins per key.
+
+    Example (per-app suspend override, in the Toshy config):
+
+        timeouts(suspend=0.3, when=lambda ctx: hmp_is_firefox_browser(ctx),
+                    name="firefox_menu_guard")
+    """
     global _TIMEOUTS
-    _TIMEOUTS = {"multipurpose": multipurpose, "suspend": suspend}
+    global _TIMEOUT_RULES
+
+    passed = {
+        "multipurpose":     multipurpose,
+        "suspend":          suspend,
+        "tap_interval":     tap_interval,
+        "min_tap_delay":    min_tap_delay,
+    }
+    # Keep only the keys the caller explicitly set (None means "no opinion").
+    values = {k: float(v) for k, v in passed.items() if v is not None}
+
+    negative = {k: v for k, v in values.items() if v < 0}
+    if negative:
+        error(f"\n\n###  timeouts(name={name!r}): negative timeout values "
+                f"not allowed: {negative}  ###\n")
+        return
+
+    # Multi-tap timeouts have no keymapper-side consumer yet (isMultiTap()
+    # still reads its own config-side values). Note this loudly at load so
+    # setting them here is never a silent no-op.
+    inert_keys = [k for k in values if k in TIMEOUT_KEYS_WITHOUT_CONSUMER]
+    if inert_keys:
+        warn(f"## timeouts: {name!r} sets {inert_keys}, which have no "
+                f"keymapper consumer yet; stored but inert until the "
+                f"multi-tap gate lands")
+
+    # Global default instance: merge onto the baseline, leaving untouched keys
+    # at their TIMEOUT_DEFAULTS values.
+    if when is None:
+        _TIMEOUTS = dict(TIMEOUT_DEFAULTS)
+        _TIMEOUTS.update(values)
+        return
+
+    # Conditional instance: guard against an empty rule that can never do
+    # anything.
+    if not values:
+        error(f"\n\n###  timeouts(name={name!r}) with `when` set no timeout "
+                f"values; rule does nothing  ###\n")
+        return
+
+    _TIMEOUT_RULES.append(TimeoutRule(name, values, when=when))
 
 
 def add_modifier(name, aliases, key=None, keys=None):

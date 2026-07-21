@@ -31,19 +31,22 @@ from .models.keymap import Keymap
 from .models.keystate import Keystate
 from .models.modifier import Modifier
 from .models.modmap import Modmap, MultiModmap
+from .models.timeout_rule import TimeoutRule
 from .output import Output
 
-_MODMAPS: list[Modmap] = None
-_MULTI_MODMAPS: list[MultiModmap] = None
-_KEYMAPS: list[Keymap] = None
+_MODMAPS: 'list[Modmap]' = None
+_MULTI_MODMAPS: 'list[MultiModmap]' = None
+_KEYMAPS: 'list[Keymap]' = None
 _TIMEOUTS = None
+_TIMEOUT_RULES: 'list[TimeoutRule]' = None
 
 def boot_config():
     global _MODMAPS
     global _MULTI_MODMAPS
     global _KEYMAPS
     global _TIMEOUTS
-    _MODMAPS, _MULTI_MODMAPS, _KEYMAPS, _TIMEOUTS = \
+    global _TIMEOUT_RULES
+    _MODMAPS, _MULTI_MODMAPS, _KEYMAPS, _TIMEOUTS, _TIMEOUT_RULES = \
         get_configuration()
 
 
@@ -384,16 +387,19 @@ def update_pressed_states(keystate: Keystate):
 # as part of a combo)
 _suspend_timer = None
 _last_suspend_timeout = 0
+_last_suspend_kind = None       # "suspend" or "multipurpose" while a window is active
 
 
 def resume_keys():
     global _last_suspend_timeout
+    global _last_suspend_kind
     global _suspend_timer
     if not is_suspended():
         return
 
     _suspend_timer.cancel()
     _last_suspend_timeout = 0
+    _last_suspend_kind = None
     _suspend_timer = None
     pointer_monitor.unlisten()
 
@@ -449,31 +455,57 @@ def is_suspended():
     return _suspend_timer is not None
 
 
-def resuspend_keys(timeout):
-    # we should not be able to resuspend for a shorter timeout, ie
-    # a multi timeout of 1s should not be overruled by a shorter timeout
+def _resolve_timeout(ctx, key):
+    """Resolve a timeout value for `key`, honoring conditional overrides.
+
+    Walks the conditional timeout rules first-match-wins. A rule matches for
+    this key only if its predicate passes for the current context AND it sets
+    a value for this key (unset keys fall through). Returns (value, rule),
+    where rule is the winning TimeoutRule on an override, or None when the
+    global default applies.
+    """
+    if _TIMEOUT_RULES:
+        for rule in _TIMEOUT_RULES:
+            value = rule.get(key)
+            if value is None:
+                continue
+            if not rule.conditional(ctx):
+                continue
+            return (value, rule)
+    return (_TIMEOUTS[key], None)
+
+
+def resuspend_keys(timeout, is_override=False, kind="suspend"):
+    # Floor: a multi timeout of 1s should not be overruled by a shorter
+    # timeout. An explicit per-condition override is authoritative in both
+    # directions, but only against a window of its own kind. A "suspend"
+    # override must never collapse a multipurpose-originated window, or fast
+    # rollover typing with multipurpose keys would resolve them as holds
+    # instead of taps in apps that carry a short suspend override.
     if is_suspended():
-        if timeout < _last_suspend_timeout:
+        override_wins = is_override and kind == _last_suspend_kind
+        if not override_wins and timeout < _last_suspend_timeout:
             return
     _suspend_timer.cancel()
     debug("resuspending keys")
-    suspend_keys(timeout)
+    suspend_keys(timeout, kind)
 
 
 def pressed_mods_not_exerted_on_output():
     return [key for key in get_pressed_mods() if not _output.is_mod_pressed(key)]
 
 
-def suspend_or_resuspend_keys(timeout):
+def suspend_or_resuspend_keys(timeout, is_override=False, kind="suspend"):
     if is_suspended():
-        resuspend_keys(timeout)
+        resuspend_keys(timeout, is_override, kind)
     else:
-        suspend_keys(timeout)
+        suspend_keys(timeout, kind)
 
 
-def suspend_keys(timeout):
+def suspend_keys(timeout, kind="suspend"):
     global _suspend_timer
     global _last_suspend_timeout
+    global _last_suspend_kind
 
     debug("suspending keys:", pressed_mods_not_exerted_on_output())
 
@@ -485,6 +517,7 @@ def suspend_keys(timeout):
     loop = get_or_create_event_loop()
 
     _last_suspend_timeout = timeout
+    _last_suspend_kind = kind
     _suspend_timer = loop.call_later(timeout, resume_keys)
 
     pointer_monitor.listen(loop, resume_keys)
@@ -873,11 +906,14 @@ def on_mod_key(keystate: Keystate, ctx):
             # often 0, which collapses the window to a single loop tick and makes
             # the timer-fallback resolve every key as a hold before its release
             # can arrive. Ordinary modifiers keep the suspend timeout unchanged.
-            if keystate.is_multi:
-                suspend_timeout = _TIMEOUTS["multipurpose"]
-            else:
-                suspend_timeout = _TIMEOUTS["suspend"]
-            suspend_or_resuspend_keys(suspend_timeout)
+            timeout_key = "multipurpose" if keystate.is_multi else "suspend"
+            suspend_timeout, rule = _resolve_timeout(ctx, timeout_key)
+            if rule is not None and logger.VERBOSE:
+                debug(f"## timeout override {rule.name!r}: {timeout_key}="
+                        f"{suspend_timeout}s")
+            suspend_or_resuspend_keys(  suspend_timeout,
+                                        is_override=rule is not None,
+                                        kind=timeout_key)
 
     if not hold_output:
         if action.is_repeat:
@@ -1021,7 +1057,11 @@ def on_key(keystate: Keystate, ctx):
         keystate.suspended = True
         keystate.other_key_pressed_while_held = False  # Initialize flag
         update_pressed_states(keystate)
-        suspend_keys(_TIMEOUTS["multipurpose"])
+        multi_timeout, rule = _resolve_timeout(ctx, "multipurpose")
+        if rule is not None and logger.VERBOSE:
+            debug(f"## timeout override {rule.name!r}: multipurpose="
+                    f"{multi_timeout}s")
+        suspend_keys(multi_timeout, kind="multipurpose")
 
     elif keystate.is_multi and action.is_repeat and keystate.suspended:
         pass
@@ -1256,7 +1296,10 @@ def handle_commands(commands, key, action, ctx, input_combo=None):
     # resuspend any keys still not exerted on the output, giving
     # them a chance to be lifted or to trigger another macro as-is
     if is_suspended():
-        resuspend_keys(_TIMEOUTS["suspend"])
+        suspend_timeout, rule = _resolve_timeout(ctx, "suspend")
+        resuspend_keys( suspend_timeout,
+                        is_override=rule is not None,
+                        kind="suspend")
 
     with _output.suspend_when_lifting():
         # Execute commands
