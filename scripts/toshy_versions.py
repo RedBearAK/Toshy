@@ -308,9 +308,17 @@ max_component_name_length = max(
     if _is_shown(name, detail_only)
 )
 
+runtime_interp_path = os.path.realpath(sys.executable)
+runtime_dir_env     = os.environ.get('TOSHY_RUNTIME_DIR')
+
 print()     # separate from command
 # Print the keymapper info
 print(f"  Keymapper version:  xwaykeyz {xwaykeyz_ver}")
+# The interpreter path identifies the active runtime: the default venv on
+# normal installs, or a Nix store path for externally managed runtimes.
+print(f"  Python runtime:     {runtime_interp_path}")
+if runtime_dir_env:
+    print(f"  Resolved via:       {runtime_dir_env}")
 print()             # Separation from Toshy files version output
 print(f"  {'Component'.ljust(max_component_name_length + 4)}Version")
 print('  ' + '-' * (max_component_name_length + 14))
