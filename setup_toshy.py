@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260726'                        # CLI option "--version" will print this out.
+__version__ = '20260727'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1789,6 +1789,23 @@ def exit_with_invalid_distro_error(pkg_mgr_err=None):
     safe_shutdown(1)
 
 
+def exit_with_nixos_guidance():
+    """Utility function to show guidance and exit when running on NixOS"""
+    print()
+    error('ERROR: The standard install sequence cannot work on NixOS.')
+    print()
+    print(
+        'NixOS has no supported package manager logic, and system-level setup\n'
+        '(udev rules, groups, uinput module) must be managed declaratively in\n'
+        'the NixOS system configuration, along with a Nix-provided Python\n'
+        'runtime linked at:  ${XDG_STATE_HOME:-~/.local/state}/toshy/runtime\n'
+        '\n'
+        'Once the runtime and system pieces are in place, set up all of the\n'
+        f'user-level files with:  ./{this_file_name} install-user-files\n'
+    )
+    safe_shutdown(1)
+
+
 def is_dnf_repo_enabled(repo_name):
     """
     Utility function that checks if a specified DNF repository is present and enabled.
@@ -3532,6 +3549,26 @@ def add_user_to_group(group_name: str, user_name: str) -> None:
 
     print(f'User "{user_name}" added to group "{group_name}".')
     enable_prompt_for_reboot()
+
+
+def warn_if_missing_input_group():
+    """Passive check that warns (but does not fix) if the user does not appear
+    to be a member of the 'input' group. Used by the user-files-only sequence,
+    where system-level setup is the responsibility of external management.
+    Returns True if a warning was issued, False if membership looks OK."""
+    try:
+        input_grp = grp.getgrnam('input')
+    except KeyError:
+        error("Group 'input' does not exist on this system.")
+        error("System-level setup (udev rules, groups) must be handled externally.")
+        return True
+    if cnfg.user_name not in input_grp.gr_mem:
+        error(f"User '{cnfg.user_name}' does not appear to be in the 'input' group")
+        error("(or the membership is not active yet in this session).")
+        error("Toshy will not function until group membership and udev rules are")
+        error("in place, managed externally (e.g. in the NixOS system config).")
+        return True
+    return False
 
 
 def verify_user_groups():
@@ -5526,6 +5563,9 @@ def run_install_sequence(cnfg: InstallerSettings):
 
     get_environment_info()
 
+    if cnfg.DISTRO_ID == 'nixos':
+        exit_with_nixos_guidance()
+
     if cnfg.DISTRO_ID not in get_supported_distro_ids_lst():
         exit_with_invalid_distro_error()
 
@@ -5662,6 +5702,169 @@ def run_install_sequence(cnfg: InstallerSettings):
     safe_shutdown(0)
 
 
+def run_user_files_sequence(cnfg: InstallerSettings):
+    """Set up only the user-level files and services for Toshy.
+
+    Installs no native packages, creates no Python virtual environment, and
+    makes no system-level changes (udev rules, groups, uinput module). Meant
+    for systems where the Python runtime and system setup are managed
+    externally, such as NixOS with a Nix-provided runtime linked at:
+        ${XDG_STATE_HOME:-~/.local/state}/toshy/runtime
+    (Absent that link, launchers still expect the default venv location.)
+    """
+
+    # A venv inside the config folder can only have been created by the normal
+    # install path, meaning the keymapper and all pip dependencies live in a
+    # layer this command never updates. Shipping new user files against a stale
+    # runtime is a version-coupling trap, so refuse outright.
+    # NOTE: If this gate is ever relaxed, the venv MUST be stashed aside around
+    # backup/install below: install_toshy_files() removes the whole config
+    # folder, and backups deliberately exclude the venv. Without a stash this
+    # command would delete the venv and leave nothing to recreate it.
+    venv_dir_path = os.path.join(cnfg.toshy_dir_path, '.venv')
+    if os.path.isdir(venv_dir_path):
+        print()
+        error(f'ERROR: Found a Python venv inside the Toshy config folder:')
+        error(f'    {venv_dir_path}')
+        print()
+        print(
+            'This system appears to use the normal install path. The venv holds\n'
+            'the keymapper and all Python dependencies, and this command would\n'
+            'not update any of that, leaving new user files coupled to a stale\n'
+            'runtime. Run the full install instead:\n'
+            f'\n    ./{this_file_name} install\n'
+        )
+        safe_shutdown(1)
+
+    # With no venv allowed, the runtime must already be provided externally,
+    # or everything this command installs (services, launchers, autostart)
+    # would be inert. Mirror the launcher seam's resolution: the env var
+    # first, then the state-dir link — where a link that exists in any form
+    # (even dangling) counts as "configured" and must be valid.
+    runtime_dir_path = os.environ.get('TOSHY_RUNTIME_DIR')
+    runtime_src_desc = 'TOSHY_RUNTIME_DIR environment variable'
+    if not runtime_dir_path:
+        state_dir_path      = os.environ.get('XDG_STATE_HOME') or os.path.join(
+                                home_dir, '.local', 'state')
+        runtime_link_path   = os.path.join(state_dir_path, 'toshy', 'runtime')
+        if os.path.lexists(runtime_link_path):
+            runtime_dir_path = runtime_link_path
+            runtime_src_desc = f'runtime link: {runtime_link_path}'
+
+    if not runtime_dir_path:
+        print()
+        error(f'ERROR: No externally managed Python runtime was found.')
+        print()
+        print(
+            'This command installs only user-level files, and requires the\n'
+            'runtime to already exist. It looked for the TOSHY_RUNTIME_DIR\n'
+            'environment variable, then for a runtime link at:\n'
+            '\n    ${XDG_STATE_HOME:-~/.local/state}/toshy/runtime\n'
+            '\n'
+            'On NixOS, a missing link means the Nix flake / home-manager module\n'
+            'that is responsible for creating it has not been applied, or did\n'
+            'not work. Set that up first, then run this command again.\n'
+            '\n'
+            'On other distros, this is probably not the command you want:\n'
+            f'\n    ./{this_file_name} install\n'
+        )
+        safe_shutdown(1)
+
+    runtime_python_path = os.path.join(runtime_dir_path, 'bin', 'python')
+    if not os.access(runtime_python_path, os.X_OK):
+        print()
+        error(f'ERROR: The external runtime is configured but broken.')
+        error(f'    Selected via: {runtime_src_desc}')
+        error(f'    Expected interpreter at: {runtime_python_path}')
+        print()
+        print(
+            'This usually means a dangling symlink or a path that is not a\n'
+            'Python environment. Fix the external runtime setup (on NixOS,\n'
+            're-apply the flake / home-manager configuration) before\n'
+            'installing the user-level files.\n'
+        )
+        safe_shutdown(1)
+
+    dot_Xmodmap_warning()
+    ask_add_home_local_bin()
+
+    get_environment_info()
+
+    # Deliberately no supported-distro gate here: nothing below involves a
+    # native package manager, so unknown distro IDs (e.g. 'nixos') are fine.
+
+    if cnfg.DESKTOP_ENV == 'gnome' and cnfg.SESSION_TYPE == 'wayland':
+        check_gnome_wayland_exts()
+
+    if cnfg.DESKTOP_ENV == 'gnome':
+        check_gnome_indicator_ext()
+
+    app_switcher_kwin_compat = cnfg.DESKTOP_ENV == 'kde' and cnfg.DE_MAJ_VER in ['5', '6']
+    if app_switcher_kwin_compat and not cnfg.fancy_pants:
+        # Need to limit this check to the versions of KDE Plasma
+        # that are actually compatible with the KWin script (5/6).
+        check_kde_app_switcher()
+
+    backup_toshy_config()
+    install_toshy_files()
+
+    install_bin_commands()
+    install_desktop_apps()
+
+    # Python D-Bus service script also does this, but this will refresh if script changes
+    if cnfg.DESKTOP_ENV in ['kde', 'plasma']:
+        setup_kwin_dbus_script()
+
+    # Some users might still have an older KWin D-Bus service desktop autostart file
+    cleanup_legacy_kwin_dbus_autostart()
+
+    setup_systemd_services()
+
+    autostart_systemd_kickstarter()
+
+    autostart_tray_icon()
+    apply_desktop_tweaks()
+
+    input_group_warned = warn_if_missing_input_group()
+
+    tray_restarted = False
+    if not input_group_warned and cnfg.autostart_tray_icon:
+        # Replace any running tray instance with the freshly installed one. The
+        # tray app itself terminates a pre-existing instance on startup (via
+        # ProcessManager), so launching it is the whole "restart" mechanism.
+        tray_icon_cmd = [os.path.join(home_dir, '.local', 'bin', 'toshy-tray')]
+        subprocess.Popen(tray_icon_cmd, close_fds=True, stdout=DEVNULL, stderr=DEVNULL)
+        tray_restarted = True
+
+    lb = cnfg.sep_char * 2      # shorter variable name for left border chars
+
+    print()
+    print(cnfg.separator)
+    print(cnfg.separator)
+    print(f'{lb}  Toshy user-files setup complete. Report issues on the GitHub repo.')
+    print(f'{lb}  https://github.com/RedBearAK/toshy/issues/')
+    print(f'{lb}  >>  REMINDER: This command did NOT set up a Python runtime, udev')
+    print(f'{lb}  >>  rules, or group membership. Those are managed externally.')
+    if input_group_warned:
+        print(f'{lb}  >>  Once group membership and udev rules are in place, you must')
+        print(f'{lb}  >>  log out and back in (or reboot) before Toshy can work.')
+    if tray_restarted:
+        print(f'{lb}  Tray icon has been (re)started with the updated files.')
+    elif cnfg.autostart_tray_icon:
+        print(f'{lb}  Tray icon will appear at the next login. (Or run "toshy-tray" now.)')
+    print(cnfg.separator)
+    print(cnfg.separator)
+    print()
+
+    if cnfg.SESSION_TYPE == 'wayland' and cnfg.DESKTOP_ENV == 'kde':
+        print(f'Switch to a different window ONCE to get KWin script to start working!')
+
+    if cnfg.remind_extensions or (cnfg.DESKTOP_ENV == 'gnome' and cnfg.SESSION_TYPE == 'wayland'):
+        print(f'You MUST install GNOME EXTENSIONS if using Wayland+GNOME! See Toshy README.')
+
+    safe_shutdown(0)
+
+
 def main():
     """Deal with CLI arguments given to installer script"""
     parser = argparse.ArgumentParser(
@@ -5723,6 +5926,22 @@ def main():
         '--skip-update-check',
         action='store_true',
         help=argparse.SUPPRESS,     # internal handshake from bootstrap.sh (hidden)
+    )
+
+    subparser_user_files        = subparsers.add_parser(
+        'install-user-files',
+        help='Install only user-level files/services (runtime/system managed externally)'
+    )
+
+    subparser_user_files.add_argument(
+        '--barebones-config',
+        action='store_true',
+        help='Install with mostly empty/blank keymapper config file.'
+    )
+    subparser_user_files.add_argument(
+        '--fancy-pants',
+        action='store_true',
+        help='See README for more info on this option.'
     )
 
     subparser_list_distros      = subparsers.add_parser(
@@ -5805,6 +6024,16 @@ def main():
         if args.fancy_pants:
             cnfg.fancy_pants = True
         run_install_sequence(cnfg)
+        safe_shutdown(0)    # redundant, but that's OK
+
+    elif args.command == 'install-user-files':
+        if args.barebones_config:
+            cnfg.barebones_config = True
+
+        if args.fancy_pants:
+            cnfg.fancy_pants = True
+
+        run_user_files_sequence(cnfg)
         safe_shutdown(0)    # redundant, but that's OK
 
     elif args.command == 'list-distros':
