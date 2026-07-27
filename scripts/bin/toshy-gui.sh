@@ -20,22 +20,13 @@ fi
 # echo "toshy-pref-stub" > /proc/$$/comm
 # REMOVING: This seems to confuse systemd and cause error messages in the journal
 
-# Absolute path to the venv
-VENV_PATH="$HOME/.config/toshy/.venv"
-
-# Verify the venv directory exists
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Error: Virtual environment not found at $VENV_PATH"
-    exit 1
-fi
-
-# Activate the venv for complete environment setup (technically not needed for this app!)
+# Resolve and activate the Toshy Python runtime (venv or external)
 # shellcheck disable=SC1091
-source "${VENV_PATH}/bin/activate"
+source "$HOME/.config/toshy/scripts/toshy-runtime-env.sh" || exit 1
 
 # Original exec command before modularising toshy_gui app package:
-# exec "${VENV_PATH}/bin/python" "$HOME/.config/toshy/toshy_gui.py"
+# exec "${TOSHY_PYTHON}" "$HOME/.config/toshy/toshy_gui.py"
 
 # Launch GUI app as a Python "module":
 export PYTHONPATH="${HOME}/.config/toshy:${PYTHONPATH}"
-exec "${VENV_PATH}/bin/python" -m toshy_gui "$@"
+exec "${TOSHY_PYTHON}" -m toshy_gui "$@"

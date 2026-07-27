@@ -37,8 +37,9 @@ nohup "${HOME}/.local/bin/toshy-wlroots-dbus-service" >/dev/null 2>&1 &
 # pause to let D-Bus service(s) start up
 sleep 2
 
+# Resolve and activate the Toshy Python runtime (venv or external)
 # shellcheck disable=SC1091
-source "$HOME/.config/toshy/.venv/bin/activate"
+source "$HOME/.config/toshy/scripts/toshy-runtime-env.sh" || exit 1
 
 # overcome a possible strange and rare problem connecting to X display
 if command xhost &> /dev/null; then

@@ -6,7 +6,7 @@
 # (this exercises the detector and analyzer behind the context module)
 
 # shellcheck disable=SC2034
-VERSION='20260726'
+VERSION='20260727'
 
 # Check if the script is being run as root
 if [[ $EUID -eq 0 ]]; then
@@ -21,18 +21,9 @@ if [[ -z $USER ]] || [[ -z $HOME ]]; then
 fi
 
 
-# Absolute path to the venv
-VENV_PATH="${HOME}/.config/toshy/.venv"
-
-# Verify the venv directory exists
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Error: Virtual environment not found at $VENV_PATH"
-    exit 1
-fi
-
-# Activate the venv for complete environment setup
+# Resolve and activate the Toshy Python runtime (venv or external)
 # shellcheck disable=SC1091
-source "${VENV_PATH}/bin/activate"
+source "$HOME/.config/toshy/scripts/toshy-runtime-env.sh" || exit 1
 
 # Need PYTHONPATH update to allow absolute imports from "toshy_common" package
 export PYTHONPATH="${HOME}/.config/toshy:${PYTHONPATH}"
@@ -41,4 +32,4 @@ export PYTHONPATH="${HOME}/.config/toshy:${PYTHONPATH}"
 # PYTHONPATH this runs with proper package context, so only real "toshy_common.*"
 # imports resolve. A stray bare sibling import fails loudly instead of silently
 # working off the module's own directory (which is what the file-path form allows).
-exec "${VENV_PATH}/bin/python" -m toshy_common.kblayout_context
+exec "${TOSHY_PYTHON}" -m toshy_common.kblayout_context

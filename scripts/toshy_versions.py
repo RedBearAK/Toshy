@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260714'
+__version__ = '20260727'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -103,9 +103,10 @@ show_all_modules    = '--all' in user_args or '-a' in user_args
 # ~/.config/toshy/toshy_common/kblayout_setup.py
 # ~/.config/toshy/toshy_common/kblayout_symtable.py
 
-# These two are shell scripts, not Python scrips
+# These are shell scripts, not Python scripts
 # ~/.config/toshy/scripts/tshysvc-config
 # ~/.config/toshy/scripts/tshysvc-sessmon
+# ~/.config/toshy/scripts/toshy-runtime-env.sh
 
 # ~/.config/toshy/cosmic-dbus-service/toshy_cosmic_dbus_service.py
 # ~/.config/toshy/kwin-dbus-service/toshy_kwin_dbus_service.py
@@ -168,9 +169,10 @@ kblayout_setup_path     = os.path.join(toshy_dir_path,
 kblayout_symtable_path  = os.path.join(toshy_dir_path,
                             'toshy_common', 'kblayout_symtable.py')
 
-# These two files are shell scripts, not Python scripts:
-config_svc_path         = os.path.join(toshy_dir_path,'scripts', 'tshysvc-config')
+# These files are shell scripts, not Python scripts:
+config_svc_path         = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-config')
 sessmon_svc_path        = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-sessmon')
+runtime_env_path        = os.path.join(toshy_dir_path, 'scripts', 'toshy-runtime-env.sh')
 
 cosmic_dbus_path        = os.path.join(toshy_dir_path,
                             'cosmic-dbus-service', 'toshy_cosmic_dbus_service.py')
@@ -233,6 +235,7 @@ components = [
     (None, None),                   # Spacing
     ("SysD Svc: Keymapper Config",  config_svc_path),
     ("SysD Svc: Session Monitor",   sessmon_svc_path),
+    ("Runtime Env Resolver",        runtime_env_path),
     (None, None),                   # Spacing
     ("D-Bus Service: COSMIC",       cosmic_dbus_path),
     ("D-Bus Service: KWin",         kwin_dbus_path),
@@ -256,8 +259,11 @@ def _format_version(version_raw):
 def _raw_version_in_file(file_path):
     with open(file_path, 'r') as file:
         for line in file:
-            # Extract from both the Python style variable, and shell script style variable
-            if line.startswith('__version__') or line.startswith('SCRIPT_VERSION'):
+            # Extract from the Python style variable and the shell script style
+            # variables (the runtime env script uses a unique name because it
+            # is sourced, and must not clobber the caller's SCRIPT_VERSION).
+            if line.startswith(('__version__', 'SCRIPT_VERSION',
+                                'TOSHY_RUNTIME_ENV_VERSION')):
                 return line.split('=')[1].strip().strip('"').strip("'")
     return None
 
