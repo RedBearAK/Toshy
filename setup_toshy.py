@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260715'                        # CLI option "--version" will print this out.
+__version__ = '20260726'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -3955,6 +3955,7 @@ def install_toshy_files():
             'pyrightconfig.json',
             'README.md',
             'requirements.txt',
+            'reset_dev_beta.sh',
             'ruff.toml',
             'sync_vendors.sh',
             this_file_name,
