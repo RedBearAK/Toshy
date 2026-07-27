@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Script tries to programmatically determine which Toshy-compatible
 # GNOME extension(s) to install and use the extentions website API to

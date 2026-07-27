@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 
 # Start Toshy COSMIC D-Bus service, after terminating existing
@@ -24,19 +24,10 @@ pkill -f "${FILE_NAME}"
 
 sleep 0.5
 
-# Absolute path to the venv
-VENV_PATH="$HOME/.config/toshy/.venv"
-
-# Verify the venv directory exists
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Error: Virtual environment not found at $VENV_PATH"
-    exit 1
-fi
-
-# Activate the venv for complete environment setup
+# Resolve and activate the Toshy Python runtime (venv or external)
 # shellcheck disable=SC1091
-source "${VENV_PATH}/bin/activate"
+source "$HOME/.config/toshy/scripts/toshy-runtime-env.sh" || exit 1
 
 # start the script that will create the D-Bus object/interface
 # use "-u" option on Python to enable unbuffered output mode
-exec "${VENV_PATH}/bin/python" -u "${TOSHY_COSMIC}/${FILE_NAME}.py"
+exec "${TOSHY_PYTHON}" -u "${TOSHY_COSMIC}/${FILE_NAME}.py"

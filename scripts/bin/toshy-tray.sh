@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 
 # Start Toshy GUI app after activating venv
@@ -20,20 +20,11 @@ fi
 # echo "toshy-tray-stub" > /proc/$$/comm
 # REMOVING: This seems to confuse systemd and cause error messages in the journal
 
-# Absolute path to the venv
-VENV_PATH="$HOME/.config/toshy/.venv"
-
-# Verify the venv directory exists
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Error: Virtual environment not found at $VENV_PATH"
-    exit 1
-fi
-
-# Activate the venv for complete environment setup
+# Resolve and activate the Toshy Python runtime (venv or external)
 # shellcheck disable=SC1091
-source "${VENV_PATH}/bin/activate"
+source "$HOME/.config/toshy/scripts/toshy-runtime-env.sh" || exit 1
 
 # Seems to be unreliable to get program name to become "toshy-tray-app" but
 # it works sometimes.
 # The 'exec' should at least reduce some RAM usage by replacing this shell.
-exec "${VENV_PATH}/bin/python" "$HOME/.config/toshy/toshy_tray.py"
+exec "${TOSHY_PYTHON}" "$HOME/.config/toshy/toshy_tray.py"

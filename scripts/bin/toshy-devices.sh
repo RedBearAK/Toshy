@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 
 # Show the devices that xwaykeyz or keyszer sees
@@ -16,8 +16,9 @@ if [[ -z $USER ]] || [[ -z $HOME ]]; then
 fi
 
 
+# Resolve and activate the Toshy Python runtime (venv or external)
 # shellcheck disable=SC1091
-source "$HOME/.config/toshy/.venv/bin/activate"
+source "$HOME/.config/toshy/scripts/toshy-runtime-env.sh" || exit 1
 
 echo -e "\nList of devices seen by the keymapper (xwaykeyz or keyszer): \n"
 

@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 
 # Run the Toshy machine context module to get the hashed machine ID, for
@@ -17,20 +17,11 @@ if [[ -z $USER ]] || [[ -z $HOME ]]; then
 fi
 
 
-# Absolute path to the venv
-VENV_PATH="$HOME/.config/toshy/.venv"
-
-# Verify the venv directory exists
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Error: Virtual environment not found at $VENV_PATH"
-    exit 1
-fi
-
-# Activate the venv for complete environment setup
+# Resolve and activate the Toshy Python runtime (venv or external)
 # shellcheck disable=SC1091
-source "${VENV_PATH}/bin/activate"
+source "$HOME/.config/toshy/scripts/toshy-runtime-env.sh" || exit 1
 
 # Fix the PYTHONPATH so 'toshy_common' module is found (prevent ModuleNotFoundError)
 export PYTHONPATH="${HOME}/.config/toshy:${PYTHONPATH}"
 
-exec "${VENV_PATH}/bin/python" "$HOME/.config/toshy/toshy_common/machine_context.py"
+exec "${TOSHY_PYTHON}" "$HOME/.config/toshy/toshy_common/machine_context.py"

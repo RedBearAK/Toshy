@@ -1,7 +1,7 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 # -*- mode: sh -*-
 # vim: set ft=sh:
-SCRIPT_VERSION="20250822"
+SCRIPT_VERSION="20260727"
 echo "Toshy Config Service Version: $SCRIPT_VERSION"
 
 
@@ -29,9 +29,9 @@ else
 fi
 
 
-# Activate the Python virtual environment
+# Resolve and activate the Toshy Python runtime (venv or external)
 # shellcheck disable=SC1091
-source "$HOME/.config/toshy/.venv/bin/activate"
+source "$HOME/.config/toshy/scripts/toshy-runtime-env.sh" || exit 1
 
 
 # Check if the desktop session is X11
