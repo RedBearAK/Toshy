@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 
 # Run the Toshy machine context module to get the hashed machine ID, for

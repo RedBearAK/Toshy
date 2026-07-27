@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # scripts/bootstrap.sh
 # Toshy Installation Bootstrap Script

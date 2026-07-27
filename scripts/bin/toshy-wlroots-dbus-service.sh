@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 
 # Start Toshy Wlroots D-Bus service, after terminating existing

@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 #
 # This script uses a custom bash alias in the shebang to show something
 # other than a generic "bash" program name in process list apps like `btop`. 

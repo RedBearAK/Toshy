@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 # Monitor whether the user's desktop session is "Active" according to loginctl.
 

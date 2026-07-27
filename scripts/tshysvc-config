@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 # -*- mode: sh -*-
 # vim: set ft=sh:
 SCRIPT_VERSION="20250822"

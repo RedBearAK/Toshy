@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 
 # Start Toshy Kwin D-Bus service, after terminating existing
