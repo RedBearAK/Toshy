@@ -77,6 +77,29 @@ preservation of your prior config edits and preferences database), terminal
 commands, desktop entries, systemd user services, tray icon autostart, and
 desktop tweaks.
 
+## Starting from a fresh NixOS install (no flake yet)
+
+The Setup section above assumes an existing system flake and Home Manager
+configuration. A stock NixOS installation has neither. For that case, a
+scaffold script in this folder generates a complete system flake that wraps
+the stock `/etc/nixos/configuration.nix` and wires in everything above,
+including Home Manager and flakes enablement. It runs unprivileged, writes
+only into the current directory, and refuses to touch any existing file
+(if `/etc/nixos/flake.nix` already exists, it points you at the Setup
+section instead).
+
+```
+git clone https://github.com/RedBearAK/toshy.git
+cd toshy
+bash ./nix/nixos-scaffold.sh
+```
+
+Then follow the numbered steps it prints: review the generated file, copy
+it into place with the printed `sudo cp` command, run the printed rebuild
+command (the first flake-based rebuild enables flakes on the command line;
+afterward the setting is baked in), log out and back in, and finish with
+`install-user-files` from the same clone.
+
 ## Upgrading
 
 Two layers can change:
