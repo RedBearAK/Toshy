@@ -6,7 +6,7 @@
 # (this exercises the detector and analyzer behind the context module)
 
 # shellcheck disable=SC2034
-VERSION='20260608'
+VERSION='20260726'
 
 # Check if the script is being run as root
 if [[ $EUID -eq 0 ]]; then

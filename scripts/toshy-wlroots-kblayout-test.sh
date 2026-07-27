@@ -17,7 +17,7 @@
 # the keyboard to a plain US layout on exit (including on Ctrl-C).
 
 # shellcheck disable=SC2034
-VERSION='20260608'
+VERSION='20260726'
 
 # Distinct layouts per path so the watcher output identifies which path fired.
 # PATH_B_LAYOUT can be set to 'ru' for a much larger, unmistakable map if the

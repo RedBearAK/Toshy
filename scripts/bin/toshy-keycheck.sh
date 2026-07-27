@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
-VERSION='20260715'
+VERSION='20260726'
 
 
 # Run the Toshy keycheck module: interactively show the identity of

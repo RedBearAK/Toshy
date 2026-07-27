@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # -*- mode: sh -*-
 # vim: set ft=sh:
-SCRIPT_VERSION="20250822"
+SCRIPT_VERSION="20260726"
 echo "Toshy Session Monitor Service Version: $SCRIPT_VERSION"
 
 

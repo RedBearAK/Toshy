@@ -5,7 +5,7 @@
 # https://github.com/RedBearAK/toshy
 
 # shellcheck disable=SC2034
-VERSION='20260714'
+VERSION='20260726'
 
 # NOTE: deliberately no 'set -e'. Every command that matters is checked
 # explicitly below. And 'set -e' is silently disabled inside if/&&/||/!
