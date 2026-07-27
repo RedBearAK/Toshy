@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260715'
+__version__ = '20260726'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -17,12 +17,11 @@ __version__ = '20260715'
 ###
 ###############################################################################
 
-import re
 import os
+import re
 import sys
 import time
 import shutil
-import asyncio
 import inspect
 import textwrap
 import subprocess
@@ -30,7 +29,6 @@ import subprocess
 # Removing problematic types before they get deprecated:
 # from typing import Any, Callable, Optional, Union, List, Dict, Tuple
 from subprocess import DEVNULL
-from collections.abc import Callable
 
 from xwaykeyz.config_api import *
 from xwaykeyz.lib.key_context import KeyContext
@@ -47,7 +45,10 @@ emergency_eject_key(Key.F16)    # default key: F16
 
 timeouts(
     multipurpose        = 1,        # default: 1 sec
-    suspend             = 1,        # default: 1 sec, try 0.1 sec for touchpads/trackpads
+    suspend             = 0,        # default: 0 sec
+    # A `name=` argument exists (default "global") but is intentionally not
+    # passed here, so this config still loads on older keymapper versions
+    # whose timeouts() signature predates conditional timeout support.
 )
 
 # Delays often needed for Wayland and/or virtual machines or slow systems
@@ -656,7 +657,7 @@ def isDoubleTap(dt_combo):
 def macro_tester():
     """Type out a macro with useful info and a Unicode test.
         WARNING: Safe only for use in apps that accept text blocks/typing of many characters.
-        Character marker in front of each line is a canary to see if Combo outputs are 
+        Character marker in front of each line is a canary to see if Combo outputs are
         being corrected for the layout, not just strings going through ST()."""
     def _macro_tester(ctx: KeyContext):
         return [

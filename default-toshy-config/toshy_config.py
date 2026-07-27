@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260715'
+__version__ = '20260726'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -17,12 +17,11 @@ __version__ = '20260715'
 ###
 ###############################################################################
 
-import re
 import os
+import re
 import sys
 import time
 import shutil
-import asyncio
 import inspect
 import textwrap
 import subprocess
@@ -30,7 +29,6 @@ import subprocess
 # Removing problematic types before they get deprecated:
 # from typing import Any, Callable, Optional, Union, List, Dict, Tuple
 from subprocess import DEVNULL
-from collections.abc import Callable
 
 from xwaykeyz.config_api import *
 from xwaykeyz.lib.key_context import KeyContext
@@ -704,6 +702,30 @@ browsers_all            = [x.casefold() for x in browsers_all]
 browsers_allStr         = "|".join('^'+x+'$' for x in browsers_all)
 
 
+# Thunderbird and its Betterbird fork have several different app class strings.
+# Betterbird historically reports 'thunderbird-default' because the Mozilla build system
+# ties WM_CLASS to 'moz_app_remotingname', which Betterbird must leave as 'thunderbird'
+# so it takes the Thunderbird code path. Newer builds may report the reverse-DNS form.
+# The same mechanism produces the '-esr' suffix on distro ESR packages.
+thunderbirds = [
+    'thunderbird.*',                    # Catches 'thunderbird-default', 'thunderbird_esr'
+    'org.mozilla.thunderbird.*',        # Flatpak app ID, ESR adds "_esr" on the end
+    'betterbird.*',
+    'eu.betterbird.Betterbird.*',       # Flatpak app ID
+]
+thunderbirds                    = [x.casefold() for x in thunderbirds]
+thunderbirdStr                  = toRgxStr(thunderbirds)
+
+# Compose window title prefix. Localized in non-English builds — a wrong pattern here
+# silently drops the compose window into the non-compose keymap.
+thunderbird_compose_names = [
+    'Write:.*',                         # Current prefix (windowTitlePrefix in composeMsgs.properties)
+    'Compose:.*',                       # Older prefix, pre-Supernova
+]
+thunderbird_compose_names       = [x.casefold() for x in thunderbird_compose_names]
+thunderbird_compose_Str         = toRgxStr(thunderbird_compose_names)
+
+
 # NOTE: Do not be tempted to convert simple app class lists into a "list of dicts"
 # If the list contains only app classes, the regex pattern string is much faster.
 filemanagers = [
@@ -1171,15 +1193,18 @@ def isDoubleTap(dt_combo):
 
 ###  Hoisted matchProps closures — factory runs once here, not on every key event  ###
 hmp_is_remote                   = matchProps(clas=remoteStr)        # Only needed for diagnostic dlg
-hmp_not_remote                  = matchProps(not_clas=remoteStr)
+# hmp_not_remote                  = matchProps(not_clas=remoteStr)                # not used currently
 hmp_is_terminal                 = matchProps(clas=termStr)
-hmp_not_term_or_remote          = matchProps(not_clas=terms_and_remotes_Str)
+# hmp_not_term_or_remote          = matchProps(not_clas=terms_and_remotes_Str)    # not used currently
 hmp_not_vscode_or_remote        = matchProps(not_clas=vscodes_and_remotes_Str)
 hmp_is_vscode                   = matchProps(clas=vscodeStr)
-hmp_numlk_off                   = matchProps(numlk=False)
+hmp_numlk_off                   = matchProps(numlk=False)           # Used for forced numpad feat.
 hmp_is_browser                  = matchProps(clas=browsers_allStr)
 hmp_is_chrome_browser           = matchProps(clas=browsers_chromeStr)
 hmp_is_firefox_browser          = matchProps(clas=browsers_firefoxStr)
+# hmp_is_thunderbird              = matchProps(clas=thunderbirdStr) # Safer to use compose vs NOT compose hoists (below)
+hmp_is_tbird_compose            = matchProps(clas=thunderbirdStr, name=thunderbird_compose_Str)
+hmp_not_tbird_compose           = matchProps(clas=thunderbirdStr, not_name=thunderbird_compose_Str)
 hmp_is_filemanager              = matchProps(clas=filemanagerStr)
 
 # Hoisted list-of-dicts calls — pre-build inner closures at load time
@@ -1301,7 +1326,7 @@ def iEF2NT():
 def macro_tester():
     """Type out a macro with useful info and a Unicode test.
         WARNING: Safe only for use in apps that accept text blocks/typing of many characters.
-        Character marker in front of each line is a canary to see if Combo outputs are 
+        Character marker in front of each line is a canary to see if Combo outputs are
         being corrected for the layout, not just strings going through ST()."""
     def _macro_tester(ctx: KeyContext):
         return [
@@ -3514,7 +3539,7 @@ keymap("Escape actions for dead keys", {
     C("RC-Tab"):        [getDK(),bind,C("Alt-Tab"),setDK(None)],            # Leave accent char, task switch
     C("Shift-RC-Tab"):  [getDK(),bind,C("Shift-Alt-Tab"),setDK(None)],      # Leave accent char, task switch (reverse)
     C("RC-Grave"):      [getDK(),bind,C("Alt-Grave"),setDK(None)],          # Leave accent char, in-app window switch
-    C("Shift-RC-Tab"):  [getDK(),bind,C("Shift-Alt-Grave"),setDK(None)],    # Leave accent char, in-app window switch (reverse)
+    C("Shift-RC-Grave"):[getDK(),bind,C("Shift-Alt-Grave"),setDK(None)],    # Leave accent char, in-app window switch (reverse)
 
     # common shortcuts that should also cancel dead keys
     C("RC-a"):                  [getDK(),C("C-a"),setDK(None)],             # Leave accent char, select all
@@ -4051,27 +4076,58 @@ except NameError:
 ###################################################################################
 # Miscellaneous apps that need a few fixes
 
-hmp_is_thunderbird              = matchProps(clas="^thunderbird.*$|^org.mozilla.thunderbird$")
-keymap("Thunderbird email client", {
+
+# Gecko ignores Ctrl+Shift+Backspace, which is what General GUI emits for Cmd+Backspace,
+# so the compose editor needs the same select-then-delete treatment as the Firefox keymap.
+#
+# THE WINDOW NAME MATCH IS LOAD-BEARING. RC-Delete is safe here ONLY because it is confined
+# to the compose window. In the message list, folder pane, address book, contact list,
+# calendar or task list, Shift+End extends the selection to the end of the list and Delete
+# is the live delete binding for all of those object types. Never widen this to class-only.
+keymap("Thunderbird compose wndw", {
+    C("Alt-RC-I"):              C("Shift-C-I"),                 # Dev tools
+    # Wordwise shortcuts (overrides of general wordwise)
+    C("RC-Backspace"):         [C("Shift-Home"),
+                                C("Backspace")],                # Delete Line Left of Cursor
+    # NEVER allow this to work in the main Thunderbird window. Could delete ENTIRE FOLDER of emails.
+    C("RC-Delete"):            [C("Shift-End"), C("Delete")],   # Delete Line Right of Cursor
+}, when = lambda ctx:
+    cnfg.screen_has_focus and
+    ctx_ovl_macos_globals and
+    hmp_is_tbird_compose(ctx) )
+
+
+# Isolate non-compose windows from compose windows in Thunderbird. See notes above.
+keymap("Thunderbird NOT compose wndw", {
     C("Alt-RC-I"):              C("Shift-C-I"),                 # Dev tools
     # Enable Cmd+Option+Left/Right for tab navigation
     C("RC-Alt-Left"):          [bind,C("C-Page_Up")],           # Go to prior tab (macOS Thunderbird tab nav shortcut)
     C("RC-Alt-Right"):         [bind,C("C-Page_Down")],         # Go to next tab (macOS Thunderbird tab nav shortcut)
+
+    # NEVER allow this to work in the main Thunderbird window. Could delete ENTIRE FOLDER of emails.
+    ### Cmd+Delete (forward delete): [Shift-End, Delete],       # Delete Line Right of Cursor (pseudo-code for safety)
+
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     ctx_ovl_macos_globals and
-    hmp_is_thunderbird(ctx) )
+    hmp_not_tbird_compose(ctx) )
+
 
 hmp_is_angry_ipscan             = matchProps(clas="^Angry.*IP.*Scanner$")
 keymap("Angry IP Scanner", {
-    C("RC-comma"):              C("Shift-C-P"),                 # Open preferences
-    C("RC-i"):                  C("Alt-Enter"),                 # Get info (details)
-    C("RC-h"):                  C("C-h"),                       # Go to next live host (override hide window)
-    C("Shift-RC-i"):            C("C-i"),                       # Invert selection
+    C("RC-comma"):              C("Shift-C-P"),                 # Open preferences (macOS Cmd+Comma)
+    # This keymap was remapping Cmd+I to Alt+Enter previously, for Details dialog.
+    # Details window opens on Enter or double-click (SWT.Traverse / TRAVERSE_RETURN in
+    # CommandsMenuActions.Details) - no accelerator on any platform, nothing to remap.
+    C("RC-i"):                  C("C-i"),                       # Invert selection (macOS Cmd+I)
+    C("RC-n"):                  C("C-h"),                       # Next alive host (macOS Cmd+N)
+    C("Shift-RC-n"):            C("Shift-C-h"),                 # Previous alive host (macOS Shift+Cmd+N)
+    C("Shift-RC-comma"):        C("Shift-C-o"),                 # Select Fetchers (macOS Shift+Cmd+comma)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     ctx_ovl_macos_globals and
     hmp_is_angry_ipscan(ctx) )
+
 
 hmp_is_transmission             = matchProps(clas=transmissionStr)
 keymap("Transmission bittorrent client", {
@@ -4081,6 +4137,7 @@ keymap("Transmission bittorrent client", {
     cnfg.screen_has_focus and
     ctx_ovl_macos_globals and
     hmp_is_transmission(ctx) )
+
 
 _jdownloader_closures           = [matchProps(**dct) for dct in JDownloader_lod]
 hmp_is_jdownloader              = lambda ctx: any(c(ctx) for c in _jdownloader_closures)
@@ -4100,6 +4157,7 @@ keymap("JDownloader", {
     ctx_ovl_macos_globals and
     hmp_is_jdownloader(ctx) )
 
+
 hmp_is_totem                    = matchProps(clas="^totem$")
 keymap("Totem video player", {
     C("RC-dot"):                C("C-q"),                       # Stop (quit player, there is no "Stop" function)
@@ -4108,6 +4166,7 @@ keymap("Totem video player", {
     ctx_ovl_macos_globals and
     hmp_is_totem(ctx) )
 
+
 hmp_is_eog                      = matchProps(clas="^eog$")
 keymap("GNOME image viewer", {
     C("RC-i"):                  C("Alt-Enter"),                 # Image properties
@@ -4115,6 +4174,7 @@ keymap("GNOME image viewer", {
     cnfg.screen_has_focus and
     ctx_ovl_macos_globals and
     hmp_is_eog(ctx) )
+
 
 hmp_is_libreoffice_writer       = matchProps(clas="^libreoffice-writer$")
 keymap("LibreOffice Writer", {
@@ -4902,17 +4962,16 @@ keymap("VSCodes", {
     C("Shift-RC-Right_Brace"):  C("C-PAGE_DOWN"),               # prev_view
 
     # VS Code Shortcuts
-    C("C-g"):                   ignore_combo,                   # cancel Go to Line...
-    C("Super-g"):               C("C-g"),                       # Go to Line...
-    C("F3"):                    ignore_combo,                   # cancel Find next
-    C("C-h"):                   ignore_combo,                   # cancel replace
-    C("C-Alt-f"):               C("C-h"),                       # replace
-    C("C-Shift-h"):             ignore_combo,                   # cancel replace_next
-    C("C-Alt-e"):               C("C-Shift-h"),                 # replace_next
-    C("f3"):                    ignore_combo,                   # cancel find_next
-    C("C-g"):                   C("f3"),                        # find_next
-    C("Shift-f3"):              ignore_combo,                   # cancel find_prev
-    C("C-Shift-g"):             C("Shift-f3"),                  # find_prev
+    C("Super-g"):               C("C-g"),                       # Emit Linux Go to Line... combo
+    # The Cmd+H "hide window" combo is now handled by the "General GUI" keymap, with notes.
+    # C("RC-h"):                  ignore_combo,                   # Block Linux replace input combo
+    C("RC-Alt-f"):              C("C-h"),                       # Emit Linux replace combo
+    C("RC-Shift-h"):            ignore_combo,                   # Block Linux replace_next input combo
+    C("RC-Alt-e"):              C("C-Shift-h"),                 # Emit Linux replace_next combo
+    C("F3"):                    ignore_combo,                   # Block Linux find_next input combo
+    C("RC-g"):                  C("F3"),                        # Emit Linux find_next combo
+    C("Shift-F3"):              ignore_combo,                   # Block Linux find_prev input combo
+    C("RC-Shift-g"):            C("Shift-F3"),                  # Emit Linux find_prev combo
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     ctx_ovl_vscode_shortcuts and
@@ -6027,6 +6086,25 @@ keymap("General GUI", {
 
     C("RC-Grave"):          [iEF2NT(),bind, C("Alt-Grave")],         # Default not-xfce4 - Cmd ` - Same App Switching
     C("Shift-RC-Grave"):    [iEF2NT(),bind, C("Alt-Shift-Grave")],   # Default not-xfce4 - Cmd ` - Same App Switching
+
+    # Cmd+H is macOS "Hide Application", a window management function. There is no portable
+    # Linux equivalent: the minimize combo is set by the window manager and does not converge
+    # across desktops (GNOME Super+H, KDE Super+PgDn, Deepin Super+N, Xfce4 Alt+F9). The
+    # working remaps therefore live in the DE/distro-specific "GenGUI overrides" keymaps
+    # further up, which win by being earlier in the lookup order.
+    #
+    # This entry is the catch-all for desktops with no override. Without it, Cmd+H reaches
+    # the focused app as a literal Ctrl+H and fires whatever that app binds there (e.g. Replace,
+    # in VSCode). Blocking is the correct default: Cmd+H is never a text or document
+    # shortcut on macOS, so no app should be receiving it.
+    #
+    # If Cmd+H is not minimizing (hiding) windows in your environment, it may need an override
+    # keymap in the section above, or your own custom keymap in the "user_apps" editable slice.
+    #
+    # An app that genuinely wants Ctrl+H should emit it from a macOS-equivalent-app combo in its
+    # own keymap rather than relying on Cmd+H leaking through. See the VSCodes keymap, where
+    # Cmd+Option+F produces Ctrl+H for Replace.
+    C("RC-H"):                  ignore_combo,                   # Block Cmd+H, no DE override matched
 
     # Fn to Alt style remaps
     C("RAlt-Enter"):            C("insert"),                    # Insert
