@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260727'                        # CLI option "--version" will print this out.
+__version__ = '20260729'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -170,12 +170,12 @@ if sys.prefix != sys.base_prefix:
     sys.path = [p for p in sys.path if not p.startswith(sys.prefix)]
     sys.prefix = sys.base_prefix
 
-do_not_ask_about_path = None
+home_local_bin_in_path = None
 if home_local_bin in original_PATH_str:
     with open(good_path_tmp_path, 'a') as file:
         file.write('Nothing to see here.')
     # subprocess.run(['touch', path_good_tmp_path])
-    do_not_ask_about_path = True
+    home_local_bin_in_path = True
 else:
     debug("Home user local bin not part of PATH string.")
 # do the 'else' of creating 'path_fix_tmp_path' later in function that prompts user
@@ -249,6 +249,7 @@ class InstallerSettings:
 
         self.autostart_tray_icon    = True
         self.unprivileged_user      = False
+        self.admin_capable_answer   = None      # 'y'/'n' from CLI latch or early question
 
         self.prep_only              = None
 
@@ -711,25 +712,6 @@ def ask_is_distro_updated():
         safe_shutdown(1)
 
 
-def ask_add_home_local_bin():
-    """
-    Check if `~/.local/bin` is in original PATH. Done earlier in script.
-    Ask user if it is OK to add the `~/.local/bin` folder to the PATH permanently.
-    Create temp file to allow bincommands script to bypass question.
-    """
-    if do_not_ask_about_path:
-        pass
-    else:
-        print()
-        response = input('The "~/.local/bin" folder is not in PATH. OK to add it? [Y/n]: ') or 'y'
-        if response in ['y', 'Y']:
-            # Let's prompt a reboot when we need to add local-bin to the PATH
-            cnfg.should_reboot = True
-            # create temp file that will get script to add local bin to path without asking
-            with open(fix_path_tmp_path, 'a') as file:
-                file.write('Nothing to see here.')
-
-
 def ask_for_attn_on_info():
     """
     Utility function to request confirmation of attention before
@@ -936,103 +918,122 @@ def check_kde_app_switcher():
             safe_shutdown(1)
 
 
-def elevate_privileges():
-    """Elevate privileges early in the installer process, or invoke unprivileged install"""
+def ask_admin_capability():
+    """Ask the admin-capability question as the first interaction of the install
+    or prep-only sequence (hoisted out of elevate_privileges), unless the answer
+    was latched by bootstrap via the hidden '--admin-capable' argument. Handles
+    the unprivileged-install acknowledgment gate on a "no" answer."""
 
-    print()     # blank line to separate
-    max_attempts = 3
+    if cnfg.admin_capable_answer is None:
+        print()     # blank line to separate
+        max_attempts = 3
 
-    # Ask politely if user is admin to avoid causing an "incident" report unnecessarily
-    for _ in range(max_attempts):
-        response = input(
-            f'Can user "{cnfg.user_name}" run admin commands (via sudo/doas/run0)? [y/n]: ')
-        if response.casefold() in ['y', 'n']:
-            # response is valid, so break loop and proceed with appropriate actions below
-            break
-        else:
+        # Ask politely if user is admin to avoid causing an "incident" report unnecessarily
+        # Keep this prompt's wording in sync with the same question in bootstrap.sh.
+        for _ in range(max_attempts):
+            response = input(
+                f'Can user "{cnfg.user_name}" run admin commands (via sudo/doas/run0)? [y/n]: ')
+            if response.casefold() in ['y', 'n']:
+                cnfg.admin_capable_answer = response.casefold()
+                break
+            else:
+                print()
+                error("Response invalid. Valid responses are 'y' or 'n'.")
+                print()     # blank line for separation, then continue loop
+        else:   # this "else" belongs to the "for" loop
             print()
-            error("Response invalid. Valid responses are 'y' or 'n'.")
-            print()     # blank line for separation, then continue loop
-    else:   # this "else" belongs to the "for" loop
+            error('Response invalid. Max attempts reached.')
+            safe_shutdown(1)
+
+    if cnfg.admin_capable_answer == 'y':
+        return
+
+    # The answer was "no" from here on down.
+    if cnfg.prep_only:
         print()
-        error('Response invalid. Max attempts reached.')
+        error('The "prep-only" command performs privileged system setup, so it')
+        error('can only be used by a user with "sudo/doas/run0" access.')
         safe_shutdown(1)
 
-    if response.casefold() == 'y':
-        cnfg.detect_elevation_command()     # Get the actual command for elevated privileges
+    secret_code = generate_secret_code()
+    print('\n\n')
+    print(fancy_str(
+        'ALERT!  ALERT!  ALERT!  ALERT!  ALERT!  ALERT!  ALERT!  ALERT!  ALERT!  ALERT!\n',
+        color_name='red', bold=True))
+    md_wrapped_str = md_wrap(f"""
+    The secret code for this run is "{secret_code}". You will need this.
 
-        # Do this here, only if the privilege elevation command is 'sudo':
-        # Invalidate any `sudo` ticket that might be hanging around, to maximize
-        # the length of time before `sudo` might demand the password again
-        if cnfg.priv_elev_cmd == 'sudo':
-            try:
-                subprocess.run(['sudo', '-k'], check=True)
-            except subprocess.CalledProcessError as proc_err:
-                error(f"ERROR: 'sudo' found, but 'sudo -k' did not work. Very strange.\n{proc_err}")
+    It is possible to install as an unprivileged user, but only after an
+    admin user first runs the full install or a "prep-only" sequence.
+    The admin user must install from a full desktop session, or from
+    a "su --login adminuser" shell instance. The admin user can do
+    just the "prep" steps with:
 
-        call_attn_to_pwd_prompt_if_needed()
-        try:
-            cmd_lst = [cnfg.priv_elev_cmd, 'bash', '-c', 'echo -e "\nUsing elevated privileges..."']
-            subprocess.run(cmd_lst, check=True)
-            cnfg.first_priv_elev_done = True
-        except subprocess.CalledProcessError as proc_err:
-            print()
-            if cnfg.prep_only:
-                print()
-                error(f'ERROR: Problem invoking "{cnfg.priv_elev_cmd}" command. Not an admin user?')
-                error(f'Only a user with "{cnfg.priv_elev_cmd}" access can use "prep-only" command.')
-            error(f'Problem invoking the "{cnfg.priv_elev_cmd}" command.')
-            print('Try answering "n" to admin question next time.')
-            safe_shutdown(1)
-    elif response.casefold() == 'n':
-        secret_code = generate_secret_code()
-        print('\n\n')
-        print(fancy_str(
-            'ALERT!  ALERT!  ALERT!  ALERT!  ALERT!  ALERT!  ALERT!  ALERT!  ALERT!  ALERT!\n',
-            color_name='red', bold=True))
-        md_wrapped_str = md_wrap(f"""
-        The secret code for this run is "{secret_code}". You will need this.
+    ./{this_file_name} prep-only
 
-        It is possible to install as an unprivileged user, but only after an
-        admin user first runs the full install or a "prep-only" sequence.
-        The admin user must install from a full desktop session, or from
-        a "su --login adminuser" shell instance. The admin user can do
-        just the "prep" steps with:
+    ... instead of using:
 
-        ./{this_file_name} prep-only
+    ./{this_file_name} install
 
-        ... instead of using:
-
-        ./{this_file_name} install
-
-        Use the "prep-only" command if it is not desired that Toshy
-        should also run when the admin user logs into a desktop session.
-        When using "su --login adminuser", that user will also need to
-        download an independent copy of the Toshy zip file to install from,
-        using a "wget" or "curl" command. Or use "sudo/doas/run0" to copy
-        the zip file from the unprivileged user's Downloads folder.
-        See the Wiki for a better example of the full "prep-only" sequence
-        with a separate admin user.
-        """)
-        print(md_wrapped_str)
+    Use the "prep-only" command if it is not desired that Toshy
+    should also run when the admin user logs into a desktop session.
+    When using "su --login adminuser", that user will also need to
+    download an independent copy of the Toshy zip file to install from,
+    using a "wget" or "curl" command. Or use "sudo/doas/run0" to copy
+    the zip file from the unprivileged user's Downloads folder.
+    See the Wiki for a better example of the full "prep-only" sequence
+    with a separate admin user.
+    """)
+    print(md_wrapped_str)
+    print()
+    md_wrapped_str = md_wrap(width=55, text="""
+    If you understand everything written above or already took care
+    of prepping the system and want to proceed with an unprivileged
+    install, enter the secret code:
+    """)
+    response = input(md_wrapped_str)
+    if response == secret_code:
+        # set a flag to bypass functions that do system "prep" work with elevated privileges
+        cnfg.unprivileged_user = True
         print()
-        md_wrapped_str = md_wrap(width=55, text="""
-        If you understand everything written above or already took care
-        of prepping the system and want to proceed with an unprivileged
-        install, enter the secret code:
-        """)
-        response = input(md_wrapped_str)
-        if response == secret_code:
-            # set a flag to bypass functions that do system "prep" work with elevated privileges
-            cnfg.unprivileged_user = True
+        print("Good code. Continuing with an unprivileged install of Toshy user components...")
+    else:
+        print()
+        error('Code does not match! Try the installer again after installing Toshy \n'
+                '     first using an admin user that has access to "sudo/doas/run0".')
+        safe_shutdown(1)
+
+
+def elevate_privileges():
+    """Establish the privilege elevation ticket. The capability question itself
+    is asked earlier by ask_admin_capability() (or latched from bootstrap), so
+    reaching this function means the user claimed admin capability."""
+
+    cnfg.detect_elevation_command()     # Get the actual command for elevated privileges
+
+    # Do this here, only if the privilege elevation command is 'sudo':
+    # Invalidate any `sudo` ticket that might be hanging around, to maximize
+    # the length of time before `sudo` might demand the password again
+    if cnfg.priv_elev_cmd == 'sudo':
+        try:
+            subprocess.run(['sudo', '-k'], check=True)
+        except subprocess.CalledProcessError as proc_err:
+            error(f"ERROR: 'sudo' found, but 'sudo -k' did not work. Very strange.\n{proc_err}")
+
+    call_attn_to_pwd_prompt_if_needed()
+    try:
+        cmd_lst = [cnfg.priv_elev_cmd, 'bash', '-c', 'echo -e "\nUsing elevated privileges..."']
+        subprocess.run(cmd_lst, check=True)
+        cnfg.first_priv_elev_done = True
+    except subprocess.CalledProcessError as proc_err:
+        print()
+        if cnfg.prep_only:
             print()
-            print("Good code. Continuing with an unprivileged install of Toshy user components...")
-            return
-        else:
-            print()
-            error('Code does not match! Try the installer again after installing Toshy \n'
-                    '     first using an admin user that has access to "sudo/doas/run0".')
-            safe_shutdown(1)
+            error(f'ERROR: Problem invoking "{cnfg.priv_elev_cmd}" command. Not an admin user?')
+            error(f'Only a user with "{cnfg.priv_elev_cmd}" access can use "prep-only" command.')
+        error(f'Problem invoking the "{cnfg.priv_elev_cmd}" command.')
+        print('Try answering "n" to admin question next time.')
+        safe_shutdown(1)
 
 
 #####################################################################################################
@@ -3663,6 +3664,76 @@ def verify_user_groups():
 #     show_task_completed_msg()
 
 
+def resolve_keymapper_ref():
+    """Resolve which keymapper ref to install. Default is the stable branch.
+    The '--dev-keymapper' flag selects the dev branch, or any ref (branch,
+    tag, or commit SHA) when given an explicit value."""
+    if cnfg.use_dev_keymapper:
+        if cnfg.keymapper_cust_branch:
+            return cnfg.keymapper_cust_branch
+        return cnfg.keymapper_dev_branch
+    return cnfg.keymapper_branch
+
+
+def preflight_keymapper_source():
+    """Verify that the keymapper source will be obtainable, BEFORE any
+    destructive steps run (config folder replacement). A failure after the
+    config tree is replaced would leave new config files coupled to the old
+    keymapper still in the venv until a rerun succeeds, so fail fast here.
+
+    Vendored refs: verify the vendored folder is present and populated.
+    Custom refs: verify 'git' exists and the remote is reachable; branch and
+    tag refs are verified to exist on the remote. Commit SHAs cannot be
+    listed by 'git ls-remote', so for SHA-like refs only remote reachability
+    is verified (the clone itself remains the real test)."""
+
+    keymapper_ref = resolve_keymapper_ref()
+
+    vendored_folder_for_ref = {
+        cnfg.keymapper_branch:      'xwaykeyz-main',
+        cnfg.keymapper_dev_branch:  'xwaykeyz-dev_beta',
+    }
+    vendored_folder_name = vendored_folder_for_ref.get(keymapper_ref)
+
+    if vendored_folder_name:
+        vendored_dir_path = os.path.join(this_file_dir, 'vendors', vendored_folder_name)
+        if os.path.isfile(os.path.join(vendored_dir_path, 'pyproject.toml')):
+            return      # vendored source present; nothing else to verify
+        warn(f"Vendored keymapper source not found: '{vendored_folder_name}'")
+        warn('Will need to clone the keymapper from the remote repo instead.')
+
+    # Custom ref, or vendored copy missing: the clone fallback will run later,
+    # so its prerequisites get verified now.
+    if not shutil.which('git'):
+        print()
+        error('ERROR: A keymapper clone will be needed, but "git" is not installed.')
+        error('Install "git" (or restore the vendored keymapper folder) and retry.')
+        safe_shutdown(1)
+
+    looks_like_sha = bool(re.fullmatch(r'[0-9a-fA-F]{7,40}', keymapper_ref))
+    probe_ref = 'HEAD' if looks_like_sha else keymapper_ref
+    cmd_lst = ['git', 'ls-remote', '--exit-code', cnfg.keymapper_url, probe_ref]
+    try:
+        subprocess.run(cmd_lst, check=True, stdout=DEVNULL, stderr=DEVNULL, timeout=30)
+    except subprocess.TimeoutExpired:
+        print()
+        error(f'ERROR: Timed out checking the keymapper remote repo:')
+        error(f'    {cnfg.keymapper_url}')
+        error('Check the network connection and retry.')
+        safe_shutdown(1)
+    except subprocess.CalledProcessError:
+        print()
+        if looks_like_sha:
+            error(f'ERROR: The keymapper remote repo is not reachable:')
+            error(f'    {cnfg.keymapper_url}')
+        else:
+            error(f"ERROR: Keymapper ref '{keymapper_ref}' was not found on the remote")
+            error(f'repo (or the repo is unreachable):')
+            error(f'    {cnfg.keymapper_url}')
+        error('Nothing has been modified. Fix the ref or connection and retry.')
+        safe_shutdown(1)
+
+
 def prep_keymapper_files():
     """Stage the keymapper source files that `pip` will install later.
 
@@ -3676,16 +3747,7 @@ def prep_keymapper_files():
     """
     print(f'\n\n§  Prepping keymapper files...\n{cnfg.separator}')
 
-    # Resolve which ref to install. Default is the stable branch. The
-    # '--dev-keymapper' flag selects the dev branch, or any ref (branch,
-    # tag, or commit SHA) when given an explicit value.
-    if cnfg.use_dev_keymapper:
-        if cnfg.keymapper_cust_branch:
-            keymapper_ref = cnfg.keymapper_cust_branch
-        else:
-            keymapper_ref = cnfg.keymapper_dev_branch
-    else:
-        keymapper_ref = cnfg.keymapper_branch
+    keymapper_ref = resolve_keymapper_ref()
 
     # Map the branches that have vendored copies onto their folder names. Any ref
     # that is not a key here (an arbitrary branch, tag, or commit SHA) must be
@@ -4452,6 +4514,17 @@ def install_pip_packages():
 def install_bin_commands():
     """Install the convenient terminal commands (symlinks to scripts) to manage Toshy"""
     print(f'\n\n§  Installing Toshy terminal commands...\n{cnfg.separator}')
+
+    if not home_local_bin_in_path:
+        # Without this the just-installed commands would not resolve, so it is
+        # done unconditionally (idempotent; performed by the bincommands script
+        # when it sees the temp file). Requires a re-login to take effect.
+        print('The "~/.local/bin" folder is not in PATH. It will be added.')
+        print('(Takes effect after logging out and back in, or rebooting.)')
+        cnfg.should_reboot = True
+        with open(fix_path_tmp_path, 'a') as file:
+            file.write('Nothing to see here.')
+
     script_path = os.path.join(cnfg.toshy_dir_path, 'scripts', 'toshy-bincommands-setup.sh')
     try:
         subprocess.run([script_path], check=True)
@@ -5546,6 +5619,8 @@ def uninstall_toshy():
 def run_install_sequence(cnfg: InstallerSettings):
     """Main installer function to call specific functions in proper sequence"""
 
+    ask_admin_capability()
+
     if not cnfg.prep_only:
         dot_Xmodmap_warning()
 
@@ -5560,9 +5635,6 @@ def run_install_sequence(cnfg: InstallerSettings):
         debug('Skipping "system updated?" prompt: existing Toshy config found (reinstall).')
     else:
         ask_is_distro_updated()
-
-    if not cnfg.prep_only:
-        ask_add_home_local_bin()
 
     get_environment_info()
 
@@ -5586,7 +5658,8 @@ def run_install_sequence(cnfg: InstallerSettings):
             # that are actually compatible with the KWin script (5/6).
             check_kde_app_switcher()
 
-    elevate_privileges()
+    if not cnfg.unprivileged_user:
+        elevate_privileges()
 
     if not cnfg.skip_native and not cnfg.unprivileged_user:
         # This will also be skipped if user proceeds with
@@ -5614,11 +5687,12 @@ def run_install_sequence(cnfg: InstallerSettings):
         safe_shutdown(0)
 
     elif not cnfg.prep_only:
-        prep_keymapper_files()
+        preflight_keymapper_source()
 
         backup_toshy_config()
         install_toshy_files()
 
+        prep_keymapper_files()
         setup_python_vir_env()
         install_pip_packages()
 
@@ -5789,7 +5863,6 @@ def run_user_files_sequence(cnfg: InstallerSettings):
         safe_shutdown(1)
 
     dot_Xmodmap_warning()
-    ask_add_home_local_bin()
 
     get_environment_info()
 
@@ -5931,6 +6004,12 @@ def main():
         help=argparse.SUPPRESS,     # internal handshake from bootstrap.sh (hidden)
     )
 
+    subparser_install.add_argument(
+        '--admin-capable',
+        choices=['yes', 'no'],
+        help=argparse.SUPPRESS      # internal latch, passed by bootstrap.sh
+    )
+
     subparser_user_files        = subparsers.add_parser(
         'install-user-files',
         help='Install only user-level files/services (runtime/system managed externally)'
@@ -5984,6 +6063,12 @@ def main():
         help='Do only prep steps that require admin privileges, no install'
     )
 
+    subparser_prep_only.add_argument(
+        '--admin-capable',
+        choices=['yes', 'no'],
+        help=argparse.SUPPRESS      # internal latch, passed by bootstrap.sh
+    )
+
     subparser_uninstall         = subparsers.add_parser(
         'uninstall',
         help='Uninstall Toshy'
@@ -5999,6 +6084,8 @@ def main():
 
     elif args.command == 'prep-only':
         cnfg.prep_only = True
+        if args.admin_capable:
+            cnfg.admin_capable_answer = 'y' if args.admin_capable == 'yes' else 'n'
 
         run_install_sequence(cnfg)
         safe_shutdown(0)    # redundant, but that's OK
@@ -6012,6 +6099,9 @@ def main():
 
         if args.skip_native:
             cnfg.skip_native = True
+
+        if args.admin_capable:
+            cnfg.admin_capable_answer = 'y' if args.admin_capable == 'yes' else 'n'
 
         if args.skip_update_check:
             cnfg.skip_update_check = True

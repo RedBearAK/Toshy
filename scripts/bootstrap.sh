@@ -5,7 +5,7 @@
 # https://github.com/RedBearAK/toshy
 
 # shellcheck disable=SC2034
-VERSION='20260726'
+VERSION='20260729'
 
 # NOTE: deliberately no 'set -e'. Every command that matters is checked
 # explicitly below. And 'set -e' is silently disabled inside if/&&/||/!
@@ -59,6 +59,30 @@ show_install_options() {
 # install. On a reinstall (existing ~/.config/toshy) this is skipped, and the
 # main setup script self-skips on the same folder check.
 #
+# Keep this prompt's wording in sync with ask_admin_capability() in setup_toshy.py.
+# Both answers are latched (unlike the update question): "no" leads setup_toshy.py
+# to its unprivileged-install acknowledgment gate without re-asking capability.
+check_admin_capability() {
+    echo_unbuffered
+
+    read_interactive -p "Can user \"$USER\" run admin commands (via sudo/doas/run0)? [y/n]: " admin_response
+
+    # shellcheck disable=SC2154
+    case "$admin_response" in
+        y|Y)
+            ADMIN_CAPABLE_ARG="--admin-capable yes"
+            ;;
+        n|N)
+            ADMIN_CAPABLE_ARG="--admin-capable no"
+            ;;
+        *)
+            echo_unbuffered
+            echo_unbuffered "Response invalid. Valid responses are 'y' or 'n'. Exiting."
+            exit 1
+            ;;
+    esac
+}
+
 # Keep this prompt's wording in sync with ask_is_distro_updated() in setup_toshy.py.
 # Path mirrors cnfg.toshy_dir_path in setup_toshy.py: ~/.config/toshy
 check_system_updated() {
@@ -280,6 +304,10 @@ INSTALL_ARGS="install"
 # so setup_toshy.py won't re-ask the same question. Empty on reinstalls.
 SKIP_UPDATE_CHECK_ARG=""
 
+# Set by check_admin_capability(); latched into setup_toshy.py so the admin
+# question is asked exactly once, here, as the first question of the process.
+ADMIN_CAPABLE_ARG=""
+
 
 echo_unbuffered
 echo_unbuffered
@@ -287,13 +315,15 @@ echo_unbuffered "=== Toshy Bootstrap Installer ==="
 
 
 # STEP 0: Confirm system is updated (fresh installs only), before any other prompts
+check_admin_capability
+
 check_system_updated
 
 # STEP 1: Get install options FIRST
 get_install_options
 
 # Append the update-check latch (empty unless a fresh install was confirmed)
-INSTALL_ARGS="$INSTALL_ARGS $SKIP_UPDATE_CHECK_ARG"
+INSTALL_ARGS="$INSTALL_ARGS $SKIP_UPDATE_CHECK_ARG $ADMIN_CAPABLE_ARG"
 
 # STEP 2: Get ref selection
 echo_unbuffered
