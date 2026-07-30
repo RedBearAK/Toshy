@@ -63,9 +63,12 @@ let
       inherit pname version;
       hash = "sha256-dNg6CB9TK8B/bXr81kFuw4QD1o9oubncnh8o+/LXmek=";
     };
-    build-system = with pyPkgs; [
-      setuptools
-      setuptools-scm
+    # setup.py imports pkg_resources (removed in setuptools 81+), only to
+    # assert setuptools >= 30. Building with setuptools 80 (the last line
+    # that still ships pkg_resources) sidesteps it; this mirrors exactly
+    # how nixpkgs' own python-xlib derivation solves the same problem.
+    build-system = [
+      (pyPkgs.setuptools-scm.override { setuptools = pyPkgs.setuptools_80; })
     ];
     dependencies = [ pyPkgs.six ];
     doCheck = false;
