@@ -315,30 +315,29 @@ echo_unbuffered "=== Toshy Bootstrap Installer ==="
 
 
 # STEP 0: Confirm system is updated (fresh installs only), before any other prompts
-# NixOS cannot use this bootstrap path at all: no package manager logic,
-# and the runtime/system layers are managed by the Nix flake. Bail out
-# before downloading anything or asking any questions.
+# NixOS cannot use the normal install path (no package manager logic; the
+# runtime/system layers are managed by the Nix flake), but downloading and
+# unpacking the source is still useful. Skip the installer questions and,
+# after unpacking, print Nix-specific guidance instead of launching setup.
+IS_NIXOS=0
 if [[ -r /etc/os-release ]] && [[ "$(. /etc/os-release && echo "${ID:-}")" == "nixos" ]]; then
+    IS_NIXOS=1
     echo_unbuffered
-    echo_unbuffered "NixOS detected. The bootstrap installer does not apply on NixOS."
-    echo_unbuffered "Toshy on NixOS is set up through the Nix flake instead. See:"
-    echo_unbuffered ""
-    echo_unbuffered "    https://github.com/RedBearAK/toshy/blob/main/nix/README.md"
-    echo_unbuffered ""
-    echo_unbuffered "Fresh install with no system flake yet? Clone/extract the repo and run:"
-    echo_unbuffered "    bash ./nix/nixos-scaffold.sh"
-    exit 1
+    echo_unbuffered "NixOS detected. The source will be downloaded and unpacked, but the"
+    echo_unbuffered "normal installer will not run; Nix-specific steps follow at the end."
 fi
 
-check_admin_capability
+if [[ "$IS_NIXOS" != "1" ]]; then
+    check_admin_capability
 
-check_system_updated
+    check_system_updated
 
-# STEP 1: Get install options FIRST
-get_install_options
+    # STEP 1: Get install options FIRST
+    get_install_options
 
-# Append the update-check latch (empty unless a fresh install was confirmed)
-INSTALL_ARGS="$INSTALL_ARGS $SKIP_UPDATE_CHECK_ARG $ADMIN_CAPABLE_ARG"
+    # Append the update-check latch (empty unless a fresh install was confirmed)
+    INSTALL_ARGS="$INSTALL_ARGS $SKIP_UPDATE_CHECK_ARG $ADMIN_CAPABLE_ARG"
+fi
 
 # STEP 2: Get ref selection
 echo_unbuffered
@@ -426,6 +425,20 @@ trap ctrl_c INT
 echo_unbuffered
 echo_unbuffered "Download complete. Toshy source unpacked to:"
 echo_unbuffered "  $TOSHY_DIR"
+
+if [[ "$IS_NIXOS" == "1" ]]; then
+    echo_unbuffered
+    echo_unbuffered "NixOS: stopping here (the normal installer does not apply)."
+    echo_unbuffered "Continue with the Nix-specific steps, from the unpacked folder:"
+    echo_unbuffered
+    echo_unbuffered "    cd \"$TOSHY_DIR\""
+    echo_unbuffered
+    echo_unbuffered "First time (no system flake yet):  bash ./nix/nixos-scaffold.sh"
+    echo_unbuffered "Runtime already in place:          bash ./nix/install-user-files.sh"
+    echo_unbuffered
+    echo_unbuffered "Full details: nix/README.md in that folder."
+    exit 0
+fi
 
 # Strong visual separation before setup launches
 echo_unbuffered

@@ -186,7 +186,11 @@ let
     gobject-introspection
   ];
 
-  giTypelibPath = lib.makeSearchPath "lib/girepository-1.0" giPackages;
+  # makeSearchPathOutput targets the "out" output explicitly: several of
+  # these packages (pango notably) list "bin" as their first/default output,
+  # which contains no typelibs, so plain makeSearchPath would silently omit
+  # them (symptom: "Typelib file for namespace 'PangoCairo' ... not found").
+  giTypelibPath = lib.makeSearchPathOutput "out" "lib/girepository-1.0" giPackages;
 
   xdgDataDirs = lib.concatStringsSep ":" [
     "${gsettings-desktop-schemas}/share/gsettings-schemas/${gsettings-desktop-schemas.name}"

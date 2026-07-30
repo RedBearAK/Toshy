@@ -179,8 +179,10 @@ setup_path() {
     local files_needing_path=()
     
     for file in "${shell_files[@]}"; do
-        # Check all existing files, plus always include .profile for universal compatibility
-        if [ -f "${file}" ] || [[ "${file}" == *"profile"* ]]; then
+        # Check all existing files, plus always include the profile files and
+        # .bashrc (NixOS creates no user dotfiles, and interactive non-login
+        # bash reads only .bashrc, so it must be created if absent)
+        if [ -f "${file}" ] || [[ "${file}" == *"profile"* ]] || [[ "${file}" == *".bashrc" ]]; then
             if ! path_contains_local_bin "${file}"; then
                 files_needing_path+=("${file}")
             fi
