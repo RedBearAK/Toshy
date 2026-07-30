@@ -93,10 +93,12 @@ fi
 
 echo
 echo "Advancing the 'toshy' flake input to the current branch tip..."
-if ! sudo nix "${nix_xf[@]}" flake update toshy --flake /etc/nixos; then
+# --refresh bypasses Nix's fetch cache (roughly a one-hour TTL on branch
+# name resolution), so this always gets the true current branch tip.
+if ! sudo nix "${nix_xf[@]}" flake update toshy --flake /etc/nixos --refresh; then
     # Older Nix used a different spelling for updating a single input.
     echo "Retrying with older 'nix flake lock' syntax..."
-    if ! sudo nix "${nix_xf[@]}" flake lock --update-input toshy /etc/nixos; then
+    if ! sudo nix "${nix_xf[@]}" flake lock --update-input toshy /etc/nixos --refresh; then
         echo "ERROR: Could not update the flake input. Fix the errors above and retry."
         exit 1
     fi
