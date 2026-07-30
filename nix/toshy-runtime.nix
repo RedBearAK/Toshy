@@ -24,6 +24,8 @@
 , pango
 , libadwaita
 , libayatana-appindicator
+, harfbuzz
+, libdbusmenu-gtk3
 , gobject-introspection
 , gsettings-desktop-schemas
 , adwaita-icon-theme
@@ -181,6 +183,8 @@ let
     graphene
     gdk-pixbuf
     pango
+    harfbuzz                    # Pango's typelib hard-requires HarfBuzz-0.0
+    libdbusmenu-gtk3            # AyatanaAppIndicator3 chain requires Dbusmenu
     libadwaita
     libayatana-appindicator
     gobject-introspection
