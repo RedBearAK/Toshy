@@ -17,7 +17,7 @@
 # scaffold does not apply. See nix/README.md for what does.
 
 # shellcheck disable=SC2034
-SCRIPT_VERSION='20260727'
+SCRIPT_VERSION='20260729'
 
 # Guard: never run as root; user detection and ownership would be wrong,
 # and nothing here needs privileges.
@@ -159,6 +159,14 @@ cat > "$out_file" << EOF
 #   - flakes enablement (baked in after the first flake-based rebuild)
 #   - the Toshy NixOS module (udev rules, uinput, input group)
 #   - Home Manager, with the Toshy Home Manager module (runtime link)
+#
+# UPGRADING TOSHY LATER: the toshy input below is PINNED in flake.lock at
+# the revision first fetched; rebuilds do not advance it. To update to the
+# current tip of the tracked branch, either run 'toshy-reinstall' (which
+# does all of this plus the user-files reinstall), or manually:
+#
+#   sudo nix flake update toshy --flake /etc/nixos
+#   sudo nixos-rebuild switch --flake /etc/nixos#${host_name}
 
 {
   inputs = {
@@ -223,6 +231,16 @@ echo ""
 echo "5. Install the Toshy user-level files, from this repo clone:"
 echo ""
 echo "       ~/.local/state/toshy/runtime/bin/python ./setup_toshy.py install-user-files"
+echo ""
+echo "6. UPGRADING LATER: the flake pins Toshy at the revision it first"
+echo "   fetches; plain rebuilds never advance it. To update to the current"
+echo "   tip of the tracked branch, just run the installed command:"
+echo ""
+echo "       toshy-reinstall"
+echo ""
+echo "   (It advances the pin, rebuilds, and reinstalls the user files from"
+echo "   the matching revision. The same commands are also in a comment at"
+echo "   the top of the generated flake.)"
 echo ""
 
 # End of file #

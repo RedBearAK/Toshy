@@ -51,8 +51,10 @@ let
   # ---- Pinned overrides (see comments in repo requirements.txt) ----
 
   # python-xlib pinned to 0.31 due to a BadRRModeError attribute bug in
-  # newer releases. nixpkgs attr is "xlib".
-  python-xlib-pinned = pyPkgs.xlib.overridePythonAttrs (old: {
+  # newer releases. (nixpkgs attr was "xlib" until mid-2026; that name is now
+  # a deprecation alias for "python-xlib", the same path that turned the old
+  # "systemd" attr into a hard error, so the real name is used here.)
+  python-xlib-pinned = pyPkgs.python-xlib.overridePythonAttrs (old: {
     version = "0.31";
     src = fetchPypi {
       pname = "python-xlib";
@@ -123,7 +125,7 @@ let
     psutil
     pygobject3
     sv-ttk
-    systemd
+    systemd-python
     tkinter
     watchdog
   ] ++ [
