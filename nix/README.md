@@ -7,6 +7,10 @@ report successes and failures on the GitHub issue tracker, ideally with build
 logs and the output of `toshy-versions` when you get far enough for that to
 work.
 
+For the full record of missteps and corrections made while building this
+support (useful before touching these files), see `DEVELOPMENT_NOTES.md`
+in this folder.
+
 ## How the pieces fit together
 
 Toshy on NixOS is split into three layers, each with a different owner:
@@ -68,8 +72,12 @@ runtime that was just linked:
 ```
 git clone https://github.com/RedBearAK/toshy.git
 cd toshy
-~/.local/state/toshy/runtime/bin/python ./setup_toshy.py install-user-files
+bash ./nix/install-user-files.sh
 ```
+
+(This is a thin wrapper that runs `setup_toshy.py install-user-files` with
+the linked runtime's Python; installer options like `--barebones-config`
+pass straight through.)
 
 The subcommand is interactive and is run manually on purpose. It performs the
 same user-level setup as the normal installer: config folder (with backups and
@@ -102,15 +110,36 @@ afterward the setting is baked in), log out and back in, and finish with
 
 ## Upgrading
 
-Two layers can change:
+The flake pins Toshy in `flake.lock` at the revision it first fetched, and
+plain rebuilds never advance that pin (this is standard flake behavior, and
+it is also what guarantees the runtime and user files can be kept on the
+same revision). Updating is an explicit action.
 
-- **Runtime**: `nix flake update` (or update the pinned input) and switch.
-  The link target moves to the new environment; restart the Toshy services to
-  load it (rerunning `install-user-files` also does this).
-- **User files**: pull the repo checkout and rerun
-  `install-user-files`. When a Toshy release changes Python requirements or
-  the keymapper, update the flake input to the same revision so both layers
-  track the same source.
+**The easy way**: once Toshy is installed, run:
+
+```
+toshy-reinstall
+```
+
+On NixOS this advances the pinned `toshy` input to the current tip of the
+branch it tracks, rebuilds the system (rebuilding the runtime), and
+reinstalls the user files from the exact locked revision, keeping both
+layers coupled.
+
+**Manually**, the equivalent is:
+
+```
+sudo nix flake update toshy --flake /etc/nixos
+sudo nixos-rebuild switch --flake /etc/nixos#<hostname>
+```
+
+(Older Nix versions spell the first command
+`sudo nix flake lock --update-input toshy /etc/nixos`.)
+
+Then rerun `install-user-files` from a source checkout of the same revision
+the lock now records. If the runtime link is managed by standalone Home
+Manager rather than the NixOS module, also run `home-manager switch` after
+the flake update.
 
 ## Known weak points (iteration expected)
 
@@ -120,15 +149,20 @@ Two layers can change:
   the most likely area to need fixes on real systems (missing typelib
   packages, icon themes, schema paths).
 - **Pinned overrides**: `python-xlib` 0.31 and `xkbcommon` 1.0.1 override the
-  nixpkgs versions with older sdists. If the nixpkgs derivations have drifted
-  (build backend changes, patches that no longer apply), these overrides may
-  need adjustments.
-- **`sv-ttk`**: assumed present in nixpkgs; if your channel lacks it, it is a
-  small pure-Python package that can be added the same way `hyprpy` is.
+  nixpkgs versions with older sdists. Verified against current nixpkgs: the
+  `xkbcommon` 1.0.1 sdist contains the `ffi_build.py` and `pyproject.toml`
+  the modern derivation's build steps expect, and `python-xlib`'s
+  setuptools-scm build reads its version from sdist metadata. Still the most
+  likely place for build failures if nixpkgs drifts again; report build logs.
 - **`XDG_STATE_HOME`**: the home-manager module places the runtime link at the
   default state location only.
 
 ## Troubleshooting
+
+- For any rebuild (especially the first), `bash ./nix/nixos-rebuild-capture.sh`
+  runs it with the experimental features enabled, keeps a full log, and on
+  failure offers to upload the log to a public paste service and print a
+  short URL, which helps on VMs without working clipboard integration.
 
 - `install-user-files` refuses with "No externally managed Python runtime":
   the home-manager module did not run or did not create the link. Check

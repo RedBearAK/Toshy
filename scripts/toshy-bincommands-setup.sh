@@ -23,6 +23,7 @@ echo -e "\nInstalling Toshy terminal commands..."
 
 mkdir -p "${LOCAL_BIN}"
 
+ln -sf "${TOSHY_BIN}/toshy-share.sh"                    "${LOCAL_BIN}/toshy-share"
 ln -sf "${TOSHY_BIN}/toshy-systemd-setup.sh"            "${LOCAL_BIN}/toshy-systemd-setup"
 ln -sf "${TOSHY_BIN}/toshy-systemd-remove.sh"           "${LOCAL_BIN}/toshy-systemd-remove"
 ln -sf "${TOSHY_BIN}/toshy-services-status.sh"          "${LOCAL_BIN}/toshy-services-status"
@@ -57,6 +58,7 @@ ln -sf "${TOSHY_BIN}/toshy-wlroots-dbus-service.sh"     "${LOCAL_BIN}/toshy-wlro
 echo ""
 echo "Finished installing Toshy terminal commands:"
 echo ""
+echo "- toshy-share"
 echo "- toshy-systemd-setup"
 echo "- toshy-systemd-remove"
 echo "- toshy-services-status"
@@ -177,8 +179,10 @@ setup_path() {
     local files_needing_path=()
     
     for file in "${shell_files[@]}"; do
-        # Check all existing files, plus always include .profile for universal compatibility
-        if [ -f "${file}" ] || [[ "${file}" == *"profile"* ]]; then
+        # Check all existing files, plus always include the profile files and
+        # .bashrc (NixOS creates no user dotfiles, and interactive non-login
+        # bash reads only .bashrc, so it must be created if absent)
+        if [ -f "${file}" ] || [[ "${file}" == *"profile"* ]] || [[ "${file}" == *".bashrc" ]]; then
             if ! path_contains_local_bin "${file}"; then
                 files_needing_path+=("${file}")
             fi

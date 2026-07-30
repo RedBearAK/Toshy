@@ -17,7 +17,17 @@
 # scaffold does not apply. See nix/README.md for what does.
 
 # shellcheck disable=SC2034
-SCRIPT_VERSION='20260727'
+SCRIPT_VERSION='20260730'
+
+use_dev_keymapper=false
+if [[ "${1:-}" == "--dev-keymapper" ]]; then
+    use_dev_keymapper=true
+elif [[ -n "${1:-}" ]]; then
+    echo "ERROR: Unknown argument: $1"
+    echo "Usage: nixos-scaffold.sh [--dev-keymapper]"
+    echo "  --dev-keymapper   Generated flake uses the dev_beta vendored keymapper"
+    exit 1
+fi
 
 # Guard: never run as root; user detection and ownership would be wrong,
 # and nothing here needs privileges.
@@ -143,6 +153,14 @@ echo ""
 
 # ---- Generation (into the current directory only) ----
 
+dev_keymapper_line=''
+if [[ "$use_dev_keymapper" == "true" ]]; then
+    dev_keymapper_line='
+            # Selected via --dev-keymapper: use the dev_beta vendored keymapper.
+            services.toshy.runtimePackage =
+              toshy.packages.${pkgs.stdenv.hostPlatform.system}.toshy-runtime-dev-beta;'
+fi
+
 out_dir='./toshy-scaffold'
 out_file="${out_dir}/flake.nix"
 
@@ -159,6 +177,14 @@ cat > "$out_file" << EOF
 #   - flakes enablement (baked in after the first flake-based rebuild)
 #   - the Toshy NixOS module (udev rules, uinput, input group)
 #   - Home Manager, with the Toshy Home Manager module (runtime link)
+#
+# UPGRADING TOSHY LATER: the toshy input below is PINNED in flake.lock at
+# the revision first fetched; rebuilds do not advance it. To update to the
+# current tip of the tracked branch, either run 'toshy-reinstall' (which
+# does all of this plus the user-files reinstall), or manually:
+#
+#   sudo nix flake update toshy --flake /etc/nixos
+#   sudo nixos-rebuild switch --flake /etc/nixos#${host_name}
 
 {
   inputs = {
@@ -183,9 +209,9 @@ cat > "$out_file" << EOF
             users  = [ "${user_name}" ];
           };
 
-          home-manager.users.${user_name} = {
+          home-manager.users.${user_name} = { pkgs, ... }: {
             imports = [ toshy.homeManagerModules.toshy ];
-            services.toshy.enable = true;
+            services.toshy.enable = true;${dev_keymapper_line}
             home.stateVersion = "${state_version}";
           };
         }
@@ -218,11 +244,31 @@ echo ""
 echo "       sudo NIX_CONFIG='experimental-features = nix-command flakes' \\"
 echo "           nixos-rebuild switch --flake /etc/nixos#${host_name}"
 echo ""
+echo "   EASIER: the same thing, plus live logging and an offer to upload"
+echo "   the log for you on failure, is available as a script:"
+echo ""
+echo "       bash ./nix/nixos-rebuild-capture.sh"
+echo ""
+echo "   NOTE: If this rebuild FAILS, nothing gets baked in. Until one"
+echo "   rebuild succeeds, keep the NIX_CONFIG prefix on every rebuild, and"
+echo "   add:  --extra-experimental-features 'nix-command flakes'"
+echo "   to any other 'nix' commands you run (nix run, nix flake, etc.)."
+echo ""
 echo "4. Log out and back in, so the 'input' group membership takes effect."
 echo ""
 echo "5. Install the Toshy user-level files, from this repo clone:"
 echo ""
-echo "       ~/.local/state/toshy/runtime/bin/python ./setup_toshy.py install-user-files"
+echo "       bash ./nix/install-user-files.sh"
+echo ""
+echo "6. UPGRADING LATER: the flake pins Toshy at the revision it first"
+echo "   fetches; plain rebuilds never advance it. To update to the current"
+echo "   tip of the tracked branch, just run the installed command:"
+echo ""
+echo "       toshy-reinstall"
+echo ""
+echo "   (It advances the pin, rebuilds, and reinstalls the user files from"
+echo "   the matching revision. The same commands are also in a comment at"
+echo "   the top of the generated flake.)"
 echo ""
 
 # End of file #

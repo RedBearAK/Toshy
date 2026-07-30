@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260313'
+__version__ = '20260730'
 
 import os
 import re
@@ -155,12 +155,24 @@ class EnvironmentInfo:
             cmd.append(name)
             return cmd
 
+        pgrep_missing_warned = False
+
         def _run_pgrep(cmd):
             """Execute pgrep command and return True if process found."""
+            nonlocal pgrep_missing_warned
             try:
                 result = subprocess.check_output(cmd)
                 return bool(result.strip())
             except subprocess.CalledProcessError:
+                return False
+            except FileNotFoundError:
+                # 'pgrep' itself is missing from PATH (seen with externally
+                # managed runtimes on NixOS). Degrade to "process not found"
+                # instead of crashing, but say so loudly, once.
+                if not pgrep_missing_warned:
+                    pgrep_missing_warned = True
+                    error("The 'pgrep' command is missing from PATH. Process detection")
+                    error("is degraded; window manager detection may be unreliable.")
                 return False
 
         if len(process_name) <= KERNEL_COMM_LEN:

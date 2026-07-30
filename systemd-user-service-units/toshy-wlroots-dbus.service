@@ -5,7 +5,7 @@ StartLimitIntervalSec=60
 
 [Service]
 SyslogIdentifier=toshy-wlroots-dbus
-ExecStartPre=/bin/bash -c 'if [ -z "$XDG_SESSION_TYPE" ]; then sleep 3; exit 1; fi'
+ExecStartPre=/usr/bin/env bash -c 'if [ -z "$XDG_SESSION_TYPE" ]; then sleep 3; exit 1; fi'
 # ExecStart=/bin/bash -c 'env TERM=xterm $HOME/.config/toshy/scripts/bin/toshy-wlroots-dbus-service.sh'
 Environment=TERM=xterm
 ExecStart=%h/.config/toshy/scripts/bin/toshy-wlroots-dbus-service.sh

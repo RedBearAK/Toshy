@@ -5,7 +5,7 @@
 # https://github.com/RedBearAK/toshy
 
 # shellcheck disable=SC2034
-VERSION='20260726'
+VERSION='20260730'
 
 # NOTE: deliberately no 'set -e'. Every command that matters is checked
 # explicitly below. And 'set -e' is silently disabled inside if/&&/||/!
@@ -59,6 +59,30 @@ show_install_options() {
 # install. On a reinstall (existing ~/.config/toshy) this is skipped, and the
 # main setup script self-skips on the same folder check.
 #
+# Keep this prompt's wording in sync with ask_admin_capability() in setup_toshy.py.
+# Both answers are latched (unlike the update question): "no" leads setup_toshy.py
+# to its unprivileged-install acknowledgment gate without re-asking capability.
+check_admin_capability() {
+    echo_unbuffered
+
+    read_interactive -p "Can user \"$USER\" run admin commands (via sudo/doas/run0)? [y/n]: " admin_response
+
+    # shellcheck disable=SC2154
+    case "$admin_response" in
+        y|Y)
+            ADMIN_CAPABLE_ARG="--admin-capable yes"
+            ;;
+        n|N)
+            ADMIN_CAPABLE_ARG="--admin-capable no"
+            ;;
+        *)
+            echo_unbuffered
+            echo_unbuffered "Response invalid. Valid responses are 'y' or 'n'. Exiting."
+            exit 1
+            ;;
+    esac
+}
+
 # Keep this prompt's wording in sync with ask_is_distro_updated() in setup_toshy.py.
 # Path mirrors cnfg.toshy_dir_path in setup_toshy.py: ~/.config/toshy
 check_system_updated() {
@@ -280,6 +304,10 @@ INSTALL_ARGS="install"
 # so setup_toshy.py won't re-ask the same question. Empty on reinstalls.
 SKIP_UPDATE_CHECK_ARG=""
 
+# Set by check_admin_capability(); latched into setup_toshy.py so the admin
+# question is asked exactly once, here, as the first question of the process.
+ADMIN_CAPABLE_ARG=""
+
 
 echo_unbuffered
 echo_unbuffered
@@ -287,13 +315,29 @@ echo_unbuffered "=== Toshy Bootstrap Installer ==="
 
 
 # STEP 0: Confirm system is updated (fresh installs only), before any other prompts
-check_system_updated
+# NixOS cannot use the normal install path (no package manager logic; the
+# runtime/system layers are managed by the Nix flake), but downloading and
+# unpacking the source is still useful. Skip the installer questions and,
+# after unpacking, print Nix-specific guidance instead of launching setup.
+IS_NIXOS=0
+if [[ -r /etc/os-release ]] && [[ "$(. /etc/os-release && echo "${ID:-}")" == "nixos" ]]; then
+    IS_NIXOS=1
+    echo_unbuffered
+    echo_unbuffered "NixOS detected. The source will be downloaded and unpacked, but the"
+    echo_unbuffered "normal installer will not run; Nix-specific steps follow at the end."
+fi
 
-# STEP 1: Get install options FIRST
-get_install_options
+if [[ "$IS_NIXOS" != "1" ]]; then
+    check_admin_capability
 
-# Append the update-check latch (empty unless a fresh install was confirmed)
-INSTALL_ARGS="$INSTALL_ARGS $SKIP_UPDATE_CHECK_ARG"
+    check_system_updated
+
+    # STEP 1: Get install options FIRST
+    get_install_options
+
+    # Append the update-check latch (empty unless a fresh install was confirmed)
+    INSTALL_ARGS="$INSTALL_ARGS $SKIP_UPDATE_CHECK_ARG $ADMIN_CAPABLE_ARG"
+fi
 
 # STEP 2: Get ref selection
 echo_unbuffered
@@ -381,6 +425,20 @@ trap ctrl_c INT
 echo_unbuffered
 echo_unbuffered "Download complete. Toshy source unpacked to:"
 echo_unbuffered "  $TOSHY_DIR"
+
+if [[ "$IS_NIXOS" == "1" ]]; then
+    echo_unbuffered
+    echo_unbuffered "NixOS: stopping here (the normal installer does not apply)."
+    echo_unbuffered "Continue with the Nix-specific steps, from the unpacked folder:"
+    echo_unbuffered
+    echo_unbuffered "    cd \"$TOSHY_DIR\""
+    echo_unbuffered
+    echo_unbuffered "First time (no system flake yet):  bash ./nix/nixos-scaffold.sh"
+    echo_unbuffered "Runtime already in place:          bash ./nix/install-user-files.sh"
+    echo_unbuffered
+    echo_unbuffered "Full details: nix/README.md in that folder."
+    exit 0
+fi
 
 # Strong visual separation before setup launches
 echo_unbuffered
