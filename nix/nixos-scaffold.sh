@@ -17,7 +17,17 @@
 # scaffold does not apply. See nix/README.md for what does.
 
 # shellcheck disable=SC2034
-SCRIPT_VERSION='20260729'
+SCRIPT_VERSION='20260730'
+
+use_dev_keymapper=false
+if [[ "${1:-}" == "--dev-keymapper" ]]; then
+    use_dev_keymapper=true
+elif [[ -n "${1:-}" ]]; then
+    echo "ERROR: Unknown argument: $1"
+    echo "Usage: nixos-scaffold.sh [--dev-keymapper]"
+    echo "  --dev-keymapper   Generated flake uses the dev_beta vendored keymapper"
+    exit 1
+fi
 
 # Guard: never run as root; user detection and ownership would be wrong,
 # and nothing here needs privileges.
@@ -143,6 +153,14 @@ echo ""
 
 # ---- Generation (into the current directory only) ----
 
+dev_keymapper_line=''
+if [[ "$use_dev_keymapper" == "true" ]]; then
+    dev_keymapper_line='
+            # Selected via --dev-keymapper: use the dev_beta vendored keymapper.
+            services.toshy.runtimePackage =
+              toshy.packages.${pkgs.stdenv.hostPlatform.system}.toshy-runtime-dev-beta;'
+fi
+
 out_dir='./toshy-scaffold'
 out_file="${out_dir}/flake.nix"
 
@@ -191,9 +209,9 @@ cat > "$out_file" << EOF
             users  = [ "${user_name}" ];
           };
 
-          home-manager.users.${user_name} = {
+          home-manager.users.${user_name} = { pkgs, ... }: {
             imports = [ toshy.homeManagerModules.toshy ];
-            services.toshy.enable = true;
+            services.toshy.enable = true;${dev_keymapper_line}
             home.stateVersion = "${state_version}";
           };
         }

@@ -27,6 +27,7 @@
 , gobject-introspection
 , gsettings-desktop-schemas
 , adwaita-icon-theme
+, procps
 , toshySrc
 , keymapperBranch ? "main"    # "main" or "dev_beta" (vendored copies in repo)
 }:
@@ -163,6 +164,9 @@ let
   ]);
 
   # ---- GI typelibs and schemas for the tray / GTK4 preferences app ----
+  # (The wrapper below also puts procps on PATH: Toshy shells out to
+  # pgrep/pkill, which cannot be assumed present in every PATH context,
+  # e.g. systemd user services or minimal sessions.)
 
   giPackages = [
     glib
@@ -202,7 +206,8 @@ runCommand "toshy-runtime-${keymapperBranch}-${kmVersion}"
         exe_name=$(basename "$exe_path")
         makeWrapper "$exe_path" "$out/bin/$exe_name" \
             --prefix GI_TYPELIB_PATH : "${giTypelibPath}" \
-            --prefix XDG_DATA_DIRS : "${xdgDataDirs}"
+            --prefix XDG_DATA_DIRS : "${xdgDataDirs}" \
+            --prefix PATH : "${lib.makeBinPath [ procps ]}"
     done
   ''
 
