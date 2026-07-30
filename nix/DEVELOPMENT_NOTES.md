@@ -3,7 +3,11 @@
 Repo location: toshy/nix/DEVELOPMENT_NOTES.md
 
 A running record of the missteps, misunderstandings, and corrections made
-while building Toshy's experimental NixOS support. Kept so that future
+while building Toshy's experimental NixOS support. (The initial campaign
+concluded successfully: keymapper with per-window context, all services,
+tray, GUI preferences app, and terminal commands verified working on NixOS
+Plasma 6 Wayland, with the normal-distro install path re-verified intact
+on openSUSE Tumbleweed afterward.) Kept so that future
 contributors (and future maintainers of this folder) inherit the lessons
 without repeating the debugging. Ordered roughly chronologically. Update as
 new issues surface.
@@ -196,7 +200,37 @@ hide in more file types than shell scripts — audit unit files, desktop
 files, and generated commands, not just shebangs; and every subprocess
 invocation should be cwd-independent.
 
-## 10. Fetch/build ergonomics discovered along the way (not bugs)
+## 10. GI typelibs: multi-output packages and the transitive namespace chain
+
+**Symptom (two rounds):** With the tray/GUI launch plumbing proven working,
+imports died first on `Typelib file for namespace 'PangoCairo' ... not
+found`, then (after the first fix) on `'HarfBuzz', version '0.0'`. A
+`Namespace AppIndicator3 not available` error alongside was expected noise:
+the tray probes the classic namespace before falling back to Ayatana.
+
+**Misunderstanding, part one:** The wrapper's typelib search path was built
+with plain `makeSearchPath`, which interpolates each package's *default*
+output — and several GTK-stack packages (pango notably: outputs list is
+`[ "bin" "out" "dev" ]`) put "bin" first, which contains no typelibs. The
+pango namespaces were silently absent while out-first packages (Gtk itself)
+worked, which made the failure look like a missing package instead of a
+wrong-output lookup.
+
+**Misunderstanding, part two:** Listing the directly imported namespaces'
+packages is not enough — typelibs declare hard dependencies on other
+typelibs (Pango requires HarfBuzz-0.0; the AyatanaAppIndicator3 chain
+requires Dbusmenu), and the import chain reveals missing transitive nodes
+one at a time, in dependency order.
+
+**Correction and lesson:** `lib.makeSearchPathOutput "out"` targets the
+typelib-bearing output explicitly for the whole list (closing the class,
+not the instance), and harfbuzz plus libdbusmenu-gtk3 joined the bundle for
+the transitive requirements. Lesson: for GI wrapping on Nix, (a) always
+target outputs explicitly for search paths over multi-output packages, and
+(b) expect each "namespace not found" to name the next missing node in the
+transitive chain — the error is precise; trust it and add the node.
+
+## 11. Fetch/build ergonomics discovered along the way (not bugs)
 
 - **A failed switch leaves fetched paths in the store.** Failed runs warm
   the store for later ones; a "newcomer-warm" VM snapshot (flake files and
@@ -210,6 +244,16 @@ invocation should be cwd-independent.
 - **Piping a rebuild through tee suppresses nix's live progress display**
   (it renders only on a terminal). The build header's declared totals plus
   grep -c on the log serve as a crude progress meter.
+- **Session latches can make fixes invisible during development.** The
+  bincommands PATH logic uses latch files in XDG_RUNTIME_DIR, which only
+  clears at full logout — and a development session that never logs out
+  keeps them forever. A "path is good" latch (set the moment any install
+  runs from a profile-sourced shell) early-exits the script before its fix
+  logic, and the script re-touches the latch itself when the current shell's
+  PATH looks correct, so the trap self-renews. Order matters when testing:
+  delete the latch first, then run from a terminal that has NOT sourced the
+  profile. (Not a bug — the latches behave correctly for real installs —
+  but a two-hour lesson for a developer mid-campaign.)
 - **VM debugging without clipboard integration** was solved with bash's
   built-in /dev/tcp redirection to a host-side `nc --keep-open` listener
   (Fedora's ncat is one-shot by default; the libvirt zone may need the
