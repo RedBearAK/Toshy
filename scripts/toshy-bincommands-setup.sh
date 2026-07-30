@@ -23,6 +23,7 @@ echo -e "\nInstalling Toshy terminal commands..."
 
 mkdir -p "${LOCAL_BIN}"
 
+ln -sf "${TOSHY_BIN}/toshy-share.sh"                    "${LOCAL_BIN}/toshy-share"
 ln -sf "${TOSHY_BIN}/toshy-systemd-setup.sh"            "${LOCAL_BIN}/toshy-systemd-setup"
 ln -sf "${TOSHY_BIN}/toshy-systemd-remove.sh"           "${LOCAL_BIN}/toshy-systemd-remove"
 ln -sf "${TOSHY_BIN}/toshy-services-status.sh"          "${LOCAL_BIN}/toshy-services-status"
@@ -57,6 +58,7 @@ ln -sf "${TOSHY_BIN}/toshy-wlroots-dbus-service.sh"     "${LOCAL_BIN}/toshy-wlro
 echo ""
 echo "Finished installing Toshy terminal commands:"
 echo ""
+echo "- toshy-share"
 echo "- toshy-systemd-setup"
 echo "- toshy-systemd-remove"
 echo "- toshy-services-status"
