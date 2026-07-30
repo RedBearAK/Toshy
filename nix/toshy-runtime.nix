@@ -32,7 +32,50 @@
 }:
 
 let
-  pyPkgs = python3.pkgs;
+  # Version pins are applied as a package-set overlay so that EVERY package
+  # in the set resolves to the pinned versions, including transitive
+  # dependents (i3ipc depends on python-xlib; without the overlay, the
+  # standard 0.33 rides into the environment alongside the pinned 0.31 and
+  # shadows it, which is exactly what tester logs showed).
+  pythonPinned = python3.override {
+    packageOverrides = pyFinal: pyPrev: {
+
+      # python-xlib pinned to 0.31 due to a BadRRModeError attribute bug in
+      # newer releases. Built from scratch; its setup.py imports
+      # pkg_resources (removed in setuptools 81+) only to assert
+      # setuptools >= 30, so it is built with setuptools 80 via the
+      # setuptools-scm override, mirroring nixpkgs' own python-xlib.
+      python-xlib = pyFinal.buildPythonPackage rec {
+        pname = "python-xlib";
+        version = "0.31";
+        pyproject = true;
+        src = fetchPypi {
+          inherit pname version;
+          hash = "sha256-dNg6CB9TK8B/bXr81kFuw4QD1o9oubncnh8o+/LXmek=";
+        };
+        build-system = [
+          (pyFinal.setuptools-scm.override { setuptools = pyFinal.setuptools_80; })
+        ];
+        dependencies = [ pyFinal.six ];
+        doCheck = false;
+        pythonImportsCheck = [ "Xlib" ];
+      };
+
+      # xkbcommon pinned below 1.1 (1.5 introduced breaking API changes;
+      # pin advised by the python-xkbcommon maintainer).
+      xkbcommon = pyPrev.xkbcommon.overridePythonAttrs (old: {
+        version = "1.0.1";
+        src = fetchPypi {
+          pname = "xkbcommon";
+          version = "1.0.1";
+          hash = "sha256-npdJ1uy6UUFhZipGi6OGiatrbpYq9C4J+6Xuq8t3bJE=";
+        };
+        doCheck = false;
+      });
+    };
+  };
+
+  pyPkgs = pythonPinned.pkgs;
 
   kmSrcPath = "${toshySrc}/vendors/xwaykeyz-${keymapperBranch}";
 
@@ -48,44 +91,7 @@ let
   kmVersion =
     if kmVersionMatches == [ ] then "unknown" else builtins.head kmVersionMatches;
 
-  # ---- Pinned overrides (see comments in repo requirements.txt) ----
-
-  # python-xlib pinned to 0.31 due to a BadRRModeError attribute bug in
-  # newer releases. Built from scratch rather than overriding the nixpkgs
-  # derivation, whose internals (fetchFromGitHub source, setuptools-scm
-  # plumbing) have drifted enough that overrides proved unreliable in
-  # practice (tester report: env still contained 0.33).
-  python-xlib-pinned = pyPkgs.buildPythonPackage rec {
-    pname = "python-xlib";
-    version = "0.31";
-    pyproject = true;
-    src = fetchPypi {
-      inherit pname version;
-      hash = "sha256-dNg6CB9TK8B/bXr81kFuw4QD1o9oubncnh8o+/LXmek=";
-    };
-    # setup.py imports pkg_resources (removed in setuptools 81+), only to
-    # assert setuptools >= 30. Building with setuptools 80 (the last line
-    # that still ships pkg_resources) sidesteps it; this mirrors exactly
-    # how nixpkgs' own python-xlib derivation solves the same problem.
-    build-system = [
-      (pyPkgs.setuptools-scm.override { setuptools = pyPkgs.setuptools_80; })
-    ];
-    dependencies = [ pyPkgs.six ];
-    doCheck = false;
-    pythonImportsCheck = [ "Xlib" ];
-  };
-
-  # xkbcommon pinned below 1.1 (1.5 introduced breaking API changes;
-  # pin advised by the python-xkbcommon maintainer).
-  xkbcommon-pinned = pyPkgs.xkbcommon.overridePythonAttrs (old: {
-    version = "1.0.1";
-    src = fetchPypi {
-      pname = "xkbcommon";
-      version = "1.0.1";
-      hash = "sha256-npdJ1uy6UUFhZipGi6OGiatrbpYq9C4J+6Xuq8t3bJE=";
-    };
-    doCheck = false;
-  });
+  # ---- Packages not in nixpkgs ----
 
   # Not in nixpkgs. Pure Python; xwaykeyz uses it for the Hyprland backend.
   hyprpy = pyPkgs.buildPythonPackage rec {
@@ -119,17 +125,18 @@ let
       inotify-simple
       ordered-set
       pywayland
+      python-xlib
     ] ++ [
       hyprpy
-      python-xlib-pinned
     ];
     # nixpkgs ships newer versions than the compatible-release pins in the
     # keymapper's pyproject (dbus-python 1.4.x vs ~=1.3.2, inotify-simple
     # 2.x vs ~=1.3). Both are runtime-compatible for xwaykeyz's usage, so
     # those two constraints are relaxed in the wheel metadata. The strict
     # python-xlib==0.31 pin is deliberately NOT relaxed: it exists for a
-    # runtime bug in newer python-xlib, and the pinned 0.31 above satisfies
-    # it, keeping the check as a guard that the pin actually took effect.
+    # runtime bug in newer python-xlib, the overlay-pinned 0.31 satisfies
+    # it, and the check then guards that the overlay actually took effect
+    # across the whole set (this is what caught the i3ipc shadowing).
     pythonRelaxDeps = [
       "dbus-python"
       "inotify-simple"
@@ -140,7 +147,7 @@ let
 
   # ---- Full environment: Toshy app deps + the keymapper ----
 
-  pythonEnv = python3.withPackages (ps: with ps; [
+  pythonEnv = pythonPinned.withPackages (ps: with ps; [
     dbus-python
     lockfile
     pillow
@@ -150,8 +157,8 @@ let
     systemd-python
     tkinter
     watchdog
+    xkbcommon
   ] ++ [
-    xkbcommon-pinned
     xwaykeyz
   ]);
 
