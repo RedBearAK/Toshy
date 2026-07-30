@@ -151,6 +151,11 @@ the flake update.
 
 ## Troubleshooting
 
+- For any rebuild (especially the first), `bash ./nix/nixos-rebuild-capture.sh`
+  runs it with the experimental features enabled, keeps a full log, and on
+  failure offers to upload the log to a public paste service and print a
+  short URL, which helps on VMs without working clipboard integration.
+
 - `install-user-files` refuses with "No externally managed Python runtime":
   the home-manager module did not run or did not create the link. Check
   `ls -l ~/.local/state/toshy/runtime`.
