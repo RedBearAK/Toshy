@@ -174,6 +174,17 @@ for _nix_style_bin_dir in ['/run/wrappers/bin', '/run/current-system/sw/bin']:
     if os.path.isdir(_nix_style_bin_dir):
         os.environ['PATH'] += f':{_nix_style_bin_dir}'
 
+# Also retain any Nix store entries from the original PATH: the Toshy Nix
+# runtime wrapper prefixes tool locations there (procps, glib, zenity,
+# etc.), which the sanitized PATH would otherwise discard. Store paths are
+# root-owned and immutable, and these are appended, so retaining them
+# cannot reintroduce the user-writable shadowing this sanitization
+# prevents.
+if original_PATH_str:
+    for _orig_path_entry in original_PATH_str.split(':'):
+        if _orig_path_entry.startswith('/nix/store/'):
+            os.environ['PATH'] += f':{_orig_path_entry}'
+
 # deactivate Python virtual environment, if one is active, to avoid issues with sys.executable
 if sys.prefix != sys.base_prefix:
     os.environ["VIRTUAL_ENV"] = ""

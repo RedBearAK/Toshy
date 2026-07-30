@@ -28,6 +28,9 @@
 , gsettings-desktop-schemas
 , adwaita-icon-theme
 , procps
+, zenity
+, libnotify
+, xdg-utils
 , toshySrc
 , keymapperBranch ? "main"    # "main" or "dev_beta" (vendored copies in repo)
 }:
@@ -164,9 +167,11 @@ let
   ]);
 
   # ---- GI typelibs and schemas for the tray / GTK4 preferences app ----
-  # (The wrapper below also puts procps on PATH: Toshy shells out to
-  # pgrep/pkill, which cannot be assumed present in every PATH context,
-  # e.g. systemd user services or minimal sessions.)
+  # (The wrapper below also puts required external tools on PATH; Toshy
+  # shells out to pgrep/pkill (procps), gdbus/gsettings (glib), zenity,
+  # notify-send (libnotify), and xdg-open (xdg-utils), none of which can be
+  # assumed present on NixOS in every PATH context, e.g. systemd user
+  # services or the sanitized installer environment.)
 
   giPackages = [
     glib
@@ -207,7 +212,7 @@ runCommand "toshy-runtime-${keymapperBranch}-${kmVersion}"
         makeWrapper "$exe_path" "$out/bin/$exe_name" \
             --prefix GI_TYPELIB_PATH : "${giTypelibPath}" \
             --prefix XDG_DATA_DIRS : "${xdgDataDirs}" \
-            --prefix PATH : "${lib.makeBinPath [ procps ]}"
+            --prefix PATH : "${lib.makeBinPath [ procps glib zenity libnotify xdg-utils ]}"
     done
   ''
 
