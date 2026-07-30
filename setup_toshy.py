@@ -164,6 +164,16 @@ fix_path_tmp_path       = os.path.join(run_tmp_dir, fix_path_tmp_file)
 # set a standard path for duration of script run, to avoid issues with user customized paths
 os.environ['PATH']      = '/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin'
 
+# NixOS keeps essentially nothing in the FHS locations above ('/usr/bin' has
+# only 'env'); the real system binaries (bash, pgrep, etc.) live in the
+# system profile. Append the Nix-style locations when they exist, so child
+# processes and 'env'-based shebang lookups keep working under the
+# sanitized PATH. Appending (not prepending) preserves the existing
+# resolution order everywhere else.
+for _nix_style_bin_dir in ['/run/wrappers/bin', '/run/current-system/sw/bin']:
+    if os.path.isdir(_nix_style_bin_dir):
+        os.environ['PATH'] += f':{_nix_style_bin_dir}'
+
 # deactivate Python virtual environment, if one is active, to avoid issues with sys.executable
 if sys.prefix != sys.base_prefix:
     os.environ["VIRTUAL_ENV"] = ""
