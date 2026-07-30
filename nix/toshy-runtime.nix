@@ -51,18 +51,26 @@ let
   # ---- Pinned overrides (see comments in repo requirements.txt) ----
 
   # python-xlib pinned to 0.31 due to a BadRRModeError attribute bug in
-  # newer releases. (nixpkgs attr was "xlib" until mid-2026; that name is now
-  # a deprecation alias for "python-xlib", the same path that turned the old
-  # "systemd" attr into a hard error, so the real name is used here.)
-  python-xlib-pinned = pyPkgs.python-xlib.overridePythonAttrs (old: {
+  # newer releases. Built from scratch rather than overriding the nixpkgs
+  # derivation, whose internals (fetchFromGitHub source, setuptools-scm
+  # plumbing) have drifted enough that overrides proved unreliable in
+  # practice (tester report: env still contained 0.33).
+  python-xlib-pinned = pyPkgs.buildPythonPackage rec {
+    pname = "python-xlib";
     version = "0.31";
+    pyproject = true;
     src = fetchPypi {
-      pname = "python-xlib";
-      version = "0.31";
+      inherit pname version;
       hash = "sha256-dNg6CB9TK8B/bXr81kFuw4QD1o9oubncnh8o+/LXmek=";
     };
+    build-system = with pyPkgs; [
+      setuptools
+      setuptools-scm
+    ];
+    dependencies = [ pyPkgs.six ];
     doCheck = false;
-  });
+    pythonImportsCheck = [ "Xlib" ];
+  };
 
   # xkbcommon pinned below 1.1 (1.5 introduced breaking API changes;
   # pin advised by the python-xkbcommon maintainer).
@@ -111,6 +119,17 @@ let
     ] ++ [
       hyprpy
       python-xlib-pinned
+    ];
+    # nixpkgs ships newer versions than the compatible-release pins in the
+    # keymapper's pyproject (dbus-python 1.4.x vs ~=1.3.2, inotify-simple
+    # 2.x vs ~=1.3). Both are runtime-compatible for xwaykeyz's usage, so
+    # those two constraints are relaxed in the wheel metadata. The strict
+    # python-xlib==0.31 pin is deliberately NOT relaxed: it exists for a
+    # runtime bug in newer python-xlib, and the pinned 0.31 above satisfies
+    # it, keeping the check as a guard that the pin actually took effect.
+    pythonRelaxDeps = [
+      "dbus-python"
+      "inotify-simple"
     ];
     doCheck = false;
     pythonImportsCheck = [ "xwaykeyz" ];
