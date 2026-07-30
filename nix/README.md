@@ -7,6 +7,10 @@ report successes and failures on the GitHub issue tracker, ideally with build
 logs and the output of `toshy-versions` when you get far enough for that to
 work.
 
+For the full record of missteps and corrections made while building this
+support (useful before touching these files), see `DEVELOPMENT_NOTES.md`
+in this folder.
+
 ## How the pieces fit together
 
 Toshy on NixOS is split into three layers, each with a different owner:
