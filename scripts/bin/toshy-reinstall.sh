@@ -57,6 +57,12 @@ fi
 runtime_link="${XDG_STATE_HOME:-$HOME/.local/state}/toshy/runtime"
 system_flake='/etc/nixos/flake.nix'
 
+# Passed to every nix invocation so this works even on a system where no
+# flake-based rebuild has succeeded yet (the scaffold bakes the experimental
+# features in only after the FIRST successful switch). Harmless when the
+# features are already enabled.
+nix_xf=(--extra-experimental-features 'nix-command flakes')
+
 if [[ ! -e "$system_flake" ]] || ! grep -q 'toshy' "$system_flake"; then
     echo "ERROR: No system flake with a 'toshy' input was found at:"
     echo "    $system_flake"
@@ -87,10 +93,10 @@ fi
 
 echo
 echo "Advancing the 'toshy' flake input to the current branch tip..."
-if ! sudo nix flake update toshy --flake /etc/nixos; then
+if ! sudo nix "${nix_xf[@]}" flake update toshy --flake /etc/nixos; then
     # Older Nix used a different spelling for updating a single input.
     echo "Retrying with older 'nix flake lock' syntax..."
-    if ! sudo nix flake lock --update-input toshy /etc/nixos; then
+    if ! sudo nix "${nix_xf[@]}" flake lock --update-input toshy /etc/nixos; then
         echo "ERROR: Could not update the flake input. Fix the errors above and retry."
         exit 1
     fi
@@ -100,7 +106,8 @@ host_name="$(hostname 2>/dev/null || cat /proc/sys/kernel/hostname)"
 
 echo
 echo "Rebuilding the system (this rebuilds the Toshy runtime)..."
-if ! sudo nixos-rebuild switch --flake "/etc/nixos#${host_name}"; then
+if ! sudo NIX_CONFIG='experimental-features = nix-command flakes' \
+        nixos-rebuild switch --flake "/etc/nixos#${host_name}"; then
     echo "ERROR: 'nixos-rebuild switch' failed. Fix the errors above and retry."
     exit 1
 fi
@@ -118,7 +125,8 @@ echo "Determining the locked Toshy revision..."
 locked_rev="$("${runtime_link}/bin/python" -c '
 import json, subprocess
 out = subprocess.check_output(
-    ["nix", "flake", "metadata", "/etc/nixos", "--json"])
+    ["nix", "--extra-experimental-features", "nix-command flakes",
+     "flake", "metadata", "/etc/nixos", "--json"])
 print(json.loads(out)["locks"]["nodes"]["toshy"]["locked"]["rev"])
 ')"
 
