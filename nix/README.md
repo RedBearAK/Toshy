@@ -68,8 +68,12 @@ runtime that was just linked:
 ```
 git clone https://github.com/RedBearAK/toshy.git
 cd toshy
-~/.local/state/toshy/runtime/bin/python ./setup_toshy.py install-user-files
+bash ./nix/install-user-files.sh
 ```
+
+(This is a thin wrapper that runs `setup_toshy.py install-user-files` with
+the linked runtime's Python; installer options like `--barebones-config`
+pass straight through.)
 
 The subcommand is interactive and is run manually on purpose. It performs the
 same user-level setup as the normal installer: config folder (with backups and
