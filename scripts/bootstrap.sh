@@ -5,7 +5,7 @@
 # https://github.com/RedBearAK/toshy
 
 # shellcheck disable=SC2034
-VERSION='20260729'
+VERSION='20260730'
 
 # NOTE: deliberately no 'set -e'. Every command that matters is checked
 # explicitly below. And 'set -e' is silently disabled inside if/&&/||/!
@@ -315,6 +315,21 @@ echo_unbuffered "=== Toshy Bootstrap Installer ==="
 
 
 # STEP 0: Confirm system is updated (fresh installs only), before any other prompts
+# NixOS cannot use this bootstrap path at all: no package manager logic,
+# and the runtime/system layers are managed by the Nix flake. Bail out
+# before downloading anything or asking any questions.
+if [[ -r /etc/os-release ]] && [[ "$(. /etc/os-release && echo "${ID:-}")" == "nixos" ]]; then
+    echo_unbuffered
+    echo_unbuffered "NixOS detected. The bootstrap installer does not apply on NixOS."
+    echo_unbuffered "Toshy on NixOS is set up through the Nix flake instead. See:"
+    echo_unbuffered ""
+    echo_unbuffered "    https://github.com/RedBearAK/toshy/blob/main/nix/README.md"
+    echo_unbuffered ""
+    echo_unbuffered "Fresh install with no system flake yet? Clone/extract the repo and run:"
+    echo_unbuffered "    bash ./nix/nixos-scaffold.sh"
+    exit 1
+fi
+
 check_admin_capability
 
 check_system_updated

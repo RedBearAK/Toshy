@@ -12,7 +12,7 @@
 #     bash ./nix/nixos-rebuild-capture.sh
 
 # shellcheck disable=SC2034
-SCRIPT_VERSION='20260729'
+SCRIPT_VERSION='20260730'
 
 if [[ $EUID -eq 0 ]]; then
     echo "ERROR: Run this as your normal user; it uses sudo where needed."
@@ -42,7 +42,10 @@ echo "Rebuilding NixOS (flake: /etc/nixos#${host_name})"
 echo "Full log: ${log_file}"
 echo
 
-sudo NIX_CONFIG='experimental-features = nix-command flakes' \
+# tarball-ttl=0 disables Nix's fetch cache for branch-name resolution
+# (roughly one hour by default), so lock creation and input resolution in
+# this rebuild always see the true current tip of tracked branches.
+sudo NIX_CONFIG=$'experimental-features = nix-command flakes\ntarball-ttl = 0' \
         nixos-rebuild switch --flake "/etc/nixos#${host_name}" 2>&1 \
         | tee "$log_file"
 # The pipeline's status is tee's (always 0); the rebuild's own status is

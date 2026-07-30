@@ -5155,7 +5155,8 @@ def apply_tweaks_KDE():
 
         do_kwin_reconfigure()
 
-        fix_task_switcher_cmd = ['./scripts/plasma-task-switcher-fixer.sh']
+        fix_task_switcher_cmd = [
+            os.path.join(this_file_dir, 'scripts', 'plasma-task-switcher-fixer.sh')]
         try:
             subprocess.run(fix_task_switcher_cmd, check=True)
         except subprocess.CalledProcessError as proc_err:
@@ -5163,7 +5164,8 @@ def apply_tweaks_KDE():
 
         do_kwin_reconfigure()
 
-        fix_task_switcher_cmd = ['./scripts/plasma-task-switcher-fixer.sh']
+        fix_task_switcher_cmd = [
+            os.path.join(this_file_dir, 'scripts', 'plasma-task-switcher-fixer.sh')]
         try:
             subprocess.run(fix_task_switcher_cmd, check=True)
         except subprocess.CalledProcessError as proc_err:
