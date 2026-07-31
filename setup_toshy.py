@@ -3453,8 +3453,16 @@ def setup_uinput_module():
         if not os.path.isfile(filepath):
             return False
         try:
-            check_cmd = f"{cnfg.priv_elev_cmd} grep -q '{pattern}' {filepath}"
-            subprocess.run(check_cmd, shell=True, check=True)
+            # List-form on purpose, NOT 'shell=True': opendoas keys its
+            # 'persist' timestamp on the parent process's PID and start time
+            # (see timestamp_path() in opendoas timestamp.c). A shell layer
+            # gives doas a brand-new '/bin/sh' parent on every call, so the
+            # ticket never matches and doas re-prompts for the password each
+            # time (Alpine, Chimera). Direct exec keeps this Python process
+            # as the stable parent. Same reasoning for other elevated
+            # commands below and in install_udev_rules().
+            cmd_lst = [cnfg.priv_elev_cmd, 'grep', '-q', pattern, filepath]
+            subprocess.run(cmd_lst, check=True)
             return True
         except subprocess.CalledProcessError:
             return False
@@ -3462,9 +3470,14 @@ def setup_uinput_module():
     # Helper to write uinput to a config file
     def write_uinput_config(filepath, append=False):
         """Write uinput to config file, optionally appending"""
-        tee_flag = '-a' if append else ''
-        command = f"echo 'uinput' | {cnfg.priv_elev_cmd} tee {tee_flag} {filepath} >/dev/null"
-        subprocess.run(command, shell=True, check=True)
+        # List-form + 'input=' instead of a shell pipeline, to keep the doas
+        # 'persist' ticket valid (see comment in file_contains_uinput above).
+        cmd_lst = [cnfg.priv_elev_cmd, 'tee']
+        if append:
+            cmd_lst += ['-a']
+        cmd_lst += [filepath]
+        subprocess.run(cmd_lst, input='uinput\n', universal_newlines=True,
+                        stdout=DEVNULL, check=True)
 
     # Check and configure systemd-style persistence
     if systemd_available:
@@ -3598,12 +3611,16 @@ def install_udev_rules():
 
     # Only write the file if it doesn't exist or its contents are different from current rule
     if rules_file_missing_or_content_differs():
-        command_str             = f'{cnfg.priv_elev_cmd} tee {rules_file_path}'
+        # List-form, NOT 'shell=True', to keep the doas 'persist' ticket
+        # valid (see comment in file_contains_uinput in setup_uinput_module).
+        # No stdout redirect: tee echoing the rules content is intentional,
+        # displaying it under the header printed just below.
+        cmd_lst                 = [cnfg.priv_elev_cmd, 'tee', rules_file_path]
         try:
             call_attn_to_pwd_prompt_if_needed()
             print(f'Using these "udev" rules for "uinput" device: ')
             print()
-            subprocess.run(command_str, input=new_rules_content.encode(), shell=True, check=True)
+            subprocess.run(cmd_lst, input=new_rules_content.encode(), check=True)
             if not rules_file_missing_or_content_differs():
                 print()
                 print(f'Toshy "udev" rules file successfully installed.')
