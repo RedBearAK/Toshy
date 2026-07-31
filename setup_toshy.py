@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260731'                        # CLI option "--version" will print this out.
+__version__ = '20260730'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1259,6 +1259,7 @@ pkg_groups_map = {
     # dependency, but headless/minimal installs will not have it, so it must
     # be listed here for the group management logic to work everywhere.
     'alpine-based': [
+        'bash',             # first distro that doesn't supply bash even with desktop installed
         'cairo-dev',
         'dbus-dev',
         'evtest',
