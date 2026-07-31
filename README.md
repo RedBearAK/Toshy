@@ -572,6 +572,7 @@ Toshy does its best to set itself up automatically on any Linux system that uses
 - `emerge`
 - `eopkg`
 - `moss`
+- `nix` (NixOS has its own install path via flake and nix subfolder scripts)
 - `pacman`
 - `rpm-ostree`
 - `transactional-update`
