@@ -6358,15 +6358,15 @@ def main():
             f'Index of distro IDs known to the Toshy installer:\n'
             f'\n(These can be tried with the "--override-distro" flag on unknown variants.)\n'
             f'\n{get_supported_distro_ids_idx()}\n'
-            f'\n Total supported package managers:      {get_supported_pkg_managers_cnt()}'
-            f'\n Total supported basic distro types:    {get_supported_distro_types_cnt()}'
-            f'\n Total supported popular distro IDs:    {get_supported_distro_ids_cnt()} *'
+            f'\n    Total supported package managers:   {get_supported_pkg_managers_cnt()}'
+            f'\n    Total supported basic distro types: {get_supported_distro_types_cnt()}'
+            f'\n    Total supported popular distro IDs: {get_supported_distro_ids_cnt()}^^'
             f'\n'
-            f'\n * Number of supported variants of base distros is higher than IDs.'
-            f'\n   Many variants still use the same distro ID as their base distro.'
+            f'\n ^  Distros like NixOS have a dedicated separate install path.'
+            f'\n    See distro-specific docs (e.g. "nix/README.md" for NixOS).'
             f'\n'
-            f'\n ^ Distro uses its own dedicated install path.'
-            f'\n   See distro-specific docs (e.g. "nix/README.md" for NixOS).'
+            f'\n ^^ Total supported distro variant count is much higher than ID total.'
+            f'\n    Many distro variants use the same distro ID as their base distro.'
         )
         safe_shutdown(0)
 
