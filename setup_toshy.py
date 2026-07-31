@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260729'                        # CLI option "--version" will print this out.
+__version__ = '20260730'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1146,6 +1146,12 @@ distro_groups_map = {
         'opensuse-microos',
     ],
 
+    # Counted as supported, but installed via its own dedicated path
+    # (Nix flake; see nix/README.md). Native packages come from the flake.
+    'nixos-based': [
+        'nixos',
+    ],
+
     # RHELs-only: Fedora standard and Fedora immutables have their own distro ID lists
     'rhel-based': [
         'almalinux',
@@ -1186,6 +1192,14 @@ distro_groups_map = {
 }
 
 
+# Distros counted as supported but installed via their own dedicated path
+# rather than the normal native-package + venv sequence. Marked with a '^'
+# footnote in the 'list-distros' index output.
+distros_with_own_install_path_lst = [
+    'nixos',
+]
+
+
 # Checklist of distro type representatives with
 # '/usr/bin/gdbus' pre-installed in clean VM.
 # Verification that 'gdbus' is the most reliable
@@ -1203,6 +1217,11 @@ distro_groups_map = {
 # - openSUSE Leap 15.6                          [Provided by 'glib2-tools']
 # - Ubuntu 20.04 LTS                            [Provided by 'libglib2.0-bin']
 # - Void Linux (rolling)                        [Provided by 'glib']
+#
+# - NixOS 25.11 (Plasma 6, clean VM)            [NOT present in base install]
+#   (No FHS paths at all, and the base system profile does not include the
+#   glib CLI tools. Toshy's Nix runtime wrapper bundles 'glib' on PATH, so
+#   'gdbus' is guaranteed for Toshy's own processes. See nix/README.md.)
 #
 
 
@@ -1494,6 +1513,14 @@ pkg_groups_map = {
         'zenity',
     ],
 
+    # NixOS: no native package list; all runtime dependencies are provided
+    # by the Nix flake (nix/toshy-runtime.nix). See nix/README.md. The
+    # sentinel entry guarantees a loud failure if any future code path
+    # consumes this list directly.
+    'nixos-based': [
+        'NIXOS-PKGS-COME-FROM-NIX-FLAKE-SEE-nix-README',
+    ],
+
     # NOTE: Do not add 'gnome-shell-extension-appindicator' to Fedora/RHELs.
     #       This will install extension but requires logging out of GNOME to activate.
     #       Also, installing DE-specific packages is probably a bad idea.
@@ -1723,7 +1750,7 @@ pip_pkgs   = [
     "inotify-simple",           # Monitor filesystem events
     "ordered-set",              # Set implementation that preserves insertion order (for key combos)
 
-    # TODO: Check on 'python-xlib' project by mid-2025 to see if this bug is fixed:
+    # TODO: Check on 'python-xlib' project yearly to see if this bug is fixed:
     #   [AttributeError: 'BadRRModeError' object has no attribute 'sequence_number']
     # If the bug is fixed, remove pinning to v0.31 here.
     # But it does not appear that the bug is ever likely to be fixed.
@@ -1765,6 +1792,10 @@ def get_supported_distro_ids_idx() -> str:
             distro_index += "\n\t" + distro[0].upper() + ": "
             line_length = len(distro[0]) + 2    # reset line length
             prev_char = distro[0]
+
+        # Mark distros that use their own dedicated install path
+        if distro in distros_with_own_install_path_lst:
+            distro = distro + '^'
 
         next_distro_with_comma = distro + ", "
         if line_length + len(next_distro_with_comma) > 80:
@@ -2983,6 +3014,21 @@ class PackageInstallDispatcher:
         native_pkg_installer.install_pkg_list(cmd_lst, cnfg.pkgs_for_distro)
 
     ###########################################################################
+    ###  NIXOS (GUARD ONLY)  ##################################################
+    ###########################################################################
+    @staticmethod
+    def install_on_nix_distro():
+        """Guard method for NixOS: the normal native-package sequence never
+        applies (the installer exits with guidance long before dispatch), so
+        reaching this method means a sequencing bug. Fail loudly."""
+        print()
+        error('ERROR: The native package installer was dispatched for NixOS.')
+        error('NixOS uses its own dedicated install path and should never')
+        error('reach this point. See "nix/README.md" in the Toshy repo, and')
+        error('please report this as an installer sequencing bug.')
+        safe_shutdown(1)
+
+    ###########################################################################
     ###  APK DISTROS  #########################################################
     ###########################################################################
     @staticmethod
@@ -3038,6 +3084,7 @@ class PackageManagerGroups:
         self.emerge_distros     = []    # 'emerge':                 Gentoo
         self.eopkg_distros      = []    # 'eopkg':                  Solus
         self.moss_distros       = []    # 'moss':                   AerynOS (was Serpent OS)
+        self.nix_distros        = []    # 'nix':                    NixOS (guard only)
         self.pacman_distros     = []    # 'pacman':                 Arch (BTW)
         self.rpmostree_distros  = []    # 'rpm-ostree':             Fedora atomic/immutables
         self.transupd_distros   = []    # 'transactional-update':   openSUSE Aeon/Kalpa/MicroOS
@@ -3076,6 +3123,9 @@ class PackageManagerGroups:
             # 'moss': AerynOS (was Serpent OS)
             self.moss_distros           += distro_groups_map['aerynos-based']
 
+            # 'nix': NixOS (guard only; NixOS uses its own dedicated install path)
+            self.nix_distros            += distro_groups_map['nixos-based']
+
             # 'pacman': Arch, BTW
             self.pacman_distros         += distro_groups_map['arch-based']
 
@@ -3106,6 +3156,7 @@ class PackageManagerGroups:
             tuple(self.emerge_distros):     PackageInstallDispatcher.install_on_emerge_distro,
             tuple(self.eopkg_distros):      PackageInstallDispatcher.install_on_eopkg_distro,
             tuple(self.moss_distros):       PackageInstallDispatcher.install_on_moss_distro,
+            tuple(self.nix_distros):        PackageInstallDispatcher.install_on_nix_distro,
             tuple(self.pacman_distros):     PackageInstallDispatcher.install_on_pacman_distro,
             tuple(self.rpmostree_distros):  PackageInstallDispatcher.install_on_rpmostree_distro,
             tuple(self.transupd_distros):   PackageInstallDispatcher.install_on_transupd_distro,
@@ -6163,6 +6214,9 @@ def main():
             f'\n'
             f'\n * Number of supported variants of base distros is higher than IDs.'
             f'\n   Many variants still use the same distro ID as their base distro.'
+            f'\n'
+            f'\n ^ Distro uses its own dedicated install path.'
+            f'\n   See distro-specific docs (e.g. "nix/README.md" for NixOS).'
         )
         safe_shutdown(0)
 
