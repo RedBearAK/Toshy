@@ -1043,8 +1043,13 @@ def elevate_privileges():
 
     call_attn_to_pwd_prompt_if_needed()
     try:
-        cmd_lst = [cnfg.priv_elev_cmd, 'bash', '-c', 'echo -e "\nUsing elevated privileges..."']
+        # Establish the elevation ticket with a no-op command. Must not invoke
+        # 'bash' here: this runs BEFORE native package install, and busybox
+        # distros like Alpine have no bash until Toshy's package list installs
+        # it. The message itself needs no elevation, so print it from Python.
+        cmd_lst = [cnfg.priv_elev_cmd, 'true']
         subprocess.run(cmd_lst, check=True)
+        print('\nUsing elevated privileges...')
         cnfg.first_priv_elev_done = True
     except subprocess.CalledProcessError as proc_err:
         print()
@@ -1258,8 +1263,12 @@ pkg_groups_map = {
     # in Alpine's busybox base install. Desktop setups often pull it in as a
     # dependency, but headless/minimal installs will not have it, so it must
     # be listed here for the group management logic to work everywhere.
+    # NOTE: 'bash' is also not in the busybox base install, and everything in
+    # 'scripts/bin/' legitimately assumes bash post-install. Nothing that runs
+    # BEFORE this package list installs may invoke bash (see the POSIX-sh
+    # 'scripts/bootstrap.sh' and the no-op ticket in elevate_privileges()).
     'alpine-based': [
-        'bash',             # first distro that doesn't supply bash even with desktop installed
+        'bash',
         'cairo-dev',
         'dbus-dev',
         'evtest',
