@@ -1,19 +1,30 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # scripts/bootstrap.sh
 # Toshy Installation Bootstrap Script
 # https://github.com/RedBearAK/toshy
 
 # shellcheck disable=SC2034
-VERSION='20260730'
+VERSION='20260731'
+
+# NOTE: This is deliberately the ONLY script in the repo written for POSIX
+# 'sh' instead of the usual '#!/usr/bin/env bash'. It is the one script that
+# must run BEFORE Toshy's native package install has had a chance to put
+# 'bash' (or anything else) on the system. Some distros with busybox userland
+# (e.g. Alpine) ship no bash at all, only 'ash' as /bin/sh. Every other
+# script in the repo runs post-install and may assume bash freely.
+#
+# Consequences kept in mind throughout this file:
+#   - No '[[ ]]' tests, no process substitution, no arrays.
+#   - No 'read -p' (busybox ash has it, but dash — /bin/sh on Debian/Ubuntu —
+#     does not). Prompts are printed separately with 'printf'.
+#   - busybox 'wget' only understands a short-option subset, so downloads
+#     stick to flags valid for both GNU and busybox wget.
 
 # NOTE: deliberately no 'set -e'. Every command that matters is checked
 # explicitly below. And 'set -e' is silently disabled inside if/&&/||/!
 # conditions anyway, so it provides partial coverage while looking like
 # total coverage.
-
-# Force unbuffered output
-exec > >(cat) 2>&1
 
 # Store the original directory
 ORIGINAL_DIR="$(pwd)"
@@ -34,12 +45,16 @@ echo_unbuffered() {
     echo "$@" >&2
 }
 
-# Helper for interactive reads (handles piped input)
+# Helper for interactive reads (handles piped input).
+# Usage: read_interactive "Prompt text: " variable_name
+# The prompt is printed with 'printf' because 'read -p' is not POSIX
+# (busybox ash has it, but dash does not).
 read_interactive() {
+    printf '%s' "$1" >&2
     if [ -t 0 ]; then
-        read -r "$@"
+        read -r "$2"
     else
-        read -r "$@" </dev/tty
+        read -r "$2" </dev/tty
     fi
 }
 
@@ -65,7 +80,7 @@ show_install_options() {
 check_admin_capability() {
     echo_unbuffered
 
-    read_interactive -p "Can user \"$USER\" run admin commands (via sudo/doas/run0)? [y/n]: " admin_response
+    read_interactive "Can user \"$USER\" run admin commands (via sudo/doas/run0)? [y/n]: " admin_response
 
     # shellcheck disable=SC2154
     case "$admin_response" in
@@ -94,7 +109,7 @@ check_system_updated() {
     echo_unbuffered "!! NOTICE: It is ESSENTIAL to have your system completely updated."
     echo_unbuffered
 
-    read_interactive -p "Have you updated your system recently? [y/N]: " update_response
+    read_interactive "Have you updated your system recently? [y/N]: " update_response
 
     # shellcheck disable=SC2154
     case "$update_response" in
@@ -117,7 +132,7 @@ get_install_options() {
     echo_unbuffered
     sleep 0.1
 
-    read_interactive -p "Options (or Enter for none): " USER_OPTIONS
+    read_interactive "Options (or Enter for none): " USER_OPTIONS
 
     if [ -n "$USER_OPTIONS" ]; then
         INSTALL_ARGS="install $USER_OPTIONS"
@@ -135,7 +150,7 @@ get_install_options() {
     echo_unbuffered
 
     while true; do
-        read_interactive -p "Continue? [Y/e/q]: " confirm
+        read_interactive "Continue? [Y/e/q]: " confirm
 
         # Convert to lowercase
         confirm=$(echo "$confirm" | tr '[:upper:]' '[:lower:]')
@@ -146,7 +161,7 @@ get_install_options() {
         elif [ "$confirm" = "e" ]; then
             show_install_options
 
-            read_interactive -p "Options (or Enter for none): " USER_OPTIONS
+            read_interactive "Options (or Enter for none): " USER_OPTIONS
 
             if [ -n "$USER_OPTIONS" ]; then
                 INSTALL_ARGS="install $USER_OPTIONS"
@@ -181,7 +196,7 @@ get_branch() {
 
     sleep 0.1
 
-    read_interactive -p "Branch [1-3, default=1]: " choice
+    read_interactive "Branch [1-3, default=1]: " choice
 
     # shellcheck disable=SC2154
     case "$choice" in
@@ -192,7 +207,7 @@ get_branch() {
             branch="$SUGGESTED_BRANCH"
             ;;
         "3")
-            read_interactive -p "Enter custom ref (branch/tag/commit): " custom_branch
+            read_interactive "Enter custom ref (branch/tag/commit): " custom_branch
             branch="${custom_branch:-$DEFAULT_BRANCH}"
             ;;
         *)
@@ -219,7 +234,11 @@ download_file() {
         return $?
     fi
 
-    wget --tries=5 --waitretry=2 --timeout=20 -O "$dest_path" "$source_url"
+    # busybox wget (Alpine and similar) only supports a short-option subset:
+    # no '--tries' or '--waitretry'. Stick to flags valid on both GNU wget
+    # and busybox wget ('-T' timeout, '-O' output). The retry behavior is
+    # only lost on the wget path; curl above remains the preferred tool.
+    wget -T 20 -O "$dest_path" "$source_url"
     return $?
 }
 
@@ -320,14 +339,14 @@ echo_unbuffered "=== Toshy Bootstrap Installer ==="
 # unpacking the source is still useful. Skip the installer questions and,
 # after unpacking, print Nix-specific guidance instead of launching setup.
 IS_NIXOS=0
-if [[ -r /etc/os-release ]] && [[ "$(. /etc/os-release && echo "${ID:-}")" == "nixos" ]]; then
+if [ -r /etc/os-release ] && [ "$(. /etc/os-release && echo "${ID:-}")" = "nixos" ]; then
     IS_NIXOS=1
     echo_unbuffered
     echo_unbuffered "NixOS detected. The source will be downloaded and unpacked, but the"
     echo_unbuffered "normal installer will not run; Nix-specific steps follow at the end."
 fi
 
-if [[ "$IS_NIXOS" != "1" ]]; then
+if [ "$IS_NIXOS" != "1" ]; then
     check_admin_capability
 
     check_system_updated
@@ -426,7 +445,7 @@ echo_unbuffered
 echo_unbuffered "Download complete. Toshy source unpacked to:"
 echo_unbuffered "  $TOSHY_DIR"
 
-if [[ "$IS_NIXOS" == "1" ]]; then
+if [ "$IS_NIXOS" = "1" ]; then
     echo_unbuffered
     echo_unbuffered "NixOS: stopping here (the normal installer does not apply)."
     echo_unbuffered "Continue with the Nix-specific steps, from the unpacked folder:"

@@ -602,7 +602,14 @@ def call_attn_to_pwd_prompt_if_needed():
     # After native package install, the sudo timestamp may have expired.
     # Block with input() so the user can return at their leisure before
     # the actual sudo prompt appears (which has its own timeout).
-    if cnfg.first_priv_elev_done:
+    #
+    # NOTE: Not for 'doas': its prompt has no timeout (waits indefinitely on
+    # readpassphrase), so the Enter-gate protects nothing there. And opendoas
+    # '-n' is pessimistic — it fails whenever the rule lacks 'nopass' without
+    # consulting the 'persist' timestamp — so on doas systems (Alpine,
+    # Chimera) this branch fires even when no password will actually be
+    # asked, pausing the install for no reason.
+    if cnfg.first_priv_elev_done and cnfg.priv_elev_cmd != 'doas':
         input(fancy_str('  Press Enter to continue (elevated privileges expired)... ',
                             alt_clr, bold=True))
         print()
@@ -1043,8 +1050,13 @@ def elevate_privileges():
 
     call_attn_to_pwd_prompt_if_needed()
     try:
-        cmd_lst = [cnfg.priv_elev_cmd, 'bash', '-c', 'echo -e "\nUsing elevated privileges..."']
+        # Establish the elevation ticket with a no-op command. Must not invoke
+        # 'bash' here: this runs BEFORE native package install, and busybox
+        # distros like Alpine have no bash until Toshy's package list installs
+        # it. The message itself needs no elevation, so print it from Python.
+        cmd_lst = [cnfg.priv_elev_cmd, 'true']
         subprocess.run(cmd_lst, check=True)
+        print('\nUsing elevated privileges...')
         cnfg.first_priv_elev_done = True
     except subprocess.CalledProcessError as proc_err:
         print()
@@ -1072,6 +1084,10 @@ distro_groups_map = {
 
     'aerynos-based': [
         'aerynos',
+    ],
+
+    'alpine-based': [
+        'alpine',
     ],
 
     'alt-based': [
@@ -1247,6 +1263,39 @@ pkg_groups_map = {
         'python-setuptools',
         'python-virtualenv',
         'wayland-devel',
+        'zenity',
+    ],
+
+    # NOTE: The 'shadow' package provides 'groupadd'/'usermod', which are not
+    # in Alpine's busybox base install. Desktop setups often pull it in as a
+    # dependency, but headless/minimal installs will not have it, so it must
+    # be listed here for the group management logic to work everywhere.
+    # NOTE: 'bash' is also not in the busybox base install, and everything in
+    # 'scripts/bin/' legitimately assumes bash post-install. Nothing that runs
+    # BEFORE this package list installs may invoke bash (see the POSIX-sh
+    # 'scripts/bootstrap.sh' and the no-op ticket in elevate_privileges()).
+    'alpine-based': [
+        'bash',
+        'cairo-dev',
+        'dbus-dev',
+        'evtest',
+        'gcc',
+        'git',
+        'gobject-introspection-dev',
+        'libayatana-appindicator-dev',
+        'libinput',
+        'libnotify',
+        'libxkbcommon-dev',
+        'linux-headers',
+        'musl-dev',
+        'pkgconf',
+        'py3-dbus',
+        'py3-evdev',
+        'py3-pip',
+        'py3-setuptools',
+        'python3-dev',
+        'shadow',
+        'wayland-dev',
         'zenity',
     ],
 
@@ -2005,6 +2054,69 @@ class DistroQuirksHandler:
             except subprocess.CalledProcessError as e:
                 error(f"Failed to refresh dnf cache: \n\t{e}")
                 safe_shutdown(1)
+
+    @staticmethod
+    def handle_quirks_Alpine():
+        """
+        Guard clause for Alpine Linux: verify that eudev (not busybox mdev)
+        is the active device manager before installing anything.
+
+        Stock Alpine uses busybox mdev, which silently ignores everything in
+        '/etc/udev/rules.d', so Toshy's udev rules (and therefore device
+        access) would appear to install fine but never take effect. Alpine's
+        'setup-desktop' script normally switches the system to eudev, so a
+        typical desktop install passes this check without ever noticing it.
+
+        Detect-only (not auto-fix): switching a system's device manager
+        touches the sysinit runlevel, which is a bigger intervention than the
+        installer should make on the user's behalf. When mdev is detected,
+        bail out loudly with the exact one-line fix.
+        """
+        print('Doing prep/checks for Alpine-based distros...')
+
+        # Make sure we only handle these quirks in the correct distros
+        if cnfg.DISTRO_ID not in distro_groups_map['alpine-based']:
+            error('Alpine quirks handler called, but this is not Alpine-based?')
+            safe_shutdown(1)
+
+        # Installer usually runs as a normal user, and sbin dirs are often
+        # not in a non-root user's PATH, so give which() an explicit path.
+        sbin_aware_path     = '/usr/sbin:/sbin:/usr/bin:/bin'
+        udevadm_cmd         = shutil.which('udevadm', path=sbin_aware_path)
+
+        # Check whether a 'udev' service is registered in any OpenRC runlevel
+        # ('setup-devd udev' adds udev/udev-trigger/udev-settle to sysinit).
+        udev_svc_registered = False
+        try:
+            result = subprocess.run(['rc-update', 'show', '-v'],
+                                    stdout=PIPE, stderr=PIPE, universal_newlines=True)
+            for line in result.stdout.splitlines():
+                # Line format: " udev | sysinit" (service name is first token)
+                fields = line.split('|')
+                if not fields or not fields[0].strip() == 'udev':
+                    continue
+                if len(fields) > 1 and fields[1].strip():
+                    udev_svc_registered = True
+                    break
+        except FileNotFoundError:
+            # No 'rc-update' means this is not an OpenRC system after all;
+            # leave the flag False and let the guard below explain.
+            pass
+
+        if udevadm_cmd and udev_svc_registered:
+            print('Device manager check passed: eudev appears to be active.')
+            return
+
+        print()
+        error('ERROR: Alpine appears to be using busybox mdev, not eudev.')
+        error('Toshy requires udev rules support, which mdev does not provide.')
+        error('The udev rules would install without error but never take effect.')
+        error('')
+        error('To switch this system to eudev, run this command and reboot:')
+        error(f'    {cnfg.priv_elev_cmd} setup-devd udev')
+        error('')
+        error('Then re-run the Toshy setup script.')
+        safe_shutdown(1)
 
     @staticmethod
     def handle_quirks_Arch():
@@ -3037,6 +3149,11 @@ class PackageInstallDispatcher:
         native_pkg_installer.check_for_pkg_mgr_cmd('apk')
         call_attn_to_pwd_prompt_if_needed()
 
+        # Quirks handler guards against busybox mdev being the active device
+        # manager (udev rules would be silently ignored), before anything installs.
+        if cnfg.DISTRO_ID in distro_groups_map['alpine-based']:
+            DistroQuirksHandler.handle_quirks_Alpine()
+
         # Quirks handler resolves AppIndicator package name and enables user
         # repo if needed, before main install logic runs.
         if cnfg.DISTRO_ID in distro_groups_map['chimera-based']:
@@ -3101,6 +3218,7 @@ class PackageManagerGroups:
         try:
 
             # 'apk': Alpine/Chimera
+            self.apk_distros            += distro_groups_map['alpine-based']
             self.apk_distros            += distro_groups_map['chimera-based']
 
             # 'apt': Debian/Ubuntu, ALT Linux (uses APT-RPM)
