@@ -602,7 +602,14 @@ def call_attn_to_pwd_prompt_if_needed():
     # After native package install, the sudo timestamp may have expired.
     # Block with input() so the user can return at their leisure before
     # the actual sudo prompt appears (which has its own timeout).
-    if cnfg.first_priv_elev_done:
+    #
+    # NOTE: Not for 'doas': its prompt has no timeout (waits indefinitely on
+    # readpassphrase), so the Enter-gate protects nothing there. And opendoas
+    # '-n' is pessimistic — it fails whenever the rule lacks 'nopass' without
+    # consulting the 'persist' timestamp — so on doas systems (Alpine,
+    # Chimera) this branch fires even when no password will actually be
+    # asked, pausing the install for no reason.
+    if cnfg.first_priv_elev_done and cnfg.priv_elev_cmd != 'doas':
         input(fancy_str('  Press Enter to continue (elevated privileges expired)... ',
                             alt_clr, bold=True))
         print()
