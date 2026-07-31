@@ -465,6 +465,7 @@ You will find these distro groupings in the Wiki article:
 
 - ### Wayland sessions
 
+    - **Budgie 10.1 or later** - _[via `wlroots` method for `labwc`]_
     - **Cinnamon 6.0 or later** - _[uses custom shell extension]_
     - **COSMIC desktop environment** - _[uses D-Bus service]_
     - **GNOME 3.38, and 40 or later** - _[needs shell extension, see [**Requirements**](#requirements)]_
