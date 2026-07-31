@@ -3509,8 +3509,12 @@ def setup_uinput_module():
         if is_dual_init and not os.path.isfile(etc_modules_path):
             print(f"Creating file for dual-init compatibility: '{etc_modules_path}'")
             try:
-                cmd = f"{cnfg.priv_elev_cmd} touch {etc_modules_path}"
-                subprocess.run(cmd, shell=True, check=True)
+                # List-form for doas 'persist' consistency (see comment in
+                # file_contains_uinput above). Currently only reachable on
+                # sudo-based dual-init distros, but this uses the generic
+                # elevation command, so it should not carry the shell layer.
+                cmd_lst = [cnfg.priv_elev_cmd, 'touch', etc_modules_path]
+                subprocess.run(cmd_lst, check=True)
             except subprocess.CalledProcessError as proc_err:
                 error(f"Problem creating {etc_modules_path}:\n\t{proc_err}")
 
