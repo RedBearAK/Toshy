@@ -586,6 +586,20 @@ def call_attn_to_pwd_prompt_if_needed():
                 "      attention function. Please notify the dev to fix this error.\n")
         return
 
+    # For 'doas' AFTER the first elevation, whether a prompt will appear is
+    # unknowable: opendoas '-n' fails whenever the rule lacks 'nopass',
+    # without consulting the 'persist' timestamp, and the timestamp files in
+    # /run/doas are internal implementation detail not worth depending on.
+    # The big banner would cry wolf on every elevated command while 'persist'
+    # is quietly satisfying them (Alpine, Chimera). Print an honest one-line
+    # note instead: emphasis enough for the case where the persist window
+    # really has lapsed and a prompt follows.
+    if cnfg.priv_elev_cmd == 'doas' and cnfg.first_priv_elev_done:
+        print()
+        print(fancy_str('  (A "doas" password prompt may appear...)  ', 'blue', bold=True))
+        print()
+        return
+
     # Get user attention if there is a password needed (prompt will appear after this)
     main_clr = 'blue'
     alt_clr = 'magenta'
@@ -603,13 +617,10 @@ def call_attn_to_pwd_prompt_if_needed():
     # Block with input() so the user can return at their leisure before
     # the actual sudo prompt appears (which has its own timeout).
     #
-    # NOTE: Not for 'doas': its prompt has no timeout (waits indefinitely on
-    # readpassphrase), so the Enter-gate protects nothing there. And opendoas
-    # '-n' is pessimistic — it fails whenever the rule lacks 'nopass' without
-    # consulting the 'persist' timestamp — so on doas systems (Alpine,
-    # Chimera) this branch fires even when no password will actually be
-    # asked, pausing the install for no reason.
-    if cnfg.first_priv_elev_done and cnfg.priv_elev_cmd != 'doas':
+    # NOTE: 'doas' never reaches this point (early return above). Its prompt
+    # has no timeout anyway (waits indefinitely on readpassphrase), so this
+    # Enter-gate would protect nothing there.
+    if cnfg.first_priv_elev_done:
         input(fancy_str('  Press Enter to continue (elevated privileges expired)... ',
                             alt_clr, bold=True))
         print()
