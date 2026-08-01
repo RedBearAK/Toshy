@@ -1109,6 +1109,7 @@ distro_groups_map = {
         'arch',
         'archarm',
         'arcolinux',
+        'artix',                # Arch, but no systemd
         'cachyos',
         'endeavouros',
         'garuda',
@@ -1124,6 +1125,7 @@ distro_groups_map = {
     'debian-based': [
         'debian',
         'deepin',
+        'devuan',               # Debian, but no systemd
         'kali',
         'linuxmint',
         'lmde',
@@ -1131,7 +1133,7 @@ distro_groups_map = {
         'q4os',
     ],
 
-    # NOTE: RHEL and Fedora immutables have separate distro ID lists
+    # NOTE: RHEL, Fedora standard and Fedora immutables all have separate distro ID lists
     'fedora-based': [
         'fedora',
         'fedoralinux',
@@ -1139,6 +1141,7 @@ distro_groups_map = {
         'ultramarine',
     ],
 
+    # NOTE: RHEL, Fedora standard and Fedora immutables all have separate distro ID lists
     # Fedora immutables using rpm-ostree, not standard Fedora
     'fedora-immutables': [
         'bazzite',
@@ -1152,7 +1155,7 @@ distro_groups_map = {
         'redcore',
     ],
 
-    # Use "tumbleweed-based" entry for Tumbleweed, "microos-based" for Aeon/Kalpa distro types
+    # NOTE: Use "tumbleweed-based" entry for Tumbleweed, "microos-based" for Aeon/Kalpa distro types
     'leap-based': [
         'leap',                     # in case OpenSUSE distros drop the "opensuse-"
         'opensuse-leap',
@@ -1166,7 +1169,7 @@ distro_groups_map = {
         'openmandriva',
     ],
 
-    # Use "leap-based" entry for Leap, "tumbleweed-based" for Tumbleweed
+    # NOTE: Use "leap-based" entry for Leap, "tumbleweed-based" for Tumbleweed
     'microos-based': [
         'opensuse-aeon',
         'opensuse-kalpa',
@@ -1179,7 +1182,7 @@ distro_groups_map = {
         'nixos',
     ],
 
-    # RHELs-only: Fedora standard and Fedora immutables have their own distro ID lists
+    # NOTE: RHEL, Fedora standard and Fedora immutables all have separate distro ID lists
     'rhel-based': [
         'almalinux',
         'centos',
@@ -1193,7 +1196,7 @@ distro_groups_map = {
         'solus',
     ],
 
-    # Use "leap-based" entry for Leap, "microos-based" for Aeon/Kalpa distro types
+    # NOTE: Use "leap-based" entry for Leap, "microos-based" for Aeon/Kalpa distro types
     'tumbleweed-based': [
         'opensuse-slowroll',        # minor variation of Tumbleweed with "slow" package updates
         'opensuse-tumbleweed',
@@ -6358,15 +6361,15 @@ def main():
             f'Index of distro IDs known to the Toshy installer:\n'
             f'\n(These can be tried with the "--override-distro" flag on unknown variants.)\n'
             f'\n{get_supported_distro_ids_idx()}\n'
-            f'\n    Total supported package managers:   {get_supported_pkg_managers_cnt()}'
-            f'\n    Total supported basic distro types: {get_supported_distro_types_cnt()}'
-            f'\n    Total supported popular distro IDs: {get_supported_distro_ids_cnt()}^^'
+            f'\n Total supported package managers:      {get_supported_pkg_managers_cnt()}'
+            f'\n Total supported basic distro types:    {get_supported_distro_types_cnt()}'
+            f'\n Total supported popular distro IDs:    {get_supported_distro_ids_cnt()} *'
             f'\n'
-            f'\n ^  Distros like NixOS have a dedicated separate install path.'
-            f'\n    See distro-specific docs (e.g. "nix/README.md" for NixOS).'
+            f'\n * Number of supported variants of base distros is higher than IDs.'
+            f'\n   Many variants still use the same distro ID as their base distro.'
             f'\n'
-            f'\n ^^ Total supported distro variant count is much higher than ID total.'
-            f'\n    Many distro variants use the same distro ID as their base distro.'
+            f'\n ^ Distro uses its own dedicated install path.'
+            f'\n   See distro-specific docs (e.g. "nix/README.md" for NixOS).'
         )
         safe_shutdown(0)
 
