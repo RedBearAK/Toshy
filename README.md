@@ -30,6 +30,8 @@ I don't really know many other places where it might be considered appropriate t
 
 # Current status: Stable Beta (Please Read)
 
+**2026-07-31 UPDATE**: Added support for Alpine Linux.
+
 **2026-07-30 UPDATE**: Added functional NixOS support. Not yet applicable to SteamOS or Steam Deck devices. 
 
 **2026-06-20 UPDATE**: Added full symbolic output correction (when possible on the layout). The second phase additions to the previous update which allowed shortcuts to operate from the correct physical position, and output shortcuts to be corrected for the layout. Symbolic correction allows macro text to come out correctly on other Latin-character non-US keyboard layouts.
