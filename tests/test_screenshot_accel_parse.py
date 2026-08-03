@@ -8,13 +8,22 @@ kglobalshortcutsrc value field parsing.
 Runnable standalone (accumulates a score in main) and collectable by
 pytest (bool-returning test functions).
 """
-__version__ = '20260801'
+__version__ = '20260803'
 
 
 import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
+# Stub out proc_launcher BEFORE package imports: the screenshots package
+# __init__ transitively imports it, and it pulls in the xwaykeyz logger
+# at module level, which isn't needed (or importable) in isolated tests.
+import types as _types
+
+_fake_proc_launcher = _types.ModuleType('toshy_common.proc_launcher')
+_fake_proc_launcher.launch_detached = lambda args, **kwargs: False
+sys.modules['toshy_common.proc_launcher'] = _fake_proc_launcher
 
 from toshy_common.screenshots.sshot_defaults import STATUS_DISABLED, STATUS_RESOLVED
 from toshy_common.screenshots.sshot_readers import (
@@ -58,7 +67,7 @@ def test_gtk_accel_normalization() -> bool:
         ('Print',                       'Print'),
         ('<Shift>Print',                'Shift-Print'),
         ('<Alt>Print',                  'Alt-Print'),
-        ('<Control><Shift>Print',       'C-Shift-Print'),
+        ('<Control><Shift>Print',       'Shift-C-Print'),
         ('<Primary>Print',              'C-Print'),
         ('<Ctrl><Alt>Print',            'C-Alt-Print'),
         ('<Super>p',                    'Super-p'),

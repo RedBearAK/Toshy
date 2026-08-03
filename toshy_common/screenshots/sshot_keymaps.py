@@ -32,9 +32,12 @@ Typical config usage (the entire config-side footprint):
 
     setup_screenshot_keymaps(globals(), when = lambda ctx: ...)
 """
-__version__ = '20260802'
+__version__ = '20260803'
 
 
+from subprocess import DEVNULL
+
+from toshy_common.proc_launcher import launch_detached
 from toshy_common.screenshots.sshot_defaults import (
     SLOT_AREA_TO_CLIPBOARD,
     SLOT_AREA_TO_FILE,
@@ -44,23 +47,30 @@ from toshy_common.screenshots.sshot_defaults import (
     SLOT_WINDOW_TO_CLIPBOARD,
     SLOT_WINDOW_TO_FILE,
     STATUS_RESOLVED,
+    CMD_FALLBACKS_DCT,
 )
 from toshy_common.screenshots.sshot_resolver import resolve_outputs
 
 
 # Default macOS-shape input combos, expressed in the keymap's post-modmap
-# world. The window slots have no direct inputs (macOS window capture is
-# the 4-then-Space sequence, handled by the nested keymaps below).
+# world. Modifier spelling follows the config file's macOS-style ordering
+# convention (Shift, Fn, Ctrl, Alt, Cmd), translated to logical
+# identities: Shift, [Super or LC], Alt, RC.
 #
-# [?] Clipboard-variant inputs: macOS adds physical Ctrl, which lands on
-# a different modifier in the GUI modmap world. 'RC-Super-...' assumed;
-# verify before relying on the clipboard variants.
+# Values are LISTS of spellings: physical Ctrl has a dual post-modmap
+# identity (Super in GUI contexts, LC in terminal contexts), so the
+# clipboard-variant slots carry both spellings. Both cohabit in the same
+# keymap safely because the modmaps make the spellings context-disjoint:
+# the wrong-context entry is simply unreachable.
+#
+# The window slots have no direct inputs (macOS window capture is the
+# 4-then-Space sequence, handled by the nested keymaps below).
 DEFAULT_INPUT_COMBOS_DCT = {
-    SLOT_FULLSCREEN_TO_FILE:        'RC-Shift-Key_3',
-    SLOT_AREA_TO_FILE:              'RC-Shift-Key_4',
-    SLOT_INTERACTIVE_UI:            'RC-Shift-Key_5',
-    SLOT_FULLSCREEN_TO_CLIPBOARD:   'RC-Super-Shift-Key_3',      # [?]
-    SLOT_AREA_TO_CLIPBOARD:         'RC-Super-Shift-Key_4',      # [?]
+    SLOT_FULLSCREEN_TO_FILE:        ['Shift-RC-3'],
+    SLOT_AREA_TO_FILE:              ['Shift-RC-4'],
+    SLOT_INTERACTIVE_UI:            ['Shift-RC-5'],
+    SLOT_FULLSCREEN_TO_CLIPBOARD:   ['Shift-Super-RC-3', 'Shift-LC-RC-3'],
+    SLOT_AREA_TO_CLIPBOARD:         ['Shift-Super-RC-4', 'Shift-LC-RC-4'],
 }
 
 # The 4-then-Space function shift pairs an area slot (nested keymap
@@ -71,9 +81,10 @@ _WINDOW_SHIFT_PAIRS_LST = [
     (SLOT_AREA_TO_CLIPBOARD,    SLOT_WINDOW_TO_CLIPBOARD),
 ]
 
-# Space continuation is bound bare and with still-held original
-# modifiers, mirroring macOS where the toggle works mid-hold.
-_SPACE_VARIANTS_LST = ['Space', 'Shift-Space', 'RC-Shift-Space']
+# Space continuation is bound bare, with Shift held, and with the full
+# original trigger chord still held (derived per trigger spelling below),
+# mirroring macOS where the toggle works mid-hold.
+_SPACE_VARIANTS_BASE_LST = ['Space', 'Shift-Space']
 
 # Outlets pass through to the DE overlay and disarm the nested keymap,
 # so cancel (Esc) and confirm (Enter) never cost a keystroke.
@@ -88,6 +99,25 @@ _ESC_FIRST_DELAY_SEC = 0.2
 _ESC_FIRST_DESKTOP_ENVS = frozenset({'kde', 'plasma'})
 
 
+def _log(msg_str: str):
+    print(f'[SSHOT] {msg_str}', flush=True)
+
+
+def _make_cmd_fallback_fn(cmd_candidates_lst: 'list[list[str]]'):
+    """Build a keymap output callable that launches the first candidate
+    command found on PATH. launch_detached() returns False when the
+    executable is absent, so candidates double as version detection."""
+
+    def _sshot_cmd_fallback(ctx):
+        for cmd_lst in cmd_candidates_lst:
+            if launch_detached(cmd_lst, stdout=DEVNULL, stderr=DEVNULL):
+                return
+
+    # Self-description for diagnostics (rendered by the CLI check command).
+    _sshot_cmd_fallback.cmd_candidates_lst = cmd_candidates_lst
+    return _sshot_cmd_fallback
+
+
 def _require_callable(name_str: str, obj):
     if callable(obj):
         return
@@ -99,7 +129,8 @@ def _require_callable(name_str: str, obj):
 def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
                                 input_combos_dct=None,
                                 enable_window_shift=True,
-                                window_shift_esc_first=None) -> 'list':
+                                window_shift_esc_first=None,
+                                enable_command_fallbacks=True) -> 'list':
     """Build and register screenshot keymaps for the current desktop
     environment. Returns the list of registered keymap objects.
 
@@ -112,7 +143,11 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
     of a pair resolve.
     window_shift_esc_first: emit Esc + delay before the window shortcut
     on the Space continuation. None (default) applies the library's
-    per-DE knowledge automatically; True/False forces it either way."""
+    per-DE knowledge automatically; True/False forces it either way.
+    enable_command_fallbacks: for slots with no native binding to emit,
+    bind curated tool-launch commands from the library's per-DE table
+    (e.g. Cinnamon's interactive UI). False disables all command
+    execution."""
     required_names_lst = ['keymap', 'C', 'immediately']
     missing_names_lst = [name for name in required_names_lst
                             if config_globals_dct.get(name) is None]
@@ -138,9 +173,10 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
             'setup_screenshot_keymaps() needs DESKTOP_ENV in the provided '
             'namespace. Pass the config globals() as the first argument.')
 
+    desktop_env_norm = (desktop_env or '').strip().lower()
+
     if window_shift_esc_first is None:
-        window_shift_esc_first = (
-            (desktop_env or '').strip().lower() in _ESC_FIRST_DESKTOP_ENVS)
+        window_shift_esc_first = desktop_env_norm in _ESC_FIRST_DESKTOP_ENVS
     if window_shift_esc_first:
         _require_callable('sleep', sleep)
 
@@ -162,39 +198,65 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
     # same combos in the flat keymap (which then excludes them anyway).
     if enable_window_shift:
         for area_slot, window_slot in _WINDOW_SHIFT_PAIRS_LST:
-            input_combo     = input_combos_dct.get(area_slot)
-            area_combo      = _resolved_combo(area_slot)
-            window_combo    = _resolved_combo(window_slot)
-            if not input_combo or not area_combo or not window_combo:
+            trigger_spellings_lst   = input_combos_dct.get(area_slot)
+            area_combo              = _resolved_combo(area_slot)
+            window_combo            = _resolved_combo(window_slot)
+            if not trigger_spellings_lst or not area_combo or not window_combo:
                 continue
 
-            if window_shift_esc_first:
-                space_action = [C('Esc'), sleep(_ESC_FIRST_DELAY_SEC), C(window_combo)]
-            else:
-                space_action = C(window_combo)
+            # One keymap per pair; one trigger entry per spelling, each
+            # with a FRESH nested dict (wrap_keymap wraps dict values per
+            # key, so sharing one dict across triggers is avoided).
+            pair_mappings_dct = {}
+            for trigger_spelling in trigger_spellings_lst:
 
-            nested_dct = {immediately: C(area_combo)}
-            for space_variant in _SPACE_VARIANTS_LST:
-                nested_dct[C(space_variant)] = space_action
-            for outlet_key in _OUTLET_KEYS_LST:
-                nested_dct[C(outlet_key)] = C(outlet_key)
+                if window_shift_esc_first:
+                    space_action = [C('Esc'), sleep(_ESC_FIRST_DELAY_SEC), C(window_combo)]
+                else:
+                    space_action = C(window_combo)
+
+                # Held-chord Space variant derived from this trigger's own
+                # spelling: replace the trailing key with Space.
+                held_variant = trigger_spelling.rsplit('-', 1)[0] + '-Space'
+
+                nested_dct = {immediately: C(area_combo)}
+                for space_variant in _SPACE_VARIANTS_BASE_LST + [held_variant]:
+                    nested_dct[C(space_variant)] = space_action
+                for outlet_key in _OUTLET_KEYS_LST:
+                    nested_dct[C(outlet_key)] = C(outlet_key)
+
+                pair_mappings_dct[C(trigger_spelling)] = nested_dct
 
             km = keymap(
                 f'Screenshots: 4-then-Space window shift ({area_slot})',
-                {C(input_combo): nested_dct},
+                pair_mappings_dct,
                 when=when)
             registered_lst.append(km)
             shifted_area_slots_lst.append(area_slot)
 
-    # Flat keymap for the remaining slots with resolved outputs.
+    # Flat keymap for the remaining slots with resolved outputs, plus
+    # curated command fallbacks for slots with no native binding at all.
+    de_cmd_fallbacks_dct = CMD_FALLBACKS_DCT.get(desktop_env_norm, {})
     flat_mappings_dct = {}
-    for slot_name, input_combo in input_combos_dct.items():
+    for slot_name, input_spellings_lst in input_combos_dct.items():
         if slot_name in shifted_area_slots_lst:
             continue
         output_combo = _resolved_combo(slot_name)
         if output_combo is None:
+            if not enable_command_fallbacks:
+                continue
+            cmd_candidates_lst = de_cmd_fallbacks_dct.get(slot_name)
+            if not cmd_candidates_lst:
+                continue
+            fallback_fn = _make_cmd_fallback_fn(cmd_candidates_lst)
+            for input_spelling in input_spellings_lst:
+                flat_mappings_dct[C(input_spelling)] = fallback_fn
+            cmds_str = ' | '.join(' '.join(cmd_lst) for cmd_lst in cmd_candidates_lst)
+            _log(f"Slot '{slot_name}' has no native binding; using command "
+                    f'fallback (first found on PATH): {cmds_str}')
             continue
-        flat_mappings_dct[C(input_combo)] = C(output_combo)
+        for input_spelling in input_spellings_lst:
+            flat_mappings_dct[C(input_spelling)] = C(output_combo)
 
     if flat_mappings_dct:
         km = keymap('Screenshots: detected shortcuts', flat_mappings_dct, when=when)

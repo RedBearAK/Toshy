@@ -14,13 +14,14 @@ Run as:
 Without --de, the desktop environment comes from Toshy's canonical
 EnvironmentInfo detector (same as the kblayout_detect package does).
 """
-__version__ = '20260802'
+__version__ = '20260803'
 
 import os
 import sys
 import argparse
 
 from toshy_common.screenshots.sshot_defaults import (
+    CMD_FALLBACKS_DCT,
     SLOT_NAMES,
     STATUS_RESOLVED,
 )
@@ -30,7 +31,101 @@ from toshy_common.screenshots.sshot_keymaps import (
     _ESC_FIRST_DESKTOP_ENVS,
     _WINDOW_SHIFT_PAIRS_LST,
 )
+from toshy_common.screenshots.sshot_keymaps import setup_screenshot_keymaps
 from toshy_common.screenshots.sshot_resolver import resolve_outputs
+
+
+class _ReprCombo:
+    """Stands in for C(); repr renders as config-file syntax."""
+
+    def __init__(self, combo_str):
+        self.combo_str = combo_str
+
+    def __hash__(self):
+        return hash(self.combo_str)
+
+    def __eq__(self, other):
+        return isinstance(other, _ReprCombo) and other.combo_str == self.combo_str
+
+    def __repr__(self):
+        return f'C("{self.combo_str}")'
+
+
+class _ReprSleep:
+    """Stands in for sleep(); repr renders as config-file syntax."""
+
+    def __init__(self, sec):
+        self.sec = sec
+
+    def __repr__(self):
+        return f'sleep({self.sec})'
+
+
+class _ReprImmediately:
+
+    def __repr__(self):
+        return 'immediately'
+
+
+class _RecordingAPI:
+    """Injected in place of the config globals() to capture the literal
+    keymap structures the builder would register."""
+
+    def __init__(self, desktop_env, de_maj_ver):
+        self.registered_lst = []
+        self.immediately = _ReprImmediately()
+        self.desktop_env = desktop_env
+        self.de_maj_ver = de_maj_ver
+
+    def namespace(self) -> dict:
+        return {
+            'keymap':       self._keymap,
+            'C':            _ReprCombo,
+            'immediately':  self.immediately,
+            'sleep':        _ReprSleep,
+            'DESKTOP_ENV':  self.desktop_env,
+            'DE_MAJ_VER':   self.de_maj_ver,
+        }
+
+    def _keymap(self, name_str, mappings_dct, when=None):
+        record_dct = {'name': name_str, 'mappings': mappings_dct}
+        self.registered_lst.append(record_dct)
+        return record_dct
+
+
+def _render_mapping_value(value, indent_str) -> str:
+    if isinstance(value, dict):
+        inner_str = _render_mappings(value, indent_str + '    ')
+        return '{\n' + inner_str + indent_str + '}'
+    if isinstance(value, list):
+        return '[' + ', '.join(repr(item) for item in value) + ']'
+    if callable(value) and hasattr(value, 'cmd_candidates_lst'):
+        cmds_str = ' | '.join(' '.join(cmd) for cmd in value.cmd_candidates_lst)
+        return f'<launch first found: {cmds_str}>'
+    return repr(value)
+
+
+def _render_mappings(mappings_dct: dict, indent_str: str) -> str:
+    key_reprs_lst = [repr(key) for key in mappings_dct]
+    key_width = max((len(key_repr) for key_repr in key_reprs_lst), default=0) + 1
+    lines_lst = []
+    for key, value in mappings_dct.items():
+        key_str = (repr(key) + ':').ljust(key_width + 1)
+        lines_lst.append(f'{indent_str}{key_str} '
+                            f'{_render_mapping_value(value, indent_str)},\n')
+    return ''.join(lines_lst)
+
+
+def _print_literal_keymaps(desktop_env, de_maj_ver):
+    api = _RecordingAPI(desktop_env, de_maj_ver)
+    setup_screenshot_keymaps(api.namespace())
+    print()
+    print('Generated keymaps (literal; when= conditions supplied by the config):')
+    for record_dct in api.registered_lst:
+        print()
+        print(f'  keymap("{record_dct["name"]}", {{')
+        print(_render_mappings(record_dct['mappings'], '      '), end='')
+        print('  })')
 
 
 def _detect_environment() -> 'tuple[str, str | None]':
@@ -80,7 +175,8 @@ def _print_keymap_preview(results_dct: dict, desktop_env: str):
     shifted_slots_lst = []
     print("  4-then-Space window shift keymap(s):")
     for area_slot, window_slot in _WINDOW_SHIFT_PAIRS_LST:
-        input_combo     = DEFAULT_INPUT_COMBOS_DCT.get(area_slot)
+        spellings_lst   = DEFAULT_INPUT_COMBOS_DCT.get(area_slot)
+        input_combo     = ' | '.join(spellings_lst) if spellings_lst else None
         area_combo      = resolved_combo(area_slot)
         window_combo    = resolved_combo(window_slot)
         if not input_combo or not area_combo or not window_combo:
@@ -100,11 +196,20 @@ def _print_keymap_preview(results_dct: dict, desktop_env: str):
 
     print("  Flat keymap ('Screenshots: detected shortcuts'):")
     flat_cnt = 0
-    for slot_name, input_combo in DEFAULT_INPUT_COMBOS_DCT.items():
+    for slot_name, spellings_lst in DEFAULT_INPUT_COMBOS_DCT.items():
         if slot_name in shifted_slots_lst:
             continue
+        input_combo = ' | '.join(spellings_lst)
         output_combo = resolved_combo(slot_name)
         if output_combo is None:
+            de_norm = (desktop_env or '').strip().lower()
+            cmd_candidates_lst = CMD_FALLBACKS_DCT.get(de_norm, {}).get(slot_name)
+            if cmd_candidates_lst:
+                flat_cnt += 1
+                cmds_str = ' | '.join(' '.join(cmd_lst) for cmd_lst in cmd_candidates_lst)
+                print(f'    {input_combo.ljust(24)}-> [run first found: {cmds_str}]'
+                        f'   ({slot_name}, command fallback)')
+                continue
             print(f'    {input_combo.ljust(24)}   (skipped: {slot_name} not resolved)')
             continue
         flat_cnt += 1
@@ -149,6 +254,7 @@ def main() -> int:
     print()
     print('Keymap preview (default input combos):')
     _print_keymap_preview(results_dct, desktop_env)
+    _print_literal_keymaps(desktop_env, de_maj_ver)
     print()
     return 0
 
