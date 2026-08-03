@@ -175,7 +175,8 @@ def _print_keymap_preview(results_dct: dict, desktop_env: str):
     shifted_slots_lst = []
     print("  4-then-Space window shift keymap(s):")
     for area_slot, window_slot in _WINDOW_SHIFT_PAIRS_LST:
-        input_combo     = DEFAULT_INPUT_COMBOS_DCT.get(area_slot)
+        spellings_lst   = DEFAULT_INPUT_COMBOS_DCT.get(area_slot)
+        input_combo     = ' | '.join(spellings_lst) if spellings_lst else None
         area_combo      = resolved_combo(area_slot)
         window_combo    = resolved_combo(window_slot)
         if not input_combo or not area_combo or not window_combo:
@@ -195,9 +196,10 @@ def _print_keymap_preview(results_dct: dict, desktop_env: str):
 
     print("  Flat keymap ('Screenshots: detected shortcuts'):")
     flat_cnt = 0
-    for slot_name, input_combo in DEFAULT_INPUT_COMBOS_DCT.items():
+    for slot_name, spellings_lst in DEFAULT_INPUT_COMBOS_DCT.items():
         if slot_name in shifted_slots_lst:
             continue
+        input_combo = ' | '.join(spellings_lst)
         output_combo = resolved_combo(slot_name)
         if output_combo is None:
             de_norm = (desktop_env or '').strip().lower()

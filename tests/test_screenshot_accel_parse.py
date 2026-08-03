@@ -67,7 +67,7 @@ def test_gtk_accel_normalization() -> bool:
         ('Print',                       'Print'),
         ('<Shift>Print',                'Shift-Print'),
         ('<Alt>Print',                  'Alt-Print'),
-        ('<Control><Shift>Print',       'C-Shift-Print'),
+        ('<Control><Shift>Print',       'Shift-C-Print'),
         ('<Primary>Print',              'C-Print'),
         ('<Ctrl><Alt>Print',            'C-Alt-Print'),
         ('<Super>p',                    'Super-p'),

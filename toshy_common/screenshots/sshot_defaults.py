@@ -130,7 +130,7 @@ GNOME_LEGACY_DEFAULTS_DCT = {
     SLOT_AREA_TO_FILE:              'Shift-Print',
     SLOT_FULLSCREEN_TO_CLIPBOARD:   'C-Print',
     SLOT_WINDOW_TO_CLIPBOARD:       'C-Alt-Print',
-    SLOT_AREA_TO_CLIPBOARD:         'C-Shift-Print',
+    SLOT_AREA_TO_CLIPBOARD:         'Shift-C-Print',
 }
 
 # Cinnamon
@@ -144,7 +144,7 @@ CINNAMON_DEFAULTS_DCT = {
     SLOT_AREA_TO_FILE:              'Shift-Print',
     SLOT_FULLSCREEN_TO_CLIPBOARD:   'C-Print',
     SLOT_WINDOW_TO_CLIPBOARD:       'C-Alt-Print',
-    SLOT_AREA_TO_CLIPBOARD:         'C-Shift-Print',
+    SLOT_AREA_TO_CLIPBOARD:         'Shift-C-Print',
 }
 
 # MATE
@@ -205,7 +205,7 @@ GENERIC_DEFAULTS_DCT = {
     SLOT_AREA_TO_FILE:              'Shift-Print',
     SLOT_FULLSCREEN_TO_CLIPBOARD:   'C-Print',
     SLOT_WINDOW_TO_CLIPBOARD:       'C-Alt-Print',
-    SLOT_AREA_TO_CLIPBOARD:         'C-Shift-Print',
+    SLOT_AREA_TO_CLIPBOARD:         'Shift-C-Print',
 }
 
 # End of file #

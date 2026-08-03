@@ -136,7 +136,7 @@ def test_nested_keymap_shape() -> bool:
 
         shift_record = next(record for record in api.registered_lst
                             if SLOT_AREA_TO_FILE in record['name'])
-        trigger_combo = ('COMBO', 'RC-Shift-Key_4')
+        trigger_combo = ('COMBO', 'Shift-RC-4')
         nested_dct = shift_record['mappings'][trigger_combo]
 
         expected_macro_lst = [('COMBO', 'Esc'), ('SLEEP', 0.2), ('COMBO', 'C-Super-Print')]
@@ -145,8 +145,21 @@ def test_nested_keymap_shape() -> bool:
             nested_dct[api.immediately] == ('COMBO', 'Shift-Super-Print'))
         all_ok &= _check('Space continuation is Esc-first macro (KDE auto)',
             nested_dct[('COMBO', 'Space')] == expected_macro_lst)
-        all_ok &= _check('held-modifier Space variant bound to same macro',
-            nested_dct[('COMBO', 'RC-Shift-Space')] == expected_macro_lst)
+        all_ok &= _check('trigger-derived held-chord Space variant bound',
+            nested_dct[('COMBO', 'Shift-RC-Space')] == expected_macro_lst)
+
+        clip_record = next(record for record in api.registered_lst
+                            if 'area_to_clipboard' in record['name'])
+        gui_trigger     = ('COMBO', 'Shift-Super-RC-4')
+        terms_trigger   = ('COMBO', 'Shift-LC-RC-4')
+        all_ok &= _check('clipboard shift keymap has cohabiting GUI+terms triggers',
+            gui_trigger in clip_record['mappings']
+            and terms_trigger in clip_record['mappings']
+            and clip_record['mappings'][gui_trigger]
+                is not clip_record['mappings'][terms_trigger])
+        all_ok &= _check('each trigger gets its own derived held-chord variant',
+            ('COMBO', 'Shift-Super-RC-Space') in clip_record['mappings'][gui_trigger]
+            and ('COMBO', 'Shift-LC-RC-Space') in clip_record['mappings'][terms_trigger])
         all_ok &= _check('Esc outlet passes through',
             nested_dct[('COMBO', 'Esc')] == ('COMBO', 'Esc'))
         all_ok &= _check('Enter outlet passes through',
@@ -169,9 +182,9 @@ def test_flat_keymap_exclusions_and_guards() -> bool:
 
         all_ok = True
         all_ok &= _check('area trigger excluded from flat keymap (owned by nested)',
-            ('COMBO', 'RC-Shift-Key_4') not in flat_keys_lst)
+            ('COMBO', 'Shift-RC-4') not in flat_keys_lst)
         all_ok &= _check('fullscreen entry present in flat keymap',
-            flat_record['mappings'].get(('COMBO', 'RC-Shift-Key_3')) == ('COMBO', 'Shift-Print'))
+            flat_record['mappings'].get(('COMBO', 'Shift-RC-3')) == ('COMBO', 'Shift-Print'))
         return all_ok
 
     def inner_missing_api() -> bool:
@@ -200,7 +213,7 @@ def test_cinnamon_command_fallback() -> bool:
 
     flat_record = next(record for record in api.registered_lst
                         if record['name'] == 'Screenshots: detected shortcuts')
-    fallback_fn = flat_record['mappings'].get(('COMBO', 'RC-Shift-Key_5'))
+    fallback_fn = flat_record['mappings'].get(('COMBO', 'Shift-RC-5'))
 
     all_ok = True
     all_ok &= _check('interactive_ui bound to a command-fallback callable',
@@ -220,7 +233,7 @@ def test_cinnamon_command_fallback() -> bool:
     flat_record2 = next(record for record in api2.registered_lst
                         if record['name'] == 'Screenshots: detected shortcuts')
     all_ok &= _check('kill switch removes the fallback binding',
-        ('COMBO', 'RC-Shift-Key_5') not in flat_record2['mappings'])
+        ('COMBO', 'Shift-RC-5') not in flat_record2['mappings'])
 
     print('\n--- Cinnamon command fallback ---')
     return all_ok

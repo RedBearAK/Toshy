@@ -19,7 +19,7 @@ Storage formats handled:
   GNOME/Cinnamon/MATE/Budgie: gsettings (dconf binary db via subprocess)
   XFCE:   xfconf XML (user file overriding XDG_CONFIG_DIRS system files)
 """
-__version__ = '20260802'
+__version__ = '20260803'
 
 
 import os
@@ -54,8 +54,12 @@ from toshy_common.screenshots.sshot_defaults import (
 ###  ACCELERATOR NORMALIZATION
 ###################################################################################################
 
-# Canonical modifier emission order for output combo strings.
-_MOD_ORDER_LST = ['C', 'Alt', 'Shift', 'Super']
+# Canonical modifier emission order for output combo strings, following
+# the config file's macOS-style convention (Shift, Fn, Ctrl, Alt, Cmd --
+# top-down, left-to-right on the left-corner modifiers), translated to
+# logical identities: Shift, C, Alt, Super. Combo parsing in the engine
+# is order-insensitive; this is purely for consistent, readable spelling.
+_MOD_ORDER_LST = ['Shift', 'C', 'Alt', 'Super']
 
 # KDE (Qt-style) modifier token names -> xwaykeyz modifier names.
 _KDE_MOD_XLAT_DCT = {
