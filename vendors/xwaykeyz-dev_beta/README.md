@@ -1,668 +1,461 @@
-# xwaykeyz - a smart key remapper for Linux (X11 and Wayland)
+# xwaykeyz - a smart key remapper for Linux (X11/Xorg and Wayland)
 
-<!-- [![latest version](https://badgen.net/pypi/v/keyszer?label=beta)](https://github.com/RedBearAK/xwaykeyz/releases)
-[![python 3.10](https://badgen.net/badge/python/3.10/blue)]()
-[![license](https://badgen.net/badge/license/GPL3/keyszer?color=cyan)](https://github.com/RedBearAK/xwaykeyz/blob/main/LICENSE)
-[![code quality](https://badgen.net/lgtm/grade/g/RedBearAK/xwaykeyz/js?label=code+quality)](https://lgtm.com/projects/g/RedBearAK/xwaykeyz/?mode=list)
-[![discord](https://badgen.net/badge/icon/discord?icon=discord&label&color=pink)](https://discord.gg/nX6qSC8mer) -->
+The `xwaykeyz` keymapper is a smart key remapper for Linux, written in Python. It is similar in spirit to `xmodmap` but allows far more flexible remapping: per-application keymaps, multipurpose (tap/hold) keys, multi-tap combos, multi-stroke sequences, string and Unicode macro output, custom modifiers, and arbitrary Python functions as combo actions. It works in X11/Xorg and in a long list of Wayland environments, though Wayland support is strictly per-compositor and mostly depends on Toshy components (see [Supported environments](#supported-environments) before assuming any particular Wayland setup is covered).
 
-<!-- [![vulnerabilities](https://badgen.net/snyk/RedBearAK/xwaykeyz)](https://snyk.io/test/github/RedBearAK/xwaykeyz?targetFile=package.json) -->
-
-[![open issues](https://badgen.net/github/open-issues/RedBearAK/xwaykeyz?label=issues)](https://github.com/RedBearAK/xwaykeyz/issues)
-[![help welcome issues](https://badgen.net/github/label-issues/RedBearAK/xwaykeyz/help%20welcome/open)](https://github.com/RedBearAK/xwaykeyz/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+welcome%22)
-[![good first issue](https://badgen.net/github/label-issues/RedBearAK/xwaykeyz/good%20first%20issue/open)](https://github.com/RedBearAK/xwaykeyz/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
-![build and CI status](https://badgen.net/github/checks/RedBearAK/xwaykeyz)
-
-
-## Forked from keyszer
-
-The `xwaykeyz` keymapper is a smart key remapper for Linux (and X11) written in Python. It's similar to `xmodmap` but allows far more flexible remappings. Several Wayland environments are supported, but some of the Wayland environments require the assistance of Toshy, a project that uses this keymapper to provide Mac-like keyboard shortcut remapping. See the [Toshy README](https://github.com/RedBearAK/toshy#currently-working-desktop-environments-or-window-managers) for a full list of the supported Wayland environments when `xwaykeyz` is installed via Toshy. The Toshy installer will accept a special `--barebones-config` argument that will leave you with a clean config file without any of the Mac-like remapping, so Toshy can also be used as just a management interface to more easily work with the keymapper while Toshy provides some of the Wayland support components. 
-
-This project was forked from [`keyszer`](https://github.com/joshgoebel/keyszer), which currently has no Wayland support, just like `xkeysnail`, and `keyszer` was in turn forked from [`xkeysnail`](https://github.com/mooz/xkeysnail), which no longer seems to be actively maintained. 
-
-Most of the references in this README to `keyszer` will be updated at some point to be more relevant for `xwaykeyz`. 
+This project was forked from [`keyszer`](https://github.com/joshgoebel/keyszer) (X11-only, no commits since late 2023), which was in turn forked from [`xkeysnail`](https://github.com/mooz/xkeysnail) (no longer maintained). Since the fork, `xwaykeyz` has grown Wayland support, non-US keyboard layout correction, conditional timeouts, in-keymapper multi-tap, a Hyper key subsystem, pointer-aware modifier handling, device quirks, and many reliability fixes. This README documents the keymapper as it is now.
 
 Feel free to pronounce `xwaykeyz` however you want: Ex-Way-Keys, Sway-Keys, or Zway-Keyzzzzzz... (Or maybe Chewy-Keyz?!)
 
-### How does it work?
-
-Xwaykeyz works at quite a low level, close to the hardware.  It grabs input directly from the kernel's [`evdev`](https://www.freedesktop.org/wiki/Software/libevdev/) input devices ( `/dev/input/event*`) and then creates an emulated [`uinput`](https://www.kernel.org/doc/html/v4.12/input/uinput.html) virtual keyboard device to inject those inputs back into the kernel.  During this process the input stream is transformed on the fly as necessary to remap keys. As a side effect of how it works, the keymapper has no idea what your keyboard layout/language is, and this can cause small or large problems for non-US layout users. The only fix for this currently is modifying the `key.py` key definition file, which works fine in many cases where only a few keys need to be swapped. 
-
-Note that the problem with non-US layouts is generally restricted to keys or shortcuts that get remapped by the config, so general typing is not affected, and if your config doesn't happen to remap a key that is different from the typical US layout, this issue may never really affect your usage of the keymapper. It is highly variable how much of a problem this is. 
-
-Some progress has been made attempting to use `xkbcommon` to be able to change the key definitions according to the user's specified layout, but there is a lot of work still not done to make that happen. It's even more difficult to try to get the user's layout changes on-the-fly, for users who need to switch between multiple layouts. 
+> [!IMPORTANT]
+> Installing the keymapper by installing [Toshy](https://github.com/RedBearAK/toshy) is the recommended path for nearly everyone, and it is a hard requirement for most Wayland environments. Several essential subsystems are fed by Toshy components at runtime: most Wayland window context methods are Toshy D-Bus services, shell extensions, or KWin scripts; environment detection (which drives `environ_api`) comes from a Toshy module; and keyboard layout correction gets its layout analysis data from Toshy components. Toshy also handles permissions (udev rules, `input` group) and runs the keymapper under systemd user services, with no `sudoers` modifications. Standalone `xwaykeyz` is fully usable, but mainly in X11/Xorg and the few Wayland environments it can query directly. The Toshy installer accepts a `--barebones-config` argument that leaves you with a clean config file without any of the Mac-like remapping, so Toshy can also serve as just a management layer around the keymapper.
 
 
-**Upgrading from xkeysnail**
+## How it works
 
-- Some configuration changes will be needed.
-- A few command line arguments have changed.
-- For xkeysnail 0.4.0 see [UPGRADING_FROM_XKEYSNAIL.md](https://github.com/RedBearAK/xwaykeyz/blob/main/UPGRADE_FROM_XKEYSNAIL.md).
-- For xkeysnail (Kinto variety) see [USING_WITH_KINTO.md](https://github.com/RedBearAK/xwaykeyz/blob/main/USING_WITH_KINTO.md) and [Using with Kinto v1.2-13](https://github.com/RedBearAK/keyszer/issues/36).
+Xwaykeyz works at quite a low level, close to the hardware. It grabs input directly from the kernel's [`evdev`](https://www.freedesktop.org/wiki/Software/libevdev/) input devices (`/dev/input/event*`) using `EVIOCGRAB`, transforms the event stream through your configured modmaps and keymaps, and re-emits the result through an emulated [`uinput`](https://kernel.org/doc/html/latest/input/uinput.html) virtual keyboard. Because this happens below the display server, the remapping itself works from the console all the way into X11 or Wayland, in any toolkit. Per-application features are a different matter: they depend on a window context provider existing for your specific environment (see [Supported environments](#supported-environments)).
 
-> [!NOTE]  
-> It is highly recommended to to consider migrating from Kinto to [Toshy](https://github.com/RedBearAK/toshy), since Toshy is intrinsically designed to work with this particular fork of the original `xkeysnail` keymapper used by Kinto, and Toshy components are currently required for supporting some of the Wayland environments. 
-
-#### Key Highlights
-
-- Low-level library usage (`evdev` and `uinput`) allows remapping to work from the console all the way into X11 (or Wayland).
-- High-level and incredibly flexible remapping mechanisms:
-    - _per-application keybindings_ - bindings that change depending on the active X11 application or window
-    - _multiple stroke keybindings_ - `Ctrl+x Ctrl+c` could map to `Ctrl+q`
-    - _very flexible output_ - `Ctrl-s` could type out `:save`, and then hit enter
-    - _stateful key combos_ - build Emacs style combos with shift/mark
-    - _multipurpose bindings_ - a regular key can become a modifier when held
-    - _arbitrary functions_ - a key combo can run custom Python function (as user)
+The keymapper itself deals only in integer keycodes; it sits below the XKB layer that turns keycodes into characters. Historically that meant non-US layouts could see wrong keys in remapped shortcuts and broken macro output. That limitation is now addressed by the opt-in keyboard layout correction system (see `keyboard_layout_correction` below), which corrects both input combo matching and string/Unicode macro output against the user's actual layout. General typing was never affected either way; only keys and shortcuts touched by the config were ever at risk.
 
 
-**New Features (since xkeysnail 0.4.0)**
+## Feature highlights
 
-- simpler and more flexible configuration scripting APIs
-- better debugging tools
-  - configurable `EMERGENCY EJECT` hotkey
-  - configurable `DIAGNOSTIC` hotkey
-- fully supports running as semi-privileged user (using `root` is now deprecated)
-- adds `include` to allow config to pull in other Python files
-- adds `throttle_delays` to allow control of output speed of macros/combos
-- adds `immediately` to nested keymaps (initial action)
-- adds `Command` and `Cmd` aliases for Super/Meta modifier
-    - `Meta` alias removed due to confusion with old refs to `Alt` key
-- add `C` combo helper (eventually to replace `K`)
-- supports custom modifiers via `add_modifier` (such as `Hyper`)
-- supports `Fn` as a potential modifier (on hardware where it works)
-- adds `bind` helper to support persistent holds across multiple combos
-  - most frequently used for macOS style `Cmd-Tab` app switching
-- adds `--check` for checking the config file for issues
-- adds `wm_name` context for all conditionals (PR #40)
-- adds `device_name` context for all conditionals (including keymaps)
-- (fix) `xmodmap` cannot be used until some keys are first pressed on the emulated output
-- (fix) ability to avoid unintentional Alt/Super false keypresses in many setups (suspend)
-- (fix) fixes multi-combo nested keymaps (vs Kinto's `xkeysnail`)
-- (fix) properly cleans up pressed keys before termination
-- individually configurable timeouts (`multipurpose` and `suspend`)
-- (fix) removed problematic `launch` macro
-- (fix) suspend extra keys during sequential sequences to create less key "noise"
-- (fix) handle X Display errors without crashing or bugging out
-
-**New Features (since forking from `keyszer`)**
-
-- Support for several Wayland environments when installed via [Toshy](https://github.com/RedBearAK/toshy)
-- Without Toshy, `xwaykeyz` natively supports only:
-
-    - **X11/Xorg sessions** _[works with any X window manager via `Xlib`]_
-    - **Hyprland** - _[via `hyprpy`, or the `wlroots` method]_
-    - **Pantheon** - _[via D-Bus queries to the Gala WM]_
-    - **Sway** - _[via `i3ipc`, or the `wlroots` method]_
-
-- With Toshy, `xwaykeyz` can support many more Wayland environments:
-    - **X11/Xorg sessions** (with any desktop environment/window manager)
-    - **Cinnamon 6.0 or later** - _[uses Toshy custom shell extension]_
-    - **COSMIC desktop environment** - _[uses Toshy D-Bus service]_
-    - **GNOME 3.38 or later** - _[needs 3rd-party shell extension]_
-    - **Hyprland** - _[via `hyprpy` or the `wlroots` method]_
-    - **Niri** - _[via the `wlroots` method]_
-    - **Plasma 5 (KDE)** - _[uses Toshy KWin script and D-Bus service]_
-    - **Plasma 6 (KDE)** - _[uses Toshy KWin script and D-Bus service]_
-    - **Qtile** - _[via the `wlroots` method]_
-    - **Sway** - _[via `i3ipc` or the `wlroots` method]_
-    - **Wayland compositors with `zwlr_foreign_toplevel_manager_v1` interface**
-        - See [Wiki article](https://github.com/RedBearAK/toshy/wiki/Wlroots-Based-Wayland-Compositors.md) on Toshy repo for usage of this method with unknown compositors that may be compatible
-    - Full list and requirements kept updated in [Toshy README](https://github.com/RedBearAK/toshy#currently-working-desktop-environments-or-window-managers)
-
-- (fix) Avoided high CPU usage while holding a key (by ignoring "repeats" by default)
-
-- (enh) Added API to specify devices from inside the config file (instead of CLI arg)
+- Per-application keybindings that follow the focused window, in X11 and [supported Wayland environments](#supported-environments)
+- Multipurpose keys: a regular key becomes a modifier when held (`Enter` as `Enter`/`Ctrl`, `CapsLock` as `Esc`/`Ctrl`, and so on)
+- Multi-tap combos: different actions for 1 to 5 rapid taps of the same combo, via the `MultiTap()` descriptor
+- Multi-stroke sequences: `Ctrl+x Ctrl+c` can map to `Ctrl+q`, with optional immediate first-stroke output
+- Very flexible output: a combo can type strings, Unicode characters, other combos, or run arbitrary Python functions (as the user running the keymapper)
+- Custom modifiers via `add_modifier`, plus a one-call Hyper key scheme via `setup_hyper`
+- `bind` for persistent holds across combos (the classic macOS-style `Cmd-Tab` app switching case)
+- Held-combo output driven by compositor key repeat, instead of synthetic tap cycles
+- Opt-in non-US keyboard layout correction for combo matching and macro output
+- Conditional (per-application) timeout overrides through one `timeouts()` API
+- Pointer monitor: touching a mouse or touchpad instantly resumes suspended modifiers, fixing modifier+click reliability
+- Device quirks framework (currently: restoring the Fn display-mode switch on Apple T2 Touch Bar keyboards)
+- Throttle delays to pace virtual keystroke output for compositors and input methods with event-order sensitivities
+- Low CPU while holding keys (repeats ignored by default), configurable diagnostics and emergency-eject hotkeys
+- Runs as a normal (or dedicated) user; running as `root` is deprecated
 
 
-***
+## Supported environments
 
-## WARNING: Everything below this section may need to be updated!
+The keymapper needs to know the focused window's application class and title to drive conditional keymaps. It contains multiple "window context providers" for this, selected by the `environ_api()` call in the config (see below).
 
-This section will slowly move down the README as I update each section of the README to reflect that this is a README for `xwaykeyz` which has been forked from `keyszer` and renamed. 
+Supported standalone, with no Toshy components (the keymapper queries these directly):
 
-***
+- **X11/Xorg sessions** (any window manager, via `Xlib`)
+- **Sway** (via `i3ipc`)
+- **Hyprland** (via `hyprpy`)
+- **Pantheon** (via D-Bus queries to the DE's own Gala WM)
 
+Requiring Toshy components (D-Bus services, shell extensions, or KWin scripts that feed window context to the keymapper's providers):
 
----
+- **Wayland compositors with the `zwlr_foreign_toplevel_manager_v1` interface** (via the Toshy Wlroots D-Bus service): Hyprland, labwc, Miracle-WM, Miriway, Niri, Qtile, River, Sway, Wayfire, and other compatible compositors
+- **GNOME 3.38 or later** (needs a third-party shell extension)
+- **Plasma 5 and Plasma 6 (KDE)** (Toshy KWin script and D-Bus service)
+- **Cinnamon 6.0 or later** (Toshy custom shell extension)
+- **COSMIC desktop environment** (Toshy D-Bus service)
+
+The full, current list with requirements is kept updated in the [Toshy README](https://github.com/RedBearAK/toshy#currently-working-desktop-environments-or-window-managers). For trying the `wlroots` method on untested compositors, see the [wlroots wiki article](https://github.com/RedBearAK/toshy/wiki/Wlroots-Based-Wayland-Compositors) on the Toshy repo.
+
 
 ## Installation
 
-Requires **Python 3**.
+Requires Python 3.8 or later.
 
-### From source
-
-Just download the source and install.
+From source:
 
     git clone https://github.com/RedBearAK/xwaykeyz.git
     cd xwaykeyz
     pip3 install --user --upgrade .
 
-
-### For testing/hacking/contributing
-
-Using a Python `venv` might be the simplest way to get started:
+For testing/hacking/contributing, a `venv` is the simplest way to get started:
 
     git clone https://github.com/RedBearAK/xwaykeyz.git
     cd xwaykeyz
-    python -m venv .venv
+    python3 -m venv .venv
     source .venv/bin/activate
     pip3 install -e .
     ./bin/xwaykeyz -c config_file
 
 
-## System Requirements
+## System requirements and permissions
 
 Xwaykeyz requires read/write access to:
 
 - `/dev/input/event*` - to grab input from your `evdev` input devices
 - `/dev/uinput` - to provide an emulated keyboard to the kernel
 
+### Running as the logged-in user (the supported way, required for Wayland)
 
-### Running as a semi-privileged user
+The keymapper runs as the logged-in desktop user. This is a hard architectural requirement in Wayland environments, not a convenience: window context comes from per-session sources that only exist inside the user's login session (the session D-Bus bus, Toshy's D-Bus services, shell extensions, KWin scripts, compositor IPC sockets). A keymapper process running outside that session cannot reach any of them, so conditional keymaps would be blind. There is also little real security benefit to a separate account: the config file is executable Python owned by the user either way, and write access to `uinput` allows arbitrary keystroke injection regardless of which account holds it. The reasoning is laid out in more depth in a dedicated article on the [Toshy wiki](https://github.com/RedBearAK/Toshy/wiki).
 
-It's best to create an entirely isolated user to run the keymapper.  Group or ACL based permissions can be used to provide this user access to the necessary devices.  You'll need only a few `udev` rules to ensure that the input devices are all given correct permissions.
+Toshy sets all of this up automatically: it creates the `input` group if needed, adds your user to it, installs a udev rules file, and runs the keymapper (and its D-Bus helper services) as systemd user services, with no `sudoers` modifications. The udev rules Toshy installs (`/etc/udev/rules.d/70-toshy-keymapper-input.rules`) look like this:
 
+    SUBSYSTEM=="input", GROUP="input", MODE="0660", TAG+="uaccess"
+    KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", TAG+="uaccess"
 
-#### ACL based permissions (narrow, more secure)
+For a manual standalone setup, install an equivalent rules file, then add your user to the `input` group and log out and back in:
 
-First, lets make a new user:
+    sudo usermod -aG input $USER
+
+### Fallback: dedicated semi-privileged user (X11/Xorg only)
+
+An isolated user with ACL-granted device access can run the keymapper instead. This only makes sense in X11/Xorg sessions, where the `Xlib` window context provider can be pointed at the display without the per-session plumbing Wayland requires, and X11 itself is slowly disappearing. Expect conditional keymaps to be broken in any Wayland session with this arrangement.
 
     sudo useradd keymapper
-
-
-...then use udev and ACL to grant our new user access:
-
-Manually edit `/etc/udev/rules.d/90-keymapper-acl.rules` to include the following:
-
-    KERNEL=="event*", SUBSYSTEM=="input", RUN+="/usr/bin/setfacl -m user:keymapper:rw /dev/input/%k"
-    KERNEL=="uinput", SUBSYSTEM=="misc", RUN+="/usr/bin/setfacl -m user:keymapper:rw /dev/uinput"
-
-
-...or do it by copypasting these lines into a shell:
 
     cat <<EOF | sudo tee /etc/udev/rules.d/90-keymapper-acl.rules
     KERNEL=="event*", SUBSYSTEM=="input", RUN+="/usr/bin/setfacl -m user:keymapper:rw /dev/input/%k"
     KERNEL=="uinput", SUBSYSTEM=="misc", RUN+="/usr/bin/setfacl -m user:keymapper:rw /dev/uinput"
     EOF
 
+### Running as root
 
-#### Group based permissions (slightly wider, less secure)
-
-Many distros already have an input group; if not, you can create one.  Next, add a new user that's a member of that group:
-
-    sudo useradd keymapper -G input
-
-
-...then use udev to grant our new user access (via the `input` group):
-
-Manually edit `/etc/udev/rules.d/90-keymapper-input.rules` to include the following:
-
-    SUBSYSTEM=="input", GROUP="input"
-    KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input"
-
-
-...or do it by copypasting these lines into a shell:
-
-    cat <<EOF | sudo tee /etc/udev/rules.d/90-keymapper-input.rules
-    SUBSYSTEM=="input", GROUP="input"
-    KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input"
-    EOF
-
-
-#### systemd
-
-For a sample systemd service file for running Keyszer as a service please see [keyszer.service](contrib/redhat/keyszer.service).
-
-
-### Running as the Active Logged in User
-
-This may be appropriate in some limited development scenarios, but is not recommended.  Giving the active, logged in user access to `evdev` and `uinput` potentially allows all keystrokes to be logged and could allow a malicious program to take over (or destroy) your machine by injecting input into a Terminal session or other application.
-
-It would be better to open a terminal, `su` to a dedicated `keymapper` user and then run Keyszer inside that context, as shown earlier.
-
-
-### Running as `root`
-
-_Don't do this, it's dangerous, and unnecessary._  A semi-privileged user with access to only the necessary input devices is a far better choice.
+Do not do this. It is dangerous and unnecessary, and support for it (`--very-bad-idea`) exists only as a deprecated escape hatch.
 
 
 ## Usage
 
-    keyszer
+    xwaykeyz
 
+A successful bare startup (no Toshy, default logging) should resemble:
 
-A successful startup should resemble:
-
-    xwaykeyz v1.3.1
-    (--) CONFIG: /home/yourusername/.config/xwaykeyz/config.py
-    (+K) Grabbing Apple, Inc Apple Keyboard (/dev/input/event3)
+    xwaykeyz v1.25.0
+    (+K) Grabbing 'Apple, Inc Apple Keyboard' (/dev/input/event3)
+    (+K) Successfully grabbed 'Apple, Inc Apple Keyboard' (/dev/input/event3)
     (--) Ready to process input.
 
+Devices are grabbed asynchronously, waiting for keys to be released first, hence the two-step grab messages. The config file path and much more detail appear with `-v`. Startups under Toshy are far noisier because the Toshy config file logs environment detection, machine identity, and remap setup while it loads; that output comes from the config, not the keymapper core.
 
-**Specifying the environment**
+### CLI options
 
-Xwaykeyz internally has multiple "window context providers", to get the application class and window title in X11/Xorg and the various Wayland environments it supports. For the keymapper to know which of the providers to use, there is an environment API function that can be used to inject the necessary information into the keymapper at startup. 
-
-```py
-environ_api(
-    session_type = 'session_type', # This will be 'x11' or 'wayland'
-    wl_compositor = 'a_wayland_compositor', # 'wlroots', 'kwin_wayland', 'muffin', 'mutter', etc. 
-)
-```
-
-For X11/Xorg, the desktop environment argument in this API is unnecessary, and ignored if provided (set to `None` internally), and then the keymapper will use the X11/Xorg window context provider. For Wayland, it is usually essential to specify the desktop environment or window manager name in order to pick the correct window context provider inside the keymapper. There are now several different Wayland providers for specific DEs/WMs, and one (`wlroots`) that may be able to cover a dozen or more less common Wayland compositors (e.g., Niri, Qtile, and similar). 
-
-With the [Toshy](https://github.com/RedBearAK/toshy) project that uses `xwaykeyz`, there is an environment module that the config file uses to grab all the relevant details about the user's environment. This allows Toshy to automatically adapt to moving from one DE or WM to another (on the same Linux system). The user in most cases never has to specify anything about their environment. This Toshy [environment module](https://github.com/RedBearAK/toshy/blob/main/lib/env.py) is frequently updated to identify even more DEs/WMs automatically. 
-
-The reason the environment scraping module from Toshy is not integrated directly into the keymapper itself is primarily because the main `keyszer` dev did not want to deal with its complexity when I introduced it. Which was not entirely irrational or unwise. It was more involved than I had predicted, to make it mostly reliable on multiple Linux distros, and able to correctly detect many different desktop environments. And it is still evolving. 
-
-If the user does not use multiple desktop environments (or window managers), it is perfectly fine to specify the environment statically with the API function call in the config file. 
-
-
-**Limiting Devices**
-
-Limit remapping to specific devices using either a command-line option (`--devices`) with one or more device path or device name arguments, or with the `devices_api()` function from inside the config file. The results will be the same. 
-
-With `--devices` CLI option:
-
-    keyszer --devices /dev/input/event3 'Topre Corporation HHKB Professional'
-
-The full path or complete device name may be used.  Device name is usually better to avoid USB device numbering jumping around after a reboot, etc...
-
-With the `devices_api()` API function in the config file:
-
-```py
-devices_api(
-    only_devices = [
-        'Some Device Name',
-        'Other Device Name',
-        '/dev/input/event3', # Path or name can be used, but paths can change
-    ]
-)
-```
-
-
-**Other CLI Options:**
-
-- `-c`, `--config` - location of the configuration file
-- `-w`, `--watch` - watch for new keyboard devices to hot-plug
-- `-v` - increase verbosity greatly (to help with debugging)
-- `--list-devices` - list out all available input devices
+- `-c`, `--config` - location of the configuration file (default: `~/.config/xwaykeyz/config.py`)
+- `-d`, `--devices` - manually specify one or more devices to remap, by path or name
+- `-w`, `--watch` - watch for hot-plugged keyboard devices
+- `-v` - increase debug logging
+- `--flush` - immediately flush all log output (useful under journald)
+- `--list-devices` - list all input devices, with every matchable identifier for each (path, bus path, name, by-id symlink, uniq, synthetic ID)
+- `--check` - evaluate the config file and check for errors, then exit
+- `--version` - print the version and exit
 
 
 ## Configuration
 
-By default we look for the configuration in `~/.config/xwaykeyz/config.py`. You can override this location using the `-c`/`--config` switch.  The configuration file is written in Python.
-For an example configuration please see [`example/config.py`](https://github.com/RedBearAK/xwaykeyz/blob/main/example/config.py).
+By default the configuration is read from `~/.config/xwaykeyz/config.py` (override with `-c`). The configuration file is Python. For a small example see [`example/config.py`](https://github.com/RedBearAK/xwaykeyz/blob/main/example/config.py); for a very large real-world example see the [Toshy config](https://github.com/RedBearAK/toshy/blob/main/default-toshy-config/toshy_config.py).
 
+The configuration API at a glance:
 
-The configuration API:
+- `environ_api(session_type=..., wl_compositor=...)` - tell the keymapper which window context provider to use
+- `devices_api(only_devices=[...])` - limit remapping to specific devices, from inside the config
+- `timeouts(multipurpose=..., suspend=..., tap_interval=..., min_tap_delay=..., when=..., name=...)` - global and per-condition timing
+- `throttle_delays(key_pre_delay_ms, key_post_delay_ms)` - pace virtual keystroke output
+- `keyboard_layout_correction(...)` and `layout_correction_options()` - opt-in non-US layout correction
+- `ignore_repeating_keys(bool)` - repeat-event handling (repeats ignored by default)
+- `modmap(name, mappings, when=...)` - key identity remapping
+- `multipurpose_modmap(name, mappings, when=...)` - tap/hold dual-purpose keys
+- `keymap(name, mappings, when=...)` - combo-to-action mapping
+- `conditional(fn, map)` - wrap a map with a condition (same effect as `when=`)
+- `matchProps(...)` - window/device context matcher factory for `when=` clauses
+- `MultiTap(...)` - multi-tap action descriptor for keymap values (deprecated alias: `isMultiTap`)
+- `add_modifier(name, aliases, key/keys)` - define custom modifiers
+- `setup_hyper(trigger_key, ...)` - one-call Hyper key scheme
+- `setup_level3_combos_via_left_alt(when=...)` - reach AltGr glyph layers with left Alt on non-US layouts
+- `dump_diagnostics_key(key)` / `emergency_eject_key(key)` - diagnostic and bail-out hotkeys
+- `wm_class_match(re_str)` / `not_wm_class_match(re_str)` - tiny regex conditional helpers
+- `include(relative_filename)` - pull other Python files into the config
+- String/Unicode macro helpers: `to_US_keystrokes(...)`, `unicode_keystrokes(...)`, `sleep(...)`, `usleep(...)`
+- Marks (Emacs-style shift/mark combos): `with_mark(...)`, `set_mark(...)`, `with_or_set_mark(...)`
 
-- `timeouts(multipurpose, suspend)`
-- `throttle_delays(key_pre_delay_ms, key_post_delay_ms)`
-- `environ_api(session_type = 'session_type', wl_compositor = 'wayland_compositor')` - See above
-- `devices_api(only_devices=['List of Device Names','One or more devices'])` - See above
-- `wm_class_match(re_str)`
-- `not_wm_class_match(re_str)`
-- `add_modifier(name, aliases, key/keys)`
-- `modmap(name, map, when_conditional)`
-- `multipurpose_modmap(name, map, when_conditional)`
-- `keymap(name, map, when_conditional)`
-- `conditional(condition_fn, map)` - used to wrap maps, applying them conditionally
-- `dump_diagnostics_key(key)`
-- `emergency_eject_key(key)`
-- `include(relative_filename)`
+### `environ_api(...)`
 
-### `include(relative_filename)`
-
-Include a sub-configuration file into the existing config.  This file is loaded and executed at the point of inclusion and shares the same global scope as the existing config. These files should be present in the same directory as your main configuration.
+Xwaykeyz has multiple window context providers for X11/Xorg and the supported Wayland environments. `environ_api()` tells it which one to instantiate:
 
 ```py
-include("os.py")
-include("apps.py")
-include("deadkeys.py")
+environ_api(
+    session_type  = 'wayland',      # 'x11' or 'wayland'
+    wl_compositor = 'kwin_wayland', # 'wlroots', 'kwin_wayland', 'mutter', 'sway', 'hyprland', etc.
+)
 ```
+
+For X11/Xorg, only `session_type='x11'` matters (the default, for backward compatibility). For Wayland, the compositor argument selects the provider; the `wlroots` value covers a dozen or more compositors that implement `zwlr_foreign_toplevel_manager_v1`.
+
+Toshy wires this automatically from an environment detection module, so users moving between desktop environments on the same system rarely need to specify anything. For a single-environment setup, a static call in the config is perfectly fine.
+
+### `devices_api(...)`
+
+Control which devices are grabbed, from inside the config. `only_devices` is an allowlist (equivalent to the `--devices` CLI option); `ignore_devices` excludes devices that would otherwise be grabbed. The ignore list wins if a device appears in both:
+
+```py
+devices_api(
+    only_devices = [
+        'Topre Corporation HHKB Professional',              # exact device name
+    ],
+    ignore_devices = [
+        '/dev/input/by-id/usb-Some_Gaming_Pad-event-kbd',   # any path; by-id symlinks resolve
+        'dc:2c:26:xx:xx:xx',                                # uniq string (serial / MAC)
+        'b0019:v0000:p0001:e0000:n51dc9927',                # synthetic ID (see below)
+    ],
+)
+```
+
+Each entry can match a device four different ways:
+
+- Exact device name (survives re-enumeration, but some hardware ships identical names)
+- Device path, including `/dev/input/by-id/` symlinks (candidates starting with `/` are resolved through `realpath`)
+- The device `uniq` string, when the hardware provides one (typically a serial number or Bluetooth MAC)
+- A synthetic ID built from evdev-reported kernel info, in the form `bustype:vendor:product:version:name_hash`, with an optional `@physical_bus` suffix. Without the suffix it matches that hardware model+name on any port; with the suffix it pins one exact physical connection. This is the reliable way to single out one of several identically named devices.
+
+Run `xwaykeyz --list-devices` to see every matchable identifier for each attached device. The output is a multi-line block per device showing the device path, bus path, name, by-id symlink (when one exists), uniq string (when the hardware provides one), and the synthetic ID.
 
 ### `timeouts(...)`
 
-Configures the timing behavior of various aspects of the keymapper.
-
-- `multipurpose` - The number of seconds before a held multi-purpose key is assumed to be a modifier (even in the absence of other keys).
-- `suspend` - The number of seconds modifiers are "suspended" and withheld from the output waiting to see whether if they are part of a combo or if they may be the actual intended output.
-
-
-Defaults:
+One API for all timing values, global and per-condition:
 
 ```py
 timeouts(
-    multipurpose = 1,
-    suspend = 1,
+    multipurpose  = 1,      # sec before a held multipurpose key resolves as its "held" identity
+    suspend       = 1,      # sec modifiers are withheld from output while combo intent is unclear
+    tap_interval  = 0.25,   # max sec between taps of a MultiTap combo (range 0.15 to 1.5)
+    min_tap_delay = 0.07,   # sec of key-repeat protection between taps (range 0.05 to 0.5)
 )
 ```
+
+Every key is optional. A global call (no `when`) merges the values you pass onto the current settings, so multiple global calls compose instead of resetting each other.
+
+Passing `when=` registers a conditional override with the same predicate style as keymaps. Only the keys you pass are stored on the rule; anything omitted falls through. Rules are consulted first-match-wins, per key, at resolution time:
+
+```py
+timeouts(suspend = 0.3, when = matchProps(clas="^firefox$"), name = "firefox_menu_guard")
+```
+
+The classic use: run a zero or near-zero global `suspend` for instant modifier response, then restore a working suspend window only for apps that steal menu focus on a bare modifier press (Firefox, VSCode, Slack). The `name=` shows up in debug logging when an override wins.
 
 ### `throttle_delays(...)`
 
-Configures the speed of virtual keyboard keystroke output to deal with issues that occur in various situations with the timing of modifier key presses and releases being misinterpreted. 
-
-- `key_pre_delay_ms` - The number of milliseconds to delay the press-release keystroke of the "normal" key after pressing modifier keys. 
-- `key_post_delay_ms` - The number of milliseconds to delay the next key event (modifier release) after the "normal" key press-release event.
-
-Defaults:
+Paces virtual keyboard output to deal with modifier press/release timing being misinterpreted downstream (certain compositors, input methods like IBus/fcitx5, and virtual machines):
 
 ```py
 throttle_delays(
-    key_pre_delay_ms    = 0,    # default: 0 ms, range: 0 to 150 ms, suggested: 1-50 ms
-    key_post_delay_ms   = 0,    # default: 0 ms, range: 0 to 150 ms, suggested: 1-100 ms
+    key_pre_delay_ms  = 0,  # delay before the "normal" key event, after modifier presses (0 to 150)
+    key_post_delay_ms = 0,  # delay after the "normal" key event, before modifier releases (0 to 150)
 )
 ```
 
-Use the throttle delays if you are having the following kinds of problems: 
+Symptoms that suggest enabling throttle delays: combos that intermittently behave as if unmapped, macros with missing characters, premature macro termination, wrong shift states in macro output, or Unicode sequences failing to complete. Try 40/70 ms in virtual machines with major problems; try 0.1/0.5 ms on bare metal with occasional macro glitches. Events the keymapper passes through unmodified take a fast path with a minimal floor delay, so throttle settings mainly affect remapped and synthesized output rather than ordinary typing.
 
-- Shortcut combos seeming to behave unreliably, sometimes as if the unmapped shortcut (or part of the unmapped shortcut) is being pressed at the same time.
-- Macros of sets of keystrokes, or strings or Unicode sequences processed by the keymapper into keystrokes, having various kinds of failures, such as: 
-    - Missing characters
-    - Premature termination of macro
-    - Shifted or uppercase characters coming out as unshifted/lowercase
-    - Unshifted or lowercase characters coming out as shifted/uppercase
-    - Unicode sequences failing to complete and create the desired Unicode character
+### `keyboard_layout_correction(...)`
 
-Suggested values to try if you are in a virtual machine and having major problems with even common shortcut combos:  
-
-- key_pre_delay_ms: 40
-- key_post_delay_ms: 70
-
-The post delay seems a little more effective in testing, but your situation may be different. For a bare-metal install where you are just having a few glitches in macro output, try much smaller delays: 
-
-- key_pre_delay_ms: 0.1
-- key_post_delay_ms: 0.5
-
-These are just examples that have worked fairly well in current testing on machines that have had these issues. 
-
-
-### `dump_diagnostics_key(key)`
-
-Configures a key that when hit will dump additional diagnostic information to STDOUT.
+Opt-in correction for non-US keyboard layouts, in two phases: input combo matching (so `C("Cmd-z")` matches the key that produces `z` on the active layout) and string/Unicode macro output (so typed strings come out correctly). Deliberately off by default because it manipulates output:
 
 ```py
-dump_diagnostics_key(Key.F15)  # default
+keyboard_layout_correction(
+    correction_enabled = True,
+    correct_number_row = False,     # opt-in for layouts with a position-flipped number row
+    symbol_miss_policy = 'refuse',  # 'refuse' | 'fold' | 'placeholder'
+)
 ```
 
-### `emergency_eject_key(key)`
+When a macro contains a character the active layout cannot type, the miss policy decides the outcome: `refuse` emits nothing and logs loudly (the default), `fold` substitutes the closest ASCII equivalent (uses `anyascii` when available), `placeholder` substitutes a visible placeholder character. The keymapper consumes layout analysis data (corrected key matching tables and a per-layout symbol table for output); in practice this data is provisioned by Toshy components, which detect the active layout and feed the correction system automatically, including layout changes. Standalone users should read the docstrings in `config_api.py` for the data-provisioning details.
 
-Configures a key that when hit will immediately terminate keyszer; useful for development, recovering from bugs, or badly broken configurations.
+### `modmap(name, mappings, when=None)`
+
+Maps a physical key to a different key identity. Conditional modmaps overrule the default modmap; the first modmap that contains the pressed key and matches its condition wins. Both sides are `Key` literals:
 
 ```py
-emergency_eject_key(Key.F16)  # default
+modmap("default", {
+    Key.CAPSLOCK: Key.LEFT_CTRL,
+})
 ```
 
+If you do not create a default (non-conditional) modmap, a blank one is created for you.
 
+### `multipurpose_modmap(name, mappings, when=None)`
 
-### `add_modifier(name, aliases, key/keys)`
+Gives a key two purposes: its tap identity and its held identity:
 
-Allows you to add custom modifiers and then map them to actual keys.
+```py
+multipurpose_modmap("default", {
+    # Enter is Enter when tapped, Right Ctrl when held with other keys
+    Key.ENTER: [Key.ENTER, Key.RIGHT_CTRL],
+})
+```
+
+A held multipurpose key resolves to its modifier identity when another key is pressed while it is down, or when the `multipurpose` timeout expires; a quick lone press-release resolves as the tap identity.
+
+### `keymap(name, mappings, when=None)`
+
+Maps input combos to output actions:
+
+```py
+keymap("Firefox", {
+    C("Cmd-s"): C("Ctrl-s"),
+}, when = matchProps(clas="^firefox$"))
+```
+
+The `mappings` dict maps `combo: command`, where `command` is one of:
+
+- `C(combo_str)` - emit a combo (single-Combo mappings ride compositor key repeat while held)
+- `Key.NAME` - emit a single key
+- `[command1, command2, ...]` - execute commands sequentially
+- `{ ... }` - nested keymap for multi-stroke sequences (see below)
+- `MultiTap(...)` - tap-count-dependent actions (see below)
+- `to_US_keystrokes("text")` - type out a string (100 characters or less)
+- `unicode_keystrokes(0x1F3B5)` - type a Unicode character by codepoint
+- arbitrary function - executed (with `ctx` if it accepts one argument); any return value is run as a command
+- `escape_next_key` - escape the next non-modifier key (held modifiers are dropped)
+- `escape_next_combo` - escape the next mods+key combo (modifiers are kept)
+- `ignore_key` - swallow the input entirely (often used to disable a native combo)
+- `bind` - bind input and output modifiers so the output is not lifted until the input is
+- `sleep(sec)` / `usleep(usec)` - pauses inside a command list
+
+### `MultiTap(...)`
+
+A passive descriptor used as the value side of a keymap entry, giving one combo different actions for 1 to 5 rapid taps:
+
+```py
+keymap("multi-tap demo", {
+    C("Shift-RC-t"): MultiTap(
+        tap_1_action = C("C-n"),            # None here would block single-tap
+        tap_2_action = some_function,
+        tap_3_action = [to_US_keystrokes("x3!"), C("Enter")],
+        # tap_interval / min_tap_delay kwargs override the timeouts() values
+    ),
+})
+```
+
+Any tap level can be a Combo, a Key, a callable, a list of those, or `None` (no action at that level), so sparse setups like "act only on 2 and 4 taps" work naturally. Timing resolves per sequence: explicit kwargs first, then any matching conditional `timeouts()` rule, then the global values. Tap counting, timing, and deferred emission all run inside the keymapper's event loop. `isMultiTap(...)` remains as a deprecated compatibility alias.
+
+### `matchProps(...)`
+
+Factory producing a `when=` predicate that matches the current window and device context. All parameters are named; at least one is required:
+
+```py
+keymap("Terminals", {
+    # ...
+}, when = matchProps(clas="gnome-terminal|konsole|alacritty"))
+```
+
+Supported parameters: `clas`, `name`, `devn` (regex strings matched against the application class, window title, and device name; case insensitive by default, `cse=True` for case sensitive), negations `not_clas`, `not_name`, `not_devn`, booleans `numlk` and `capslk`, and list-of-dicts forms `lst`/`not_lst` for matching several property sets with one call. For performance-sensitive configs, hoist the factory call into a variable at load time and reference it in `when=`, rather than calling the factory inside a lambda on every key event.
+
+### `conditional(fn, map)`
+
+Wraps a map so it applies only when `fn(ctx)` is true; equivalent to passing `when=` to the map function. Prefer `matchProps()` for building these predicates; writing a raw function is the escape hatch for conditions `matchProps()` cannot express (combining context with external state, custom logic, and so on). The `ctx` object such a function receives exposes:
+
+- `wm_class` - application class of the focused window (`WM_CLASS` in X11/Xorg; the compositor-reported `app_id` or equivalent in Wayland environments)
+- `wm_name` - title of the focused window
+- `device_name` - name of the device the input came from
+- `capslock_on` / `numlock_on` - lock key states (booleans)
+
+### `add_modifier(...)` and `setup_hyper(...)`
 
 ```py
 add_modifier("HYPER", aliases = ["Hyper"], key = Key.F24)
 ```
 
-_Note:_ Just adding `HYPER` doesn't necessarily make it work with your software, you may still need to configure X11 setup to accept the key you choose as the "Hyper" key.
-
-
-### `wm_class_match(re_str)`
-
-Helper to make matching conditionals (and caching the compiled regex) just a tiny bit simpler.
+Custom modifiers can then be used in combo strings like any built-in modifier. For the common Hyper scheme, `setup_hyper()` does everything in one call: creates the modifier on a virtual carrier keycode, binds the trigger key (as a plain modmap, or a multipurpose modmap when `tap_output` is given), and appends an expansion keymap that turns `Hyper-X` into `Shift+Ctrl+Alt+Super+X` (or a two-layer variant with `add_unshifted_layer=True`):
 
 ```py
-keymap("Firefox",{
-    # ... keymap here
-}, when = wm_class_match("^Firefox$"))
+setup_hyper(Key.CAPSLOCK, tap_output=Key.ESC)
 ```
 
+User keymaps referencing Hyper combos automatically take priority over the expansion, since the expansion keymap is appended last.
 
-### `not_wm_class_match(re_str)`
-
-The negation of `wm_class_match`, matches only when the regex does NOT match.
-
-
-### `modmap(name, mappings, when_conditional = None)`
-
-Maps a single physical key to a different key.  A default modmap will always be overruled by any conditional modmaps that apply.  `when_conditional` can be passed to make the modmap conditional.  The first modmap found that includes the pressed key and matches the `when_conditional` will be used to remap the key.
+### `dump_diagnostics_key(key)` and `emergency_eject_key(key)`
 
 ```py
-modmap("default", {
-    # mapping caps lock to left control
-    Key.CAPSLOCK: Key.LEFT_CTRL
-})
+dump_diagnostics_key(Key.F15)   # default; dumps diagnostic info to stdout when hit
+emergency_eject_key(Key.F16)    # default; immediately terminates the keymapper when hit
 ```
 
-If you don't create a default (non-conditional) modmap a blank one is created for you.  For `modmap` both sides of the pairing will be `Key` literals (not combos).
+The eject key is invaluable while developing a config that has gone sideways.
 
+### `include(relative_filename)`
 
-### `multipurpose_modmap(name, mappings)`
-
-Used to bestow a key with multiple-purposes, both for regular use and for use as a modifier.
+Loads another Python file into the config at the point of inclusion, sharing the same global scope. Files must live in the same directory as the main config:
 
 ```py
-multipurpose_modmap("default",
-    # Enter is enter if pressed and immediately released...
-    # ...but Right Control if held down and paired with other keys.
-    {Key.ENTER: [Key.ENTER, Key.RIGHT_CTRL]}
-)
+include("os.py")
+include("apps.py")
 ```
 
+### Combo specifications
 
-### `keymap(name, mappings)`
+Combos are written as `C("(<Modifier>-)*<Key>")`. Modifiers:
 
-Defines a keymap of input combos mapped to output equivalents.
+- `C` or `Ctrl` - Control
+- `Alt` - Alt
+- `Shift` - Shift
+- `Super`, `Win`, `Command`, `Cmd`, `Meta` - Super/Windows/Command
+- `Fn` - Function (on hardware that exposes it)
+- Any custom modifier alias created with `add_modifier`
+
+Prefix `L` or `R` for a specific side (`LC-`, `RAlt-`). `<Key>` is any name defined in [`key.py`](https://github.com/RedBearAK/xwaykeyz/blob/main/src/xwaykeyz/models/key.py). Examples:
+
+- `C("LC-Alt-j")` - left Control, Alt, `j`
+- `C("Ctrl-m")` - either Control, `m`
+- `C("Alt-Shift-comma")` - Alt, either Shift, comma
+
+`K()` is an older alias for `C()` kept for config compatibility.
+
+### Multi-stroke sequences
+
+Nested keymaps create multi-stroke bindings; `immediately` gives the first stroke its own output:
 
 ```py
-keymap("Firefox", {
-    # when Cmd-S is input instead send Ctrl-S to the output
-    C("Cmd-s"): C("Ctrl-s"),
-}, when = lambda ctx: ctx.wm_class == "Firefox")
-```
-
-Because of the `when` conditional this keymap will only apply for Firefox.
-
-
-The argument `mappings` is a dictionary in the form of `{ combo: command, ...}` where `combo` and `command` take following forms:
-
-- `combo`: Combo to map, specified by `K(combo_str)`
-    - For the syntax of combo specifications, see [Combo Specifications](#combo-specifications).
-- `command`: one of the following
-    - `K(combo_str)`: Type a specific key combo to the output.
-    - `[command1, command2, ...]`: Execute multiple commands sequentially.
-    - `{ ... }`: Sub-keymap. Used to define [Multiple Stroke Keys](#multiple-stroke-keys).
-    - `escape_next_key`: Escape the next (non-modifier) key pressed. Held modifiers are dropped!
-    - `escape_next_combo`: Escapes the next [mod(s)]+key combo seen. Does NOT drop modifiers.
-    - `ignore_key`: Ignore the key/combo that is pressed next. (often used to disable native combos)
-    - `bind`: Bind an input and output modifier together such that the output is not lifted until the input is.
-    - arbitrary function: The function is executed and the returned value (if any) is used as a command.
-
-The argument `name` specifies the keymap name. Every keymap has a name - using `default` is suggested for a non-conditional keymap.
-
-
-### `conditional(fn, map)`
-
-Applies a map conditionally, only when the `fn` function evaluates `True`.  The below example is a modmap that is only active when the current `WM_CLASS` is `Terminal`.
-
-```py
-conditional(
-    lambda ctx: ctx.wm_class == "Terminal",
-    modmap({
-        # ...
-    })
-)
-```
-
-The `context` object passed to the `fn` function has several attributes:
-
-- `wm_class` - the WM_CLASS of the [input] focused X11 window
-- `wm_name` - the WM_NAME of the [input] focused X11 window
-- `device_name` - name of the device where an input originated
-- `capslock_on` - state of CapsLock (boolean)
-- `numlock_on` - state of NumLock (boolean)
-
-_Note:_ The same conditional `fn` can always be passed directly to `modmap` using the `when` argument.
-
----
-
-#### Marks
-
-TODO: need docs (See issue #8)
-
-
-#### Combo Specifications
-
-The Combo specification in a keymap is written in the form of `C("(<Modifier>-)*<Key>")`.
-
-`<Modifier>` is one of the following:
-
-- `C` or `Ctrl` -> Control key
-- `Alt` -> Alt key
-- `Shift` -> Shift key
-- `Super`, `Win`, `Command`, `Cmd`, `Meta` -> Super/Windows/Command key
-- `Fn` -> Function key (on supported keyboards)
-
-You can specify left/right modifiers by adding the prefixes `L` or `R`.
-
-`<Key>` is any key whose name is defined in [`key.py`](https://github.com/RedBearAK/xwaykeyz/blob/main/keyszer/models/key.py).
-
-Some combo examples:
-
-- `C("LC-Alt-j")`: left Control, Alt, `j`
-- `C("Ctrl-m")`: Left or Right Control, `m`
-- `C("Win-o")`: Cmd/Windows,  `o`
-- `C("Alt-Shift-comma")`: Alt, Left or Right Shift, comma
-
-
-#### Multiple Stroke Keys
-
-To use multiple stroke keys, simply define a nested keymap. For example, the
-following example remaps `C-x C-c` to `C-q`.
-
-```python
 keymap("multi stroke", {
     C("C-x"): {
-      C("C-c"): C("C-q"),
-    }
+        immediately: C("x"),        # optional
+        C("C-c"): C("C-q"),
+    },
 })
 ```
 
-If you'd like the first keystroke to also produce it's own output, `immediately` can be used:
 
-```python
-keymap("multi stroke", {
-  C("C-x"): {
-    # immediately output "x" when Ctrl-X is pressed
-    immediately: C("x"),
-    C("C-c"): C("C-q"),
-  }
-})
-```
+## Finding key names and window properties
 
-#### Finding out the proper `Key.NAME` literal for a key on your keyboard
+To find the `Key.NAME` literal for a physical key, run `evtest`, select your keyboard device, and hit the key:
 
-From a terminal session run `evtest` and select your keyboard's input device.  Now hit the key in question.
+    Event: time 1655723568.594844, type 1 (EV_KEY), code 69 (KEY_NUMLOCK), value 1
 
-```
-Event: time 1655723568.594844, type 1 (EV_KEY), code 69 (KEY_NUMLOCK), value 1
-Event: time 1655723568.594844, -------------- SYN_REPORT ------------
-```
+`KEY_NUMLOCK` translates to `Key.NUMLOCK`. The [full list of key names](https://github.com/RedBearAK/xwaykeyz/blob/main/src/xwaykeyz/models/key.py) is in the source.
 
-Above I've just pressed "clear" on my numpad and see `code 69 (KEY_NUMLOCK)` in the output. For Keyszer this would translate to `Key.NUMLOCK`.  You can also browse the [full list of key names](https://github.com/RedBearAK/xwaykeyz/blob/main/src/keyszer/models/key.py) in the source.
+The `ctx.wm_class` and `ctx.wm_name` attributes carry the application class and window title regardless of session type: in X11/Xorg they come from the `WM_CLASS` and `WM_NAME`/`_NET_WM_NAME` window properties, while in Wayland environments the window context providers fill them with the compositor-reported `app_id` (or its equivalent) and window title. In X11/Xorg you can inspect these directly: run `xprop WM_CLASS _NET_WM_NAME WM_NAME` and click the window, then match `ctx.wm_class` against the second `WM_CLASS` value.
+
+> [!NOTE]
+> `xprop` only works in X11/Xorg. The Toshy config has a diagnostic hotkey function that shows a dialog with the app class and window title in X11/Xorg and all supported Wayland environments, which is the practical way to get these values on Wayland.
 
 
-#### Finding an Application's `WM_CLASS`  and `WM_NAME` using `xprop`
+## Upgrading from xkeysnail or Kinto
 
-> [!NOTE]  
-> The [Toshy](https://github.com/RedBearAK/toshy) project has a custom function in its config that will show a dialog with the app class and window title in X11/Xorg and compatible Wayland environments. The `xprop` command will only work in X11/Xorg.  
+Some configuration changes and CLI argument changes are needed coming from `xkeysnail` 0.4.0; see [UPGRADE_FROM_XKEYSNAIL.md](https://github.com/RedBearAK/xwaykeyz/blob/main/UPGRADE_FROM_XKEYSNAIL.md). For the Kinto variety of `xkeysnail`, see [USING_WITH_KINTO.md](https://github.com/RedBearAK/xwaykeyz/blob/main/USING_WITH_KINTO.md).
 
-Use the `xprop` command from a terminal:
-
-    xprop WM_CLASS _NET_WM_NAME WM_NAME
-
-...then click an application window.
-
-Use the second `WM_CLASS` value (in this case `Google-chrome`) when matching `ctx.wm_class`.
-
-
-#### Example of Case Insensitive Matching
-
-```py
-terminals = ["gnome-terminal","konsole","io.elementary.terminal","sakura"]
-terminals = [term.casefold() for term in terminals]
-USING_TERMINAL_RE = re.compile("|".join(terminals), re.IGNORECASE)
-
-modmap("not in terminal", {
-    Key.LEFT_ALT: Key.RIGHT_CTRL,
-    # ...
-    }, when = lambda ctx: ctx.wm_class.casefold() not in terminals
-)
-
-modmap("terminals", {
-    Key.RIGHT_ALT: Key.RIGHT_CTRL,
-    # ...
-    }, when = lambda ctx: USING_TERMINAL_RE.search(ctx.wm_class)
-)
-```
+> [!NOTE]
+> Kinto users should strongly consider migrating to [Toshy](https://github.com/RedBearAK/toshy), which is intrinsically designed around this keymapper, supports many Wayland environments Kinto cannot, and is actively maintained.
 
 
 ## FAQ
 
-
 **Can I remap the keyboard's `Fn` key?**
 
-_It depends._  Most laptops do not allow this as the `Fn` keypress events are not _directly_ exposed to the operating system.  On some keyboards, it's just another key.  To find out you can run `evtest`.  Point it to your keyboard device and then hit a few keys; then try `Fn`.  If you get output, then you can map `Fn`.  If not, you can't.
-
-Here is an example from a full size Apple keyboard I have:
-
-```
-Event: time 1654948033.572989, type 1 (EV_KEY), code 464 (KEY_FN), value 1
-Event: time 1654948033.572989, -------------- SYN_REPORT ------------
-Event: time 1654948033.636611, type 1 (EV_KEY), code 464 (KEY_FN), value 0
-Event: time 1654948033.636611, -------------- SYN_REPORT ------------
-```
-
+It depends. Most laptops do not expose `Fn` keypress events directly to the operating system. On some keyboards it is just another key. Run `evtest` against your keyboard device and press `Fn`: if you get output (e.g. `code 464 (KEY_FN)`), you can map it; if not, you cannot. On Apple T2 MacBooks, the built-in device quirk restores the Touch Bar's native Fn display-mode switching that grabbing the keyboard would otherwise break.
 
 **What if my keyboard seems laggy or is not repeating keys fast enough?**
 
-You likely need to set the [virtual] keyboards repeat rate to match your actual keyboard.
+The virtual keyboard's repeat settings may not match your physical keyboard. In X11/Xorg, `xset r rate 200 20` (adjust to taste) after the keymapper starts usually fixes it. Wayland compositors manage repeat rate per their own settings.
 
-Here is the command I use:
+**My modifier+click combos were unreliable. Is that fixed?**
 
-    xset r rate 200 20
+Yes, this is what the pointer monitor is for. Modifiers are briefly "suspended" from the output while the keymapper waits to see whether they are part of a combo; any mouse or touchpad activity during that window now resumes them immediately, so modifier+click and modifier+scroll work as expected even with the suspend timeout active. Suspend behavior is tunable globally and per-app via `timeouts()`.
 
-For best results your real keyboard and Keyszer [virtual] keyboard should have matching repeat rates. That seems to work best for me. Anytime you restart keyszer you'll need to reconfigure the repeat rate because each time a new virtual keyboard device is created... or maybe it's that there is only a single repeat rate and every time you "plug in" a new keyboard it changes?
+**Does xwaykeyz support FreeBSD/NetBSD or other BSDs?**
 
-_If you could shed some light on this, please [get in touch](https://github.com/RedBearAK/xwaykeyz/issues/55)._
-
-
-**Does Keyszer support FreeBSD/NetBSD or other BSDs?**
-
-Not at the moment, perhaps never.  If you're an expert on the BSD kernel's input layers please
-[join the discussion](https://github.com/RedBearAK/xwaykeyz/issues/46).  I'm at the very least open to the discussion to find out if this is possible, a good idea, etc...
-
-
-**Is keyszer compatible with [Kinto.sh](https://github.com/rbreaves/kinto)?**
-
-
-*That is certainly the plan.*   The major reason Kinto.sh required it's own fork [has been resolved](https://github.com/RedBearAK/xwaykeyz/issues/11).  Kinto.sh should simply "just work" with `keyszer` (with a few tiny config changes).  In fact, hopefully it works better than before since many quirks with the Kinto fork should be resolved. (such as nested combos not working, etc)
-
-Reference:
-
-- [Kinto GitHub issue](https://github.com/rbreaves/kinto/issues/718) regarding the transition.
-- Instructions on altering your `kinto.py` config slightly. See [USING_WITH_KINTO.md](https://github.com/RedBearAK/xwaykeyz/blob/main/USING_WITH_KINTO.md).
-
+No. The keymapper is built directly on the Linux kernel's `evdev`/`uinput` interfaces.
 
 **How can I help or contribute?**
 
-Please open an issue to discuss how you'd like to get involved or respond on one of the existing issues. Also feel free to open new issues for feature requests.  Many issues are tagged [good first issue](https://github.com/RedBearAK/xwaykeyz/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) or [help welcome](https://github.com/RedBearAK/xwaykeyz/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+welcome%22).
-
+Open an [issue](https://github.com/RedBearAK/xwaykeyz/issues) to discuss what you would like to work on, or pick up an existing one. Bug reports with clear reproduction steps are always valuable, as are reports of Wayland compositors that do or do not work with the wlroots window context method.
 
 
 ## License
 
-`keyszer` is distributed under GPL3.  See [LICENSE](https://github.com/RedBearAK/xwaykeyz/blob/main/LICENSE).
-
-
+`xwaykeyz` is distributed under GPL3. See [LICENSE](https://github.com/RedBearAK/xwaykeyz/blob/main/LICENSE).
