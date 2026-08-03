@@ -220,6 +220,7 @@ from toshy_common.notification_manager  import NotificationManager
 from toshy_common.overlay_context       import OverlayFlag as OFlag
 from toshy_common.proc_launcher         import launch_detached
 from toshy_common.runtime_utils         import sanitize_text
+from toshy_common.screenshots           import setup_screenshot_keymaps
 from toshy_common.settings_class        import Settings
 from toshy_common.terminal_utils        import render_pango_text
 
@@ -4050,6 +4051,18 @@ keymap("User hardware keys", {
 #       cnfg.screen_has_focus and
 #       ctx_app_is_remote
 # )
+
+
+try:
+    setup_screenshot_keymaps(
+        globals(),
+        when = lambda ctx:
+            ctx_ovl_macos_globals and
+            cnfg.screen_has_focus and
+            not ctx_app_is_remote
+    )
+except NameError:
+    pass
 
 
 try:

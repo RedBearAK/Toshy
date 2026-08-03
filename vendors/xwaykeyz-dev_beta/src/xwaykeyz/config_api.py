@@ -1720,14 +1720,17 @@ def keymap(name, mappings, when=None):
         # Merge expanded mappings into original mappings
         target.update(expanded_mappings)
 
-    def wrap_keymap(name, mappings, depth=0):
+    def wrap_keymap(name, mappings, nest_path_lst=None):
         """convert naked dict objects into proper named keymaps"""
-        if depth > 0:
-            name = f"{name} (" * depth + " nested" + ")" * depth
+        nest_path_lst = nest_path_lst or []
+        if nest_path_lst:
+            full_name = f'{name} [nested: {" > ".join(nest_path_lst)}]'
+        else:
+            full_name = name
         for k, v in mappings.items():
             if isinstance(v, dict):
-                mappings[k] = wrap_keymap(name, v, depth + 1)
-        return Keymap(name, mappings)
+                mappings[k] = wrap_keymap(name, v, nest_path_lst + [str(k)])
+        return Keymap(full_name, mappings)
 
     expand(mappings)
 

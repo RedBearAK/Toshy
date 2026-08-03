@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260727'
+__version__ = '20260802'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -169,6 +169,9 @@ kblayout_setup_path     = os.path.join(toshy_dir_path,
 kblayout_symtable_path  = os.path.join(toshy_dir_path,
                             'toshy_common', 'kblayout_symtable.py')
 
+screenshots_pkg_path    = os.path.join(toshy_dir_path,
+                            'toshy_common', 'screenshots')          # package dir
+
 # These files are shell scripts, not Python scripts:
 config_svc_path         = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-config')
 sessmon_svc_path        = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-sessmon')
@@ -190,6 +193,11 @@ versions_path           = os.path.join(toshy_dir_path,
 # Detector is a package now; its per-module entries (below) show only with --all.
 def _kbld_module(filename):
     return os.path.join(kblayout_detect_path, filename)
+
+
+# Screenshots is a package; its per-module entries (below) show only with --all.
+def _sshot_module(filename):
+    return os.path.join(screenshots_pkg_path, filename)
 
 
 components = [
@@ -232,6 +240,16 @@ components = [
     (None, None, True),             # Spacing (detailed output only)
     ("Kbd Layout Setup",            kblayout_setup_path),
     ("Kbd Layout Symbol Table",     kblayout_symtable_path),
+    (None, None),                   # Spacing
+    ("Screenshot Shortcuts (pkg)",  screenshots_pkg_path),
+    (None, None, True),             # Spacing (detailed output only)
+    ("  Sshot: __init__",           _sshot_module('__init__.py'),           True),
+    ("  Sshot: __main__",           _sshot_module('__main__.py'),           True),
+    ("  Sshot: accel regexes",      _sshot_module('sshot_accel_rgx.py'),    True),
+    ("  Sshot: defaults",           _sshot_module('sshot_defaults.py'),     True),
+    ("  Sshot: keymaps",            _sshot_module('sshot_keymaps.py'),      True),
+    ("  Sshot: readers",            _sshot_module('sshot_readers.py'),      True),
+    ("  Sshot: resolver",           _sshot_module('sshot_resolver.py'),     True),
     (None, None),                   # Spacing
     ("SysD Svc: Keymapper Config",  config_svc_path),
     ("SysD Svc: Session Monitor",   sessmon_svc_path),
