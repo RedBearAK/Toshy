@@ -117,10 +117,10 @@ def _render_mappings(mappings_dct: dict, indent_str: str) -> str:
 
 
 def _print_literal_keymaps(desktop_env, de_maj_ver):
-    api = _RecordingAPI(desktop_env, de_maj_ver)
-    setup_screenshot_keymaps(api.namespace())
     print()
     print('Generated keymaps (literal; when= conditions supplied by the config):')
+    api = _RecordingAPI(desktop_env, de_maj_ver)
+    setup_screenshot_keymaps(api.namespace())
     for record_dct in api.registered_lst:
         print()
         print(f'  keymap("{record_dct["name"]}", {{')
@@ -165,6 +165,9 @@ def _print_slot_table(results_dct: dict):
 
 def _print_keymap_preview(results_dct: dict, desktop_env: str):
     esc_first = (desktop_env or '').strip().lower() in _ESC_FIRST_DESKTOP_ENVS
+    joined_inputs_dct = {slot: ' | '.join(spellings_lst)
+                            for slot, spellings_lst in DEFAULT_INPUT_COMBOS_DCT.items()}
+    input_pad_w = max([24] + [len(joined) for joined in joined_inputs_dct.values()]) + 2
 
     def resolved_combo(slot_name: str) -> 'str | None':
         result = results_dct.get(slot_name)
@@ -175,8 +178,7 @@ def _print_keymap_preview(results_dct: dict, desktop_env: str):
     shifted_slots_lst = []
     print("  4-then-Space window shift keymap(s):")
     for area_slot, window_slot in _WINDOW_SHIFT_PAIRS_LST:
-        spellings_lst   = DEFAULT_INPUT_COMBOS_DCT.get(area_slot)
-        input_combo     = ' | '.join(spellings_lst) if spellings_lst else None
+        input_combo     = joined_inputs_dct.get(area_slot)
         area_combo      = resolved_combo(area_slot)
         window_combo    = resolved_combo(window_slot)
         if not input_combo or not area_combo or not window_combo:
@@ -191,15 +193,15 @@ def _print_keymap_preview(results_dct: dict, desktop_env: str):
                                 f'{window_combo}')
         else:
             continuation_str = window_combo
-        print(f'    {input_combo.ljust(24)}-> {area_combo}   '
+        print(f'    {input_combo.ljust(input_pad_w)}-> {area_combo}   '
                 f'(then Space -> {continuation_str}; Esc/Enter pass through)')
 
     print("  Flat keymap ('Screenshots: detected shortcuts'):")
     flat_cnt = 0
-    for slot_name, spellings_lst in DEFAULT_INPUT_COMBOS_DCT.items():
+    for slot_name in DEFAULT_INPUT_COMBOS_DCT:
         if slot_name in shifted_slots_lst:
             continue
-        input_combo = ' | '.join(spellings_lst)
+        input_combo = joined_inputs_dct[slot_name]
         output_combo = resolved_combo(slot_name)
         if output_combo is None:
             de_norm = (desktop_env or '').strip().lower()
@@ -207,13 +209,13 @@ def _print_keymap_preview(results_dct: dict, desktop_env: str):
             if cmd_candidates_lst:
                 flat_cnt += 1
                 cmds_str = ' | '.join(' '.join(cmd_lst) for cmd_lst in cmd_candidates_lst)
-                print(f'    {input_combo.ljust(24)}-> [run first found: {cmds_str}]'
+                print(f'    {input_combo.ljust(input_pad_w)}-> [run first found: {cmds_str}]'
                         f'   ({slot_name}, command fallback)')
                 continue
-            print(f'    {input_combo.ljust(24)}   (skipped: {slot_name} not resolved)')
+            print(f'    {input_combo.ljust(input_pad_w)}   (skipped: {slot_name} not resolved)')
             continue
         flat_cnt += 1
-        print(f'    {input_combo.ljust(24)}-> {output_combo.ljust(22)}({slot_name})')
+        print(f'    {input_combo.ljust(input_pad_w)}-> {output_combo.ljust(22)}({slot_name})')
     if not flat_cnt:
         print('    (no entries)')
 
