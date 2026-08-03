@@ -12,7 +12,7 @@ like real kglobalshortcutsrc data.
 Runnable standalone (accumulates a score in main) and collectable by
 pytest (bool-returning test functions).
 """
-__version__ = '20260801'
+__version__ = '20260802'
 
 
 import os
@@ -46,7 +46,7 @@ _k_friendly_name=Spectacle
 _launch=Print,Print,Launch Spectacle
 FullScreenScreenShot=none,Shift+Print,Capture Entire Desktop
 RectangularRegionScreenShot=,Meta+Shift+Print,Capture Rectangular Region
-ActiveWindowScreenShot=Meta+Print\\tAlt+P,Meta+Print,Capture Active Window
+WindowUnderCursorScreenShot=Meta+Ctrl+Print\\tAlt+P,Meta+Ctrl+Print,Capture Window Under Cursor
 
 [plasmashell]
 activate task manager entry 1=Meta+1,Meta+1,Activate Task Manager Entry 1
@@ -99,7 +99,7 @@ def test_reader_with_section() -> bool:
             and results_dct[SLOT_AREA_TO_FILE][1] == 'Shift-Super-Print')
         all_ok &= _check('window_to_file takes first alternate',
             results_dct.get(SLOT_WINDOW_TO_FILE, (None,))[0] == STATUS_RESOLVED
-            and results_dct[SLOT_WINDOW_TO_FILE][1] == 'Super-Print')
+            and results_dct[SLOT_WINDOW_TO_FILE][1] == 'C-Super-Print')
         all_ok &= _check('area_to_clipboard mirrors area_to_file',
             results_dct.get(SLOT_AREA_TO_CLIPBOARD, (None,))[0] == STATUS_RESOLVED
             and results_dct[SLOT_AREA_TO_CLIPBOARD][1] == 'Shift-Super-Print')

@@ -32,7 +32,7 @@ Typical config usage (the entire config-side footprint):
 
     setup_screenshot_keymaps(globals(), when = lambda ctx: ...)
 """
-__version__ = '20260801'
+__version__ = '20260802'
 
 
 from toshy_common.screenshots.sshot_defaults import (
@@ -81,6 +81,12 @@ _OUTLET_KEYS_LST = ['Esc', 'Enter']
 
 _ESC_FIRST_DELAY_SEC = 0.2
 
+# DEs whose area-capture overlay must be dismissed (Esc + pause) before
+# the window shortcut can open the interactive window picker. Live-tested
+# on KDE (2026-08): emitting the window shortcut with Spectacle's region
+# overlay up completes/saves instead of shifting capture mode.
+_ESC_FIRST_DESKTOP_ENVS = frozenset({'kde', 'plasma'})
+
 
 def _require_callable(name_str: str, obj):
     if callable(obj):
@@ -93,7 +99,7 @@ def _require_callable(name_str: str, obj):
 def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
                                 input_combos_dct=None,
                                 enable_window_shift=True,
-                                window_shift_esc_first=False) -> 'list':
+                                window_shift_esc_first=None) -> 'list':
     """Build and register screenshot keymaps for the current desktop
     environment. Returns the list of registered keymap objects.
 
@@ -105,11 +111,9 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
     enable_window_shift: build 4-then-Space nested keymaps when both legs
     of a pair resolve.
     window_shift_esc_first: emit Esc + delay before the window shortcut
-    on the Space continuation (for DEs whose area overlay eats the
-    emitted shortcut; determined by per-DE testing)."""
+    on the Space continuation. None (default) applies the library's
+    per-DE knowledge automatically; True/False forces it either way."""
     required_names_lst = ['keymap', 'C', 'immediately']
-    if window_shift_esc_first:
-        required_names_lst.append('sleep')
     missing_names_lst = [name for name in required_names_lst
                             if config_globals_dct.get(name) is None]
     if missing_names_lst:
@@ -126,8 +130,6 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
 
     _require_callable('keymap', keymap)
     _require_callable('C', C)
-    if window_shift_esc_first:
-        _require_callable('sleep', sleep)
 
     desktop_env = config_globals_dct.get('DESKTOP_ENV')
     de_maj_ver  = config_globals_dct.get('DE_MAJ_VER')
@@ -135,6 +137,12 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
         raise ValueError(
             'setup_screenshot_keymaps() needs DESKTOP_ENV in the provided '
             'namespace. Pass the config globals() as the first argument.')
+
+    if window_shift_esc_first is None:
+        window_shift_esc_first = (
+            (desktop_env or '').strip().lower() in _ESC_FIRST_DESKTOP_ENVS)
+    if window_shift_esc_first:
+        _require_callable('sleep', sleep)
 
     if input_combos_dct is None:
         input_combos_dct = DEFAULT_INPUT_COMBOS_DCT

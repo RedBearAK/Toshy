@@ -22,7 +22,7 @@ macOS shortcut reference (verified against Apple support docs, 2026-08):
     Shift+Cmd+5             interactive screenshot/recording toolbar
     + Control (any above)   destination becomes clipboard instead of file
 """
-__version__ = '20260801'
+__version__ = '20260802'
 
 
 
@@ -73,7 +73,13 @@ SOURCE_GENERIC_CONVENTION       = 'generic_convention'
 #   _launch                      = Print              (interactive UI)
 #   FullScreenScreenShot         = Shift+Print
 #   RectangularRegionScreenShot  = Meta+Shift+Print
-#   ActiveWindowScreenShot       = Meta+Print
+#   ActiveWindowScreenShot       = Meta+Print         (immediate, focused win)
+#   WindowUnderCursorScreenShot  = Meta+Ctrl+Print    (interactive Select Window)
+# Window slots use WindowUnderCursorScreenShot, NOT ActiveWindowScreenShot:
+# live testing (2026-08) confirmed ActiveWindow captures the focused window
+# immediately, while WindowUnderCursor opens Spectacle's interactive
+# "Select Window" picker -- the true twin of macOS's 4-then-Space camera
+# mode (any window can be chosen, including background windows).
 # Spectacle has no separate clipboard-destination shortcuts; capture
 # destination is governed by Spectacle's own settings. Clipboard slots
 # therefore mirror the file slots (capture still happens; destination
@@ -82,10 +88,10 @@ KDE_DEFAULTS_DCT = {
     SLOT_INTERACTIVE_UI:            'Print',
     SLOT_FULLSCREEN_TO_FILE:        'Shift-Print',
     SLOT_AREA_TO_FILE:              'Shift-Super-Print',
-    SLOT_WINDOW_TO_FILE:            'Super-Print',
+    SLOT_WINDOW_TO_FILE:            'C-Super-Print',
     SLOT_FULLSCREEN_TO_CLIPBOARD:   'Shift-Print',
     SLOT_AREA_TO_CLIPBOARD:         'Shift-Super-Print',
-    SLOT_WINDOW_TO_CLIPBOARD:       'Super-Print',
+    SLOT_WINDOW_TO_CLIPBOARD:       'C-Super-Print',
 }
 
 # GNOME 42 and later (gnome-shell screenshot UI)

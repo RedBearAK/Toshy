@@ -26,6 +26,8 @@ from toshy_common.screenshots.sshot_defaults import (
 )
 from toshy_common.screenshots.sshot_keymaps import (
     DEFAULT_INPUT_COMBOS_DCT,
+    _ESC_FIRST_DELAY_SEC,
+    _ESC_FIRST_DESKTOP_ENVS,
     _WINDOW_SHIFT_PAIRS_LST,
 )
 from toshy_common.screenshots.sshot_resolver import resolve_outputs
@@ -66,7 +68,8 @@ def _print_slot_table(results_dct: dict):
             print(f'  {"".ljust(name_width)}note: {result.note}')
 
 
-def _print_keymap_preview(results_dct: dict):
+def _print_keymap_preview(results_dct: dict, desktop_env: str):
+    esc_first = (desktop_env or '').strip().lower() in _ESC_FIRST_DESKTOP_ENVS
 
     def resolved_combo(slot_name: str) -> 'str | None':
         result = results_dct.get(slot_name)
@@ -87,8 +90,13 @@ def _print_keymap_preview(results_dct: dict):
                     f'{"window leg unresolved" if input_combo and area_combo else ""})')
             continue
         shifted_slots_lst.append(area_slot)
+        if esc_first:
+            continuation_str = (f'Esc, {_ESC_FIRST_DELAY_SEC}s pause, '
+                                f'{window_combo}')
+        else:
+            continuation_str = window_combo
         print(f'    {input_combo.ljust(24)}-> {area_combo}   '
-                f'(then Space -> {window_combo}, Esc/Enter pass through)')
+                f'(then Space -> {continuation_str}; Esc/Enter pass through)')
 
     print("  Flat keymap ('Screenshots: detected shortcuts'):")
     flat_cnt = 0
@@ -140,7 +148,7 @@ def main() -> int:
     _print_slot_table(results_dct)
     print()
     print('Keymap preview (default input combos):')
-    _print_keymap_preview(results_dct)
+    _print_keymap_preview(results_dct, desktop_env)
     print()
     return 0
 

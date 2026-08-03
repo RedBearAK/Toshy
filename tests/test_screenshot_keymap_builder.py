@@ -9,7 +9,7 @@ resolution is deterministic.
 Runnable standalone (accumulates a score in main) and collectable by
 pytest (bool-returning test functions).
 """
-__version__ = '20260801'
+__version__ = '20260802'
 
 
 import os
@@ -30,7 +30,7 @@ _FIXTURE_FULL_SECTION = '''[org.kde.spectacle.desktop]
 _launch=Print,Print,Launch Spectacle
 FullScreenScreenShot=Shift+Print,Shift+Print,Capture Entire Desktop
 RectangularRegionScreenShot=Meta+Shift+Print,Meta+Shift+Print,Capture Rectangular Region
-ActiveWindowScreenShot=Meta+Print,Meta+Print,Capture Active Window
+WindowUnderCursorScreenShot=Meta+Ctrl+Print,Meta+Ctrl+Print,Capture Window Under Cursor
 '''
 
 
@@ -45,6 +45,9 @@ class _FakeAPI:
     def C(self, combo_str):
         return ('COMBO', combo_str)
 
+    def sleep(self, sec):
+        return ('SLEEP', sec)
+
     def keymap(self, name_str, mappings_dct, when=None):
         record_dct = {'name': name_str, 'mappings': mappings_dct, 'when': when}
         self.registered_lst.append(record_dct)
@@ -56,6 +59,7 @@ class _FakeAPI:
             'keymap':       self.keymap,
             'C':            self.C,
             'immediately':  self.immediately,
+            'sleep':        self.sleep,
             'DESKTOP_ENV':  'kde',
             'DE_MAJ_VER':   None,
         }
@@ -119,13 +123,14 @@ def test_nested_keymap_shape() -> bool:
         trigger_combo = ('COMBO', 'RC-Shift-Key_4')
         nested_dct = shift_record['mappings'][trigger_combo]
 
+        expected_macro_lst = [('COMBO', 'Esc'), ('SLEEP', 0.2), ('COMBO', 'C-Super-Print')]
         all_ok = True
         all_ok &= _check('immediately entry emits area combo',
             nested_dct[api.immediately] == ('COMBO', 'Shift-Super-Print'))
-        all_ok &= _check('Space continuation emits window combo',
-            nested_dct[('COMBO', 'Space')] == ('COMBO', 'Super-Print'))
-        all_ok &= _check('held-modifier Space variant bound',
-            nested_dct[('COMBO', 'RC-Shift-Space')] == ('COMBO', 'Super-Print'))
+        all_ok &= _check('Space continuation is Esc-first macro (KDE auto)',
+            nested_dct[('COMBO', 'Space')] == expected_macro_lst)
+        all_ok &= _check('held-modifier Space variant bound to same macro',
+            nested_dct[('COMBO', 'RC-Shift-Space')] == expected_macro_lst)
         all_ok &= _check('Esc outlet passes through',
             nested_dct[('COMBO', 'Esc')] == ('COMBO', 'Esc'))
         all_ok &= _check('Enter outlet passes through',

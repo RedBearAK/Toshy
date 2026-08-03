@@ -19,7 +19,7 @@ Storage formats handled:
   GNOME/Cinnamon/MATE/Budgie: gsettings (dconf binary db via subprocess)
   XFCE:   xfconf XML (user file overriding XDG_CONFIG_DIRS system files)
 """
-__version__ = '20260801'
+__version__ = '20260802'
 
 
 import os
@@ -167,11 +167,14 @@ _KDE_SECTION_SERVICES       = '[services][org.kde.spectacle.desktop]'
 
 # Spectacle action objectNames -> slot names. Verified stable across
 # Spectacle v21.12.3 through master (see sshot_defaults.py provenance).
+# WindowUnderCursorScreenShot (interactive "Select Window" picker) feeds
+# the window slot, deliberately NOT ActiveWindowScreenShot (immediate
+# capture of the focused window); see sshot_defaults.py for rationale.
 _KDE_ACTION_SLOT_DCT = {
     '_launch':                      SLOT_INTERACTIVE_UI,
     'FullScreenScreenShot':         SLOT_FULLSCREEN_TO_FILE,
     'RectangularRegionScreenShot':  SLOT_AREA_TO_FILE,
-    'ActiveWindowScreenShot':       SLOT_WINDOW_TO_FILE,
+    'WindowUnderCursorScreenShot':  SLOT_WINDOW_TO_FILE,
 }
 
 # Clipboard slots mirror their file siblings on KDE; Spectacle's capture
