@@ -32,9 +32,12 @@ Typical config usage (the entire config-side footprint):
 
     setup_screenshot_keymaps(globals(), when = lambda ctx: ...)
 """
-__version__ = '20260802'
+__version__ = '20260803'
 
 
+from subprocess import DEVNULL
+
+from toshy_common.proc_launcher import launch_detached
 from toshy_common.screenshots.sshot_defaults import (
     SLOT_AREA_TO_CLIPBOARD,
     SLOT_AREA_TO_FILE,
@@ -44,6 +47,7 @@ from toshy_common.screenshots.sshot_defaults import (
     SLOT_WINDOW_TO_CLIPBOARD,
     SLOT_WINDOW_TO_FILE,
     STATUS_RESOLVED,
+    CMD_FALLBACKS_DCT,
 )
 from toshy_common.screenshots.sshot_resolver import resolve_outputs
 
@@ -88,6 +92,23 @@ _ESC_FIRST_DELAY_SEC = 0.2
 _ESC_FIRST_DESKTOP_ENVS = frozenset({'kde', 'plasma'})
 
 
+def _log(msg_str: str):
+    print(f'[SSHOT] {msg_str}', flush=True)
+
+
+def _make_cmd_fallback_fn(cmd_candidates_lst: 'list[list[str]]'):
+    """Build a keymap output callable that launches the first candidate
+    command found on PATH. launch_detached() returns False when the
+    executable is absent, so candidates double as version detection."""
+
+    def _sshot_cmd_fallback(ctx):
+        for cmd_lst in cmd_candidates_lst:
+            if launch_detached(cmd_lst, stdout=DEVNULL, stderr=DEVNULL):
+                return
+
+    return _sshot_cmd_fallback
+
+
 def _require_callable(name_str: str, obj):
     if callable(obj):
         return
@@ -99,7 +120,8 @@ def _require_callable(name_str: str, obj):
 def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
                                 input_combos_dct=None,
                                 enable_window_shift=True,
-                                window_shift_esc_first=None) -> 'list':
+                                window_shift_esc_first=None,
+                                enable_command_fallbacks=True) -> 'list':
     """Build and register screenshot keymaps for the current desktop
     environment. Returns the list of registered keymap objects.
 
@@ -112,7 +134,11 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
     of a pair resolve.
     window_shift_esc_first: emit Esc + delay before the window shortcut
     on the Space continuation. None (default) applies the library's
-    per-DE knowledge automatically; True/False forces it either way."""
+    per-DE knowledge automatically; True/False forces it either way.
+    enable_command_fallbacks: for slots with no native binding to emit,
+    bind curated tool-launch commands from the library's per-DE table
+    (e.g. Cinnamon's interactive UI). False disables all command
+    execution."""
     required_names_lst = ['keymap', 'C', 'immediately']
     missing_names_lst = [name for name in required_names_lst
                             if config_globals_dct.get(name) is None]
@@ -138,9 +164,10 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
             'setup_screenshot_keymaps() needs DESKTOP_ENV in the provided '
             'namespace. Pass the config globals() as the first argument.')
 
+    desktop_env_norm = (desktop_env or '').strip().lower()
+
     if window_shift_esc_first is None:
-        window_shift_esc_first = (
-            (desktop_env or '').strip().lower() in _ESC_FIRST_DESKTOP_ENVS)
+        window_shift_esc_first = desktop_env_norm in _ESC_FIRST_DESKTOP_ENVS
     if window_shift_esc_first:
         _require_callable('sleep', sleep)
 
@@ -186,13 +213,24 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
             registered_lst.append(km)
             shifted_area_slots_lst.append(area_slot)
 
-    # Flat keymap for the remaining slots with resolved outputs.
+    # Flat keymap for the remaining slots with resolved outputs, plus
+    # curated command fallbacks for slots with no native binding at all.
+    de_cmd_fallbacks_dct = CMD_FALLBACKS_DCT.get(desktop_env_norm, {})
     flat_mappings_dct = {}
     for slot_name, input_combo in input_combos_dct.items():
         if slot_name in shifted_area_slots_lst:
             continue
         output_combo = _resolved_combo(slot_name)
         if output_combo is None:
+            if not enable_command_fallbacks:
+                continue
+            cmd_candidates_lst = de_cmd_fallbacks_dct.get(slot_name)
+            if not cmd_candidates_lst:
+                continue
+            flat_mappings_dct[C(input_combo)] = _make_cmd_fallback_fn(cmd_candidates_lst)
+            cmds_str = ' | '.join(' '.join(cmd_lst) for cmd_lst in cmd_candidates_lst)
+            _log(f"Slot '{slot_name}' has no native binding; using command "
+                    f'fallback (first found on PATH): {cmds_str}')
             continue
         flat_mappings_dct[C(input_combo)] = C(output_combo)
 

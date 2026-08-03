@@ -22,7 +22,7 @@ macOS shortcut reference (verified against Apple support docs, 2026-08):
     Shift+Cmd+5             interactive screenshot/recording toolbar
     + Control (any above)   destination becomes clipboard instead of file
 """
-__version__ = '20260802'
+__version__ = '20260803'
 
 
 
@@ -171,6 +171,29 @@ XFCE_DEFAULTS_DCT = {
     SLOT_FULLSCREEN_TO_FILE:        'Print',
     SLOT_WINDOW_TO_FILE:            'Alt-Print',
     SLOT_AREA_TO_FILE:              'Shift-Print',
+}
+
+# Command fallbacks: per-DE, per-slot candidate command lines used by the
+# keymap builder ONLY for slots that resolve as unresolved (no native
+# binding exists to emit). Candidates are tried in order at keystroke
+# time via launch_detached(), which returns False when the executable is
+# not on PATH -- so no DE version detection is needed: whichever tool the
+# installed DE actually ships is the one that runs.
+#
+# Cinnamon: no interactive-UI action exists in the media-keys schema at
+# all (the six capture keys are the entire schema), so the interactive
+# slot can never resolve natively. csd-media-keys executes
+# 'cinnamon-screenshot' on Cinnamon 6.4+/Mint 22.1+ (flag set verified in
+# cinnamon-screenshot application.py argparse, incl. -i/--interactive,
+# linuxmint/cinnamon master 2026-08); older Cinnamon shipped
+# gnome-screenshot, which takes the same -i flag.
+CMD_FALLBACKS_DCT = {
+    'cinnamon': {
+        SLOT_INTERACTIVE_UI: [
+            ['cinnamon-screenshot', '-i'],
+            ['gnome-screenshot', '-i'],
+        ],
+    },
 }
 
 # Unknown desktop environments: the gnome-settings-daemon heritage

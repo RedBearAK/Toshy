@@ -21,6 +21,7 @@ import sys
 import argparse
 
 from toshy_common.screenshots.sshot_defaults import (
+    CMD_FALLBACKS_DCT,
     SLOT_NAMES,
     STATUS_RESOLVED,
 )
@@ -105,6 +106,14 @@ def _print_keymap_preview(results_dct: dict, desktop_env: str):
             continue
         output_combo = resolved_combo(slot_name)
         if output_combo is None:
+            de_norm = (desktop_env or '').strip().lower()
+            cmd_candidates_lst = CMD_FALLBACKS_DCT.get(de_norm, {}).get(slot_name)
+            if cmd_candidates_lst:
+                flat_cnt += 1
+                cmds_str = ' | '.join(' '.join(cmd_lst) for cmd_lst in cmd_candidates_lst)
+                print(f'    {input_combo.ljust(24)}-> [run first found: {cmds_str}]'
+                        f'   ({slot_name}, command fallback)')
+                continue
             print(f'    {input_combo.ljust(24)}   (skipped: {slot_name} not resolved)')
             continue
         flat_cnt += 1

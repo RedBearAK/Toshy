@@ -9,14 +9,30 @@ resolution is deterministic.
 Runnable standalone (accumulates a score in main) and collectable by
 pytest (bool-returning test functions).
 """
-__version__ = '20260802'
+__version__ = '20260803'
 
 
 import os
 import sys
+import types
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
+# Stub out proc_launcher BEFORE package imports: it pulls in the xwaykeyz
+# logger at module level, and stubbing also lets tests record launch
+# attempts instead of spawning processes.
+_launch_calls_lst = []
+
+
+def _fake_launch_detached(args, **kwargs):
+    _launch_calls_lst.append(list(args))
+    return False        # simulate command not found on PATH
+
+
+_fake_proc_launcher = types.ModuleType('toshy_common.proc_launcher')
+_fake_proc_launcher.launch_detached = _fake_launch_detached
+sys.modules['toshy_common.proc_launcher'] = _fake_proc_launcher
 
 from toshy_common.screenshots.sshot_defaults import (
     SLOT_AREA_TO_FILE,
@@ -177,11 +193,45 @@ def test_flat_keymap_exclusions_and_guards() -> bool:
     return all_ok
 
 
+def test_cinnamon_command_fallback() -> bool:
+    api = _FakeAPI()
+    ns_dct = api.namespace(DESKTOP_ENV='cinnamon')
+    setup_screenshot_keymaps(ns_dct)
+
+    flat_record = next(record for record in api.registered_lst
+                        if record['name'] == 'Screenshots: detected shortcuts')
+    fallback_fn = flat_record['mappings'].get(('COMBO', 'RC-Shift-Key_5'))
+
+    all_ok = True
+    all_ok &= _check('interactive_ui bound to a command-fallback callable',
+        callable(fallback_fn))
+
+    if callable(fallback_fn):
+        _launch_calls_lst.clear()
+        result = fallback_fn(None)
+        all_ok &= _check('callable returns None and tries candidates in order',
+            result is None
+            and _launch_calls_lst == [['cinnamon-screenshot', '-i'],
+                                        ['gnome-screenshot', '-i']])
+
+    api2 = _FakeAPI()
+    setup_screenshot_keymaps(api2.namespace(DESKTOP_ENV='cinnamon'),
+                                enable_command_fallbacks=False)
+    flat_record2 = next(record for record in api2.registered_lst
+                        if record['name'] == 'Screenshots: detected shortcuts')
+    all_ok &= _check('kill switch removes the fallback binding',
+        ('COMBO', 'RC-Shift-Key_5') not in flat_record2['mappings'])
+
+    print('\n--- Cinnamon command fallback ---')
+    return all_ok
+
+
 def main():
     results_lst = [
         test_builder_registers_keymaps(),
         test_nested_keymap_shape(),
         test_flat_keymap_exclusions_and_guards(),
+        test_cinnamon_command_fallback(),
     ]
     passed_cnt = sum(1 for result in results_lst if result)
     print(f'\nScore: {passed_cnt}/{len(results_lst)} test groups passed')

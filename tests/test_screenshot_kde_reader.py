@@ -12,7 +12,7 @@ like real kglobalshortcutsrc data.
 Runnable standalone (accumulates a score in main) and collectable by
 pytest (bool-returning test functions).
 """
-__version__ = '20260802'
+__version__ = '20260803'
 
 
 import os
@@ -20,6 +20,15 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
+# Stub out proc_launcher BEFORE package imports: the screenshots package
+# __init__ transitively imports it, and it pulls in the xwaykeyz logger
+# at module level, which isn't needed (or importable) in isolated tests.
+import types as _types
+
+_fake_proc_launcher = _types.ModuleType('toshy_common.proc_launcher')
+_fake_proc_launcher.launch_detached = lambda args, **kwargs: False
+sys.modules['toshy_common.proc_launcher'] = _fake_proc_launcher
 
 from toshy_common.screenshots import sshot_resolver as screenshot_shortcuts
 from toshy_common.screenshots.sshot_defaults import (
