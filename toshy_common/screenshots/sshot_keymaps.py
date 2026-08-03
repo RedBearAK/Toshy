@@ -106,6 +106,8 @@ def _make_cmd_fallback_fn(cmd_candidates_lst: 'list[list[str]]'):
             if launch_detached(cmd_lst, stdout=DEVNULL, stderr=DEVNULL):
                 return
 
+    # Self-description for diagnostics (rendered by the CLI check command).
+    _sshot_cmd_fallback.cmd_candidates_lst = cmd_candidates_lst
     return _sshot_cmd_fallback
 
 
