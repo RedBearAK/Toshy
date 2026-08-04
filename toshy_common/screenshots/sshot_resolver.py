@@ -31,7 +31,17 @@ __version__ = '20260803'
 
 
 from toshy_common.logger import debug
-from toshy_common.screenshots.sshot_accel_rgx import _rgx_combo_valid
+from toshy_common.shortcut_detect import (
+    SOURCE_DEFAULTS_TABLE,
+    SOURCE_GENERIC_CONVENTION,
+    SOURCE_USER_OVERRIDE,
+    STATUS_DISABLED,
+    STATUS_RESOLVED,
+    SlotResult,
+    log_resolution,
+    resolve_slot_tiers,
+)
+from toshy_common.shortcut_detect.sc_det_accel_rgx import _rgx_combo_valid
 from toshy_common.screenshots.sshot_defaults import (
     CINNAMON_DEFAULTS_DCT,
     GENERIC_DEFAULTS_DCT,
@@ -40,13 +50,6 @@ from toshy_common.screenshots.sshot_defaults import (
     KDE_DEFAULTS_DCT,
     MATE_DEFAULTS_DCT,
     SLOT_NAMES,
-    SOURCE_DEFAULTS_TABLE,
-    SOURCE_GENERIC_CONVENTION,
-    SOURCE_LIVE_SETTINGS,
-    SOURCE_USER_OVERRIDE,
-    STATUS_DISABLED,
-    STATUS_RESOLVED,
-    STATUS_UNRESOLVED,
     XFCE_DEFAULTS_DCT,
 )
 from toshy_common.screenshots.sshot_readers import (
@@ -57,22 +60,6 @@ from toshy_common.screenshots.sshot_readers import (
     read_mate,
     read_xfce,
 )
-
-
-class SlotResult:
-    """Resolution result for one screenshot slot."""
-
-    def __init__(self, status: str, combo: 'str | None' = None,
-                    source: str = '', raw: str = '', note: str = ''):
-        self.status     = status
-        self.combo      = combo
-        self.source     = source
-        self.raw        = raw
-        self.note       = note
-
-    def __repr__(self):
-        return (f'SlotResult(status={self.status!r}, combo={self.combo!r}, '
-                f'source={self.source!r}, raw={self.raw!r}, note={self.note!r})')
 
 
 # Desktop environment identifier -> (reader description, defaults table).
@@ -172,51 +159,22 @@ def resolve_outputs(desktop_env: str, de_maj_ver=None) -> dict:
     live_dct = _run_reader(desktop_env_str, maj_ver)
     table_dct, table_source = _defaults_for(desktop_env_str, maj_ver)
 
-    results_dct = {}
-    for slot_name in SLOT_NAMES:
+    results_dct = resolve_slot_tiers(SLOT_NAMES, live_dct, table_dct, table_source)
 
-        if slot_name in _custom_outputs_dct:
-            custom_combo = _custom_outputs_dct[slot_name]
-            if custom_combo is None:
-                results_dct[slot_name] = SlotResult(
-                    STATUS_DISABLED, source=SOURCE_USER_OVERRIDE, note='suppressed by user')
-            else:
-                results_dct[slot_name] = SlotResult(
-                    STATUS_RESOLVED, combo=custom_combo, source=SOURCE_USER_OVERRIDE)
-            continue
-
-        if slot_name in live_dct:
-            status, combo_str, raw_str, note_str = live_dct[slot_name]
+    # User overrides (vestigial registry; keymaps are the idiomatic path)
+    # win over all detection tiers.
+    for slot_name, custom_combo in _custom_outputs_dct.items():
+        if custom_combo is None:
             results_dct[slot_name] = SlotResult(
-                status, combo=combo_str, source=SOURCE_LIVE_SETTINGS,
-                raw=raw_str, note=note_str)
-            continue
-
-        table_combo = table_dct.get(slot_name)
-        if table_combo is not None:
+                STATUS_DISABLED, source=SOURCE_USER_OVERRIDE, note='suppressed by user')
+        else:
             results_dct[slot_name] = SlotResult(
-                STATUS_RESOLVED, combo=table_combo, source=table_source)
-            continue
+                STATUS_RESOLVED, combo=custom_combo, source=SOURCE_USER_OVERRIDE)
 
-        results_dct[slot_name] = SlotResult(STATUS_UNRESOLVED)
-
-    _log_resolution_summary(desktop_env_str, results_dct, live_dct, table_source)
+    log_resolution('SSHOT',
+                    f"Screenshot shortcuts for '{desktop_env_str or 'unknown DE'}'",
+                    results_dct, live_dct, table_source)
     return results_dct
-
-
-def _log_resolution_summary(desktop_env_str: str, results_dct: dict,
-                            live_dct: dict, table_source: str):
-    resolved_cnt    = sum(1 for res in results_dct.values() if res.status == STATUS_RESOLVED)
-    disabled_cnt    = sum(1 for res in results_dct.values() if res.status == STATUS_DISABLED)
-    unresolved_cnt  = sum(1 for res in results_dct.values() if res.status == STATUS_UNRESOLVED)
-
-    live_note = 'live settings read OK' if live_dct else f'no live settings; using {table_source}'
-    debug(f"SSHOT: Screenshot shortcuts for '{desktop_env_str or 'unknown DE'}': "
-            f'{resolved_cnt} resolved, {disabled_cnt} disabled, '
-            f'{unresolved_cnt} unresolved ({live_note})')
-
-    for slot_name, result in results_dct.items():
-        debug(f'SSHOT:   {slot_name}: {result!r}')
 
 
 def build_keymap_entries(input_combos_dct: dict, desktop_env: str, de_maj_ver=None) -> dict:
@@ -239,7 +197,7 @@ def build_keymap_entries(input_combos_dct: dict, desktop_env: str, de_maj_ver=No
     for slot_name, input_combo in input_combos_dct.items():
         result = results_dct[slot_name]
         if result.status != STATUS_RESOLVED:
-            debug(f"SSHOT: build_keymap_entries skipping '{slot_name}' ({result.status})")
+            debug(f"SSHOT: build_keymap_entries skipping '{slot_name}' ({result.status})", ctx='DT')
             continue
         entries_dct[input_combo] = result.combo
 

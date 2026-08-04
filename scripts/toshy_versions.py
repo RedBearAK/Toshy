@@ -172,6 +172,9 @@ kblayout_symtable_path  = os.path.join(toshy_dir_path,
 screenshots_pkg_path    = os.path.join(toshy_dir_path,
                             'toshy_common', 'screenshots')          # package dir
 
+shortcut_detect_pkg_path = os.path.join(toshy_dir_path,
+                            'toshy_common', 'shortcut_detect')      # package dir
+
 # These files are shell scripts, not Python scripts:
 config_svc_path         = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-config')
 sessmon_svc_path        = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-sessmon')
@@ -198,6 +201,11 @@ def _kbld_module(filename):
 # Screenshots is a package; its per-module entries (below) show only with --all.
 def _sshot_module(filename):
     return os.path.join(screenshots_pkg_path, filename)
+
+
+# Shortcut Detection is a package; its per-module entries show only with --all.
+def _sc_det_module(filename):
+    return os.path.join(shortcut_detect_pkg_path, filename)
 
 
 components = [
@@ -245,11 +253,23 @@ components = [
     (None, None, True),             # Spacing (detailed output only)
     ("  Sshot: __init__",           _sshot_module('__init__.py'),           True),
     ("  Sshot: __main__",           _sshot_module('__main__.py'),           True),
-    ("  Sshot: accel regexes",      _sshot_module('sshot_accel_rgx.py'),    True),
+    ("  Sshot: command regexes",    _sshot_module('sshot_cmd_rgx.py'),      True),
     ("  Sshot: defaults",           _sshot_module('sshot_defaults.py'),     True),
     ("  Sshot: keymaps",            _sshot_module('sshot_keymaps.py'),      True),
     ("  Sshot: readers",            _sshot_module('sshot_readers.py'),      True),
     ("  Sshot: resolver",           _sshot_module('sshot_resolver.py'),     True),
+    (None, None),                   # Spacing
+    ("Shortcut Detection (pkg)",    shortcut_detect_pkg_path),
+    (None, None, True),             # Spacing (detailed output only)
+    ("  ScDet: __init__",           _sc_det_module('__init__.py'),           True),
+    ("  ScDet: accel normalizer",   _sc_det_module('sc_det_accel.py'),        True),
+    ("  ScDet: accel regexes",      _sc_det_module('sc_det_accel_rgx.py'),    True),
+    ("  ScDet: cmd fallback",       _sc_det_module('sc_det_fallback.py'),     True),
+    ("  ScDet: diagnostics",        _sc_det_module('sc_det_diag.py'),         True),
+    ("  ScDet: gsettings reader",   _sc_det_module('sc_det_gsettings.py'),    True),
+    ("  ScDet: KDE rc reader",      _sc_det_module('sc_det_kde_rc.py'),       True),
+    ("  ScDet: result model",       _sc_det_module('sc_det_result.py'),       True),
+    ("  ScDet: xfconf reader",      _sc_det_module('sc_det_xfconf.py'),       True),
     (None, None),                   # Spacing
     ("SysD Svc: Keymapper Config",  config_svc_path),
     ("SysD Svc: Session Monitor",   sessmon_svc_path),

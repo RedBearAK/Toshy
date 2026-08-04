@@ -43,9 +43,8 @@ from toshy_common.screenshots.sshot_defaults import (
     SLOT_FULLSCREEN_TO_FILE,
     SLOT_INTERACTIVE_UI,
     SLOT_WINDOW_TO_FILE,
-    STATUS_DISABLED,
-    STATUS_RESOLVED,
 )
+from toshy_common.shortcut_detect import STATUS_DISABLED, STATUS_RESOLVED
 from toshy_common.screenshots.sshot_readers import read_kde
 
 

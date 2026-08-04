@@ -50,16 +50,8 @@ SLOT_NAMES = (
     SLOT_INTERACTIVE_UI,
 )
 
-# Per-slot resolution status values.
-STATUS_RESOLVED                 = 'resolved'      # combo available for emission
-STATUS_DISABLED                 = 'disabled'      # user explicitly disabled native shortcut
-STATUS_UNRESOLVED               = 'unresolved'    # no binding known; slot stays unmapped
-
-# Where a resolved combo came from (for logging/diagnostics).
-SOURCE_USER_OVERRIDE            = 'user_override'
-SOURCE_LIVE_SETTINGS            = 'live_settings'
-SOURCE_DEFAULTS_TABLE           = 'defaults_table'
-SOURCE_GENERIC_CONVENTION       = 'generic_convention'
+# Status and source constants live in toshy_common.shortcut_detect
+# (sc_det_result.py); this module holds only the screenshot domain.
 
 
 ###################################################################################################

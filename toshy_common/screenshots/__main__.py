@@ -23,7 +23,11 @@ import argparse
 from toshy_common.screenshots.sshot_defaults import (
     CMD_FALLBACKS_DCT,
     SLOT_NAMES,
+)
+from toshy_common.shortcut_detect import (
+    RecordingAPI,
     STATUS_RESOLVED,
+    print_keymap_records,
 )
 from toshy_common.screenshots.sshot_keymaps import (
     DEFAULT_INPUT_COMBOS_DCT,
@@ -35,110 +39,13 @@ from toshy_common.screenshots.sshot_keymaps import setup_screenshot_keymaps
 from toshy_common.screenshots.sshot_resolver import resolve_outputs
 
 
-class _ReprCombo:
-    """Stands in for C(); repr renders as config-file syntax."""
-
-    def __init__(self, combo_str):
-        self.combo_str = combo_str
-
-    def __hash__(self):
-        return hash(self.combo_str)
-
-    def __eq__(self, other):
-        return isinstance(other, _ReprCombo) and other.combo_str == self.combo_str
-
-    def __repr__(self):
-        return f'C("{self.combo_str}")'
-
-
-class _ReprSleep:
-    """Stands in for sleep(); repr renders as config-file syntax."""
-
-    def __init__(self, sec):
-        self.sec = sec
-
-    def __repr__(self):
-        return f'sleep({self.sec})'
-
-
-class _ReprImmediately:
-
-    def __repr__(self):
-        return 'immediately'
-
-
-class _RecordingAPI:
-    """Injected in place of the config globals() to capture the literal
-    keymap structures the builder would register."""
-
-    def __init__(self, desktop_env, de_maj_ver):
-        self.registered_lst = []
-        self.immediately = _ReprImmediately()
-        self.desktop_env = desktop_env
-        self.de_maj_ver = de_maj_ver
-
-    def namespace(self) -> dict:
-        return {
-            'keymap':       self._keymap,
-            'C':            _ReprCombo,
-            'immediately':  self.immediately,
-            'sleep':        _ReprSleep,
-            'DESKTOP_ENV':  self.desktop_env,
-            'DE_MAJ_VER':   self.de_maj_ver,
-        }
-
-    def _keymap(self, name_str, mappings_dct, when=None):
-        record_dct = {'name': name_str, 'mappings': mappings_dct}
-        self.registered_lst.append(record_dct)
-        return record_dct
-
-
-def _render_mapping_value(value, indent_str) -> str:
-    if isinstance(value, dict):
-        inner_str = _render_mappings(value, indent_str + '    ')
-        return '{\n' + inner_str + indent_str + '}'
-    if isinstance(value, list):
-        return '[' + ', '.join(repr(item) for item in value) + ']'
-    if callable(value) and hasattr(value, 'cmd_candidates_lst'):
-        cmds_str = ' | '.join(' '.join(cmd) for cmd in value.cmd_candidates_lst)
-        return f'<launch first found: {cmds_str}>'
-    return repr(value)
-
-
-def _render_mappings(mappings_dct: dict, indent_str: str) -> str:
-    key_reprs_lst = [repr(key) for key in mappings_dct]
-    key_width = max((len(key_repr) for key_repr in key_reprs_lst), default=0) + 1
-    lines_lst = []
-    for key, value in mappings_dct.items():
-        key_str = (repr(key) + ':').ljust(key_width + 1)
-        lines_lst.append(f'{indent_str}{key_str} '
-                            f'{_render_mapping_value(value, indent_str)},\n')
-    return ''.join(lines_lst)
-
-
 def _print_literal_keymaps(desktop_env, de_maj_ver):
     print()
     print('Generated keymaps (literal; when= conditions supplied by the config):')
-    api = _RecordingAPI(desktop_env, de_maj_ver)
-    setup_screenshot_keymaps(api.namespace())
-    for record_dct in api.registered_lst:
-        print()
-        print(f'  keymap("{record_dct["name"]}", {{')
-        print(_render_mappings(record_dct['mappings'], '      '), end='')
-        print('  })')
-
-
-def _detect_environment() -> 'tuple[str, str | None]':
-    """Get DESKTOP_ENV and DE_MAJ_VER from Toshy's canonical detector."""
-    try:
-        from toshy_common.env_context import EnvironmentInfo
-    except ImportError as import_err:
-        print(f'Could not import Toshy environment detection: {import_err}')
-        print("Pass the desktop environment explicitly, e.g.: --de kde --de-ver 6")
-        sys.exit(1)
-
-    env_info_dct = EnvironmentInfo().get_env_info()
-    return (env_info_dct.get('DESKTOP_ENV'), env_info_dct.get('DE_MAJ_VER'))
+    api = RecordingAPI()
+    setup_screenshot_keymaps(api.namespace(
+        DESKTOP_ENV=desktop_env, DE_MAJ_VER=de_maj_ver))
+    print_keymap_records(api.registered_lst)
 
 
 def _print_slot_table(results_dct: dict):

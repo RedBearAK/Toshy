@@ -35,10 +35,7 @@ Typical config usage (the entire config-side footprint):
 __version__ = '20260803'
 
 
-from subprocess import DEVNULL
-
 from toshy_common.logger import debug
-from toshy_common.proc_launcher import launch_detached
 from toshy_common.screenshots.sshot_defaults import (
     SLOT_AREA_TO_CLIPBOARD,
     SLOT_AREA_TO_FILE,
@@ -47,8 +44,11 @@ from toshy_common.screenshots.sshot_defaults import (
     SLOT_INTERACTIVE_UI,
     SLOT_WINDOW_TO_CLIPBOARD,
     SLOT_WINDOW_TO_FILE,
-    STATUS_RESOLVED,
     CMD_FALLBACKS_DCT,
+)
+from toshy_common.shortcut_detect import (
+    STATUS_RESOLVED,
+    make_cmd_fallback_fn,
 )
 from toshy_common.screenshots.sshot_resolver import resolve_outputs
 
@@ -98,21 +98,6 @@ _ESC_FIRST_DELAY_SEC = 0.2
 # on KDE (2026-08): emitting the window shortcut with Spectacle's region
 # overlay up completes/saves instead of shifting capture mode.
 _ESC_FIRST_DESKTOP_ENVS = frozenset({'kde', 'plasma'})
-
-
-def _make_cmd_fallback_fn(cmd_candidates_lst: 'list[list[str]]'):
-    """Build a keymap output callable that launches the first candidate
-    command found on PATH. launch_detached() returns False when the
-    executable is absent, so candidates double as version detection."""
-
-    def _sshot_cmd_fallback(ctx):
-        for cmd_lst in cmd_candidates_lst:
-            if launch_detached(cmd_lst, stdout=DEVNULL, stderr=DEVNULL):
-                return
-
-    # Self-description for diagnostics (rendered by the CLI check command).
-    _sshot_cmd_fallback.cmd_candidates_lst = cmd_candidates_lst
-    return _sshot_cmd_fallback
 
 
 def _require_callable(name_str: str, obj):
@@ -245,12 +230,12 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
             cmd_candidates_lst = de_cmd_fallbacks_dct.get(slot_name)
             if not cmd_candidates_lst:
                 continue
-            fallback_fn = _make_cmd_fallback_fn(cmd_candidates_lst)
+            fallback_fn = make_cmd_fallback_fn(cmd_candidates_lst)
             for input_spelling in input_spellings_lst:
                 flat_mappings_dct[C(input_spelling)] = fallback_fn
             cmds_str = ' | '.join(' '.join(cmd_lst) for cmd_lst in cmd_candidates_lst)
             debug(f"SSHOT: Slot '{slot_name}' has no native binding; using command "
-                    f'fallback (first found on PATH): {cmds_str}')
+                    f'fallback (first found on PATH): {cmds_str}', ctx='DT')
             continue
         for input_spelling in input_spellings_lst:
             flat_mappings_dct[C(input_spelling)] = C(output_combo)
