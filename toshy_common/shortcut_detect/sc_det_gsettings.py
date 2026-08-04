@@ -74,24 +74,25 @@ def read_gsettings_family(schema_str: str, slot_key_dct: dict,
                             notes_dct: 'dict | None' = None) -> dict:
     """Read one gsettings schema family into the reader return contract.
 
-    Returns {} if the schema is entirely unreadable (probe on the first
-    key fails), so the caller can try another family or fall through."""
+    Multiple slots may alias the same key; each distinct key is queried
+    and parsed exactly once, then fanned out to its slots. Returns {} if
+    the schema is entirely unreadable (probe on the first distinct key
+    fails), so the caller can try another family or fall through."""
     notes_dct = notes_dct or {}
-    results_dct = {}
-    probed = False
 
-    for slot_name, key_str in slot_key_dct.items():
+    distinct_keys_lst = list(dict.fromkeys(slot_key_dct.values()))
+    key_results_dct = {}
+    for key_idx, key_str in enumerate(distinct_keys_lst):
         raw_output = gsettings_get(schema_str, key_str)
         if raw_output is None:
-            if not probed:
+            if key_idx == 0:
                 # Schema/key missing on first probe: family unavailable.
                 return {}
             continue
-        probed = True
 
         status, raw_accel = parse_gvariant_accel_value(raw_output)
         if status == STATUS_DISABLED:
-            results_dct[slot_name] = (STATUS_DISABLED, None, raw_output, notes_dct.get(slot_name, ''))
+            key_results_dct[key_str] = (STATUS_DISABLED, None, raw_output)
             continue
 
         combo_str = normalize_gtk_accel(raw_accel)
@@ -99,7 +100,15 @@ def read_gsettings_family(schema_str: str, slot_key_dct: dict,
             error(f"SC_DET: Could not parse '{schema_str}::{key_str}' value "
                     f'{raw_accel!r} (slot falls back to defaults)', ctx='DT')
             continue
-        results_dct[slot_name] = (STATUS_RESOLVED, combo_str, raw_accel, notes_dct.get(slot_name, ''))
+        key_results_dct[key_str] = (STATUS_RESOLVED, combo_str, raw_accel)
+
+    results_dct = {}
+    for slot_name, key_str in slot_key_dct.items():
+        key_result = key_results_dct.get(key_str)
+        if key_result is None:
+            continue
+        status, combo_str, raw_str = key_result
+        results_dct[slot_name] = (status, combo_str, raw_str, notes_dct.get(slot_name, ''))
 
     return results_dct
 
