@@ -73,7 +73,9 @@ def _render_mapping_value(value, indent_str) -> str:
         inner_str = render_mappings(value, indent_str + '    ')
         return '{\n' + inner_str + indent_str + '}'
     if isinstance(value, list):
-        return '[' + ', '.join(repr(item) for item in value) + ']'
+        return ('['
+                + ', '.join(_render_mapping_value(item, indent_str) for item in value)
+                + ']')
     if callable(value) and hasattr(value, 'cmd_candidates_lst'):
         cmds_str = ' | '.join(' '.join(cmd) for cmd in value.cmd_candidates_lst)
         return f'<launch first found: {cmds_str}>'
