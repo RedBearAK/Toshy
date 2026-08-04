@@ -52,6 +52,8 @@ _GTK_MOD_XLAT_DCT = {
 _KEY_NAME_XLAT_DCT = {
     'Return':   'Enter',
     'Escape':   'Esc',
+    'Super_L':  'Super',
+    'Super_R':  'RSuper',
 }
 
 

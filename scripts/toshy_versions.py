@@ -175,6 +175,9 @@ screenshots_pkg_path    = os.path.join(toshy_dir_path,
 shortcut_detect_pkg_path = os.path.join(toshy_dir_path,
                             'toshy_common', 'shortcut_detect')      # package dir
 
+spotlight_input_pkg_path = os.path.join(toshy_dir_path,
+                            'toshy_common', 'spotlight_input')      # package dir
+
 # These files are shell scripts, not Python scripts:
 config_svc_path         = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-config')
 sessmon_svc_path        = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-sessmon')
@@ -206,6 +209,11 @@ def _sshot_module(filename):
 # Shortcut Detection is a package; its per-module entries show only with --all.
 def _sc_det_module(filename):
     return os.path.join(shortcut_detect_pkg_path, filename)
+
+
+# Spotlight/Input is a package; its per-module entries show only with --all.
+def _spli_module(filename):
+    return os.path.join(spotlight_input_pkg_path, filename)
 
 
 components = [
