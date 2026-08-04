@@ -39,6 +39,19 @@ from toshy_common.screenshots.sshot_keymaps import setup_screenshot_keymaps
 from toshy_common.screenshots.sshot_resolver import resolve_outputs
 
 
+def _detect_environment() -> 'tuple[str, str | None]':
+    """Get DESKTOP_ENV and DE_MAJ_VER from Toshy's canonical detector."""
+    try:
+        from toshy_common.env_context import EnvironmentInfo
+    except ImportError as import_err:
+        print(f'Could not import Toshy environment detection: {import_err}')
+        print("Pass the desktop environment explicitly, e.g.: --de kde --de-ver 6")
+        sys.exit(1)
+
+    env_info_dct = EnvironmentInfo().get_env_info()
+    return (env_info_dct.get('DESKTOP_ENV'), env_info_dct.get('DE_MAJ_VER'))
+
+
 def _print_literal_keymaps(desktop_env, de_maj_ver):
     print()
     print('Generated keymaps (literal; when= conditions supplied by the config):')
