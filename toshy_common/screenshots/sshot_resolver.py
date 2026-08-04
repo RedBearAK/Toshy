@@ -27,9 +27,10 @@ Typical config-side usage (see screenshot_shortcuts_config_example.py):
     # then inside the GenGUI overrides keymap:
     # **{C(in_combo): C(out_combo) for in_combo, out_combo in entries_dct.items()},
 """
-__version__ = '20260801'
+__version__ = '20260803'
 
 
+from toshy_common.logger import debug
 from toshy_common.screenshots.sshot_accel_rgx import _rgx_combo_valid
 from toshy_common.screenshots.sshot_defaults import (
     CINNAMON_DEFAULTS_DCT,
@@ -56,21 +57,6 @@ from toshy_common.screenshots.sshot_readers import (
     read_mate,
     read_xfce,
 )
-
-
-# [?] Swap these prints for the project logger if preferred; kept as plain
-# prints with a grep-able prefix for the initial state.
-DEBUG_DETAIL = False
-
-
-def _log(msg_str: str):
-    print(f'[SSHOT] {msg_str}', flush=True)
-
-
-def _log_detail(msg_str: str):
-    if not DEBUG_DETAIL:
-        return
-    _log(msg_str)
 
 
 class SlotResult:
@@ -225,12 +211,12 @@ def _log_resolution_summary(desktop_env_str: str, results_dct: dict,
     unresolved_cnt  = sum(1 for res in results_dct.values() if res.status == STATUS_UNRESOLVED)
 
     live_note = 'live settings read OK' if live_dct else f'no live settings; using {table_source}'
-    _log(f"Screenshot shortcuts for '{desktop_env_str or 'unknown DE'}': "
+    debug(f"SSHOT: Screenshot shortcuts for '{desktop_env_str or 'unknown DE'}': "
             f'{resolved_cnt} resolved, {disabled_cnt} disabled, '
             f'{unresolved_cnt} unresolved ({live_note})')
 
     for slot_name, result in results_dct.items():
-        _log_detail(f'  {slot_name}: {result!r}')
+        debug(f'SSHOT:   {slot_name}: {result!r}')
 
 
 def build_keymap_entries(input_combos_dct: dict, desktop_env: str, de_maj_ver=None) -> dict:
@@ -253,7 +239,7 @@ def build_keymap_entries(input_combos_dct: dict, desktop_env: str, de_maj_ver=No
     for slot_name, input_combo in input_combos_dct.items():
         result = results_dct[slot_name]
         if result.status != STATUS_RESOLVED:
-            _log_detail(f"  skipping '{slot_name}' ({result.status})")
+            debug(f"SSHOT: build_keymap_entries skipping '{slot_name}' ({result.status})")
             continue
         entries_dct[input_combo] = result.combo
 

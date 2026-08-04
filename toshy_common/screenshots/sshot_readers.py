@@ -28,6 +28,7 @@ import subprocess
 
 from xml.etree import ElementTree
 
+from toshy_common.logger import error
 from toshy_common.screenshots.sshot_accel_rgx import (
     _rgx_gtk_mod_token,
     _rgx_key_token_valid,
@@ -273,8 +274,8 @@ def read_kde() -> dict:
 
         combo_str = normalize_kde_accel(raw_accel)
         if combo_str is None:
-            # Unparseable accelerator: leave slot out so caller can fall
-            # through to defaults (loud logging happens in the caller).
+            error(f"SSHOT: Could not parse Spectacle shortcut for "
+                    f"'{action_name}': {raw_accel!r} (slot falls back to defaults)")
             continue
         results_dct[slot_name] = (STATUS_RESOLVED, combo_str, raw_accel, '')
 
@@ -404,6 +405,8 @@ def _read_gsettings_family(schema_str: str, slot_key_dct: dict, notes_dct: 'dict
 
         combo_str = normalize_gtk_accel(raw_accel)
         if combo_str is None:
+            error(f"SSHOT: Could not parse '{schema_str}::{key_str}' value "
+                    f'{raw_accel!r} (slot falls back to defaults)')
             continue
         results_dct[slot_name] = (STATUS_RESOLVED, combo_str, raw_accel, notes_dct.get(slot_name, ''))
 
@@ -536,6 +539,8 @@ def read_xfce() -> dict:
             continue
         combo_str = normalize_gtk_accel(accel_str)
         if combo_str is None:
+            error(f'SSHOT: Could not parse XFCE shortcut accelerator '
+                    f'{accel_str!r} for command {command_str!r}')
             continue
         # Later entries (user file, custom subtree) overwrite earlier ones.
         results_dct[slot_name] = (STATUS_RESOLVED, combo_str, accel_str, '')
