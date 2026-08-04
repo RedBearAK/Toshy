@@ -24,6 +24,11 @@ import types as _types
 _fake_proc_launcher = _types.ModuleType('toshy_common.proc_launcher')
 _fake_proc_launcher.launch_detached = lambda args, **kwargs: False
 sys.modules['toshy_common.proc_launcher'] = _fake_proc_launcher
+_fake_logger = _types.ModuleType('toshy_common.logger')
+_fake_logger.debug = lambda *args, **kwargs: None
+_fake_logger.error = lambda *args, **kwargs: None
+_fake_logger.VERBOSE = False
+sys.modules['toshy_common.logger'] = _fake_logger
 
 from toshy_common.screenshots.sshot_defaults import STATUS_DISABLED, STATUS_RESOLVED
 from toshy_common.screenshots.sshot_readers import (

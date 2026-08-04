@@ -37,6 +37,7 @@ __version__ = '20260803'
 
 from subprocess import DEVNULL
 
+from toshy_common.logger import debug
 from toshy_common.proc_launcher import launch_detached
 from toshy_common.screenshots.sshot_defaults import (
     SLOT_AREA_TO_CLIPBOARD,
@@ -97,10 +98,6 @@ _ESC_FIRST_DELAY_SEC = 0.2
 # on KDE (2026-08): emitting the window shortcut with Spectacle's region
 # overlay up completes/saves instead of shifting capture mode.
 _ESC_FIRST_DESKTOP_ENVS = frozenset({'kde', 'plasma'})
-
-
-def _log(msg_str: str):
-    print(f'[SSHOT] {msg_str}', flush=True)
 
 
 def _make_cmd_fallback_fn(cmd_candidates_lst: 'list[list[str]]'):
@@ -252,7 +249,7 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
             for input_spelling in input_spellings_lst:
                 flat_mappings_dct[C(input_spelling)] = fallback_fn
             cmds_str = ' | '.join(' '.join(cmd_lst) for cmd_lst in cmd_candidates_lst)
-            _log(f"Slot '{slot_name}' has no native binding; using command "
+            debug(f"SSHOT: Slot '{slot_name}' has no native binding; using command "
                     f'fallback (first found on PATH): {cmds_str}')
             continue
         for input_spelling in input_spellings_lst:

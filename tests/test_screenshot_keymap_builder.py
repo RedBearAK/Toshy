@@ -33,6 +33,11 @@ def _fake_launch_detached(args, **kwargs):
 _fake_proc_launcher = types.ModuleType('toshy_common.proc_launcher')
 _fake_proc_launcher.launch_detached = _fake_launch_detached
 sys.modules['toshy_common.proc_launcher'] = _fake_proc_launcher
+_fake_logger = types.ModuleType('toshy_common.logger')
+_fake_logger.debug = lambda *args, **kwargs: None
+_fake_logger.error = lambda *args, **kwargs: None
+_fake_logger.VERBOSE = False
+sys.modules['toshy_common.logger'] = _fake_logger
 
 from toshy_common.screenshots.sshot_defaults import (
     SLOT_AREA_TO_FILE,

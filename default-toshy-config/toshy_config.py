@@ -1433,6 +1433,7 @@ def notify_context():
             f"{nwln_str}"
             f"<b>Input keyboard name:</b> '{ctx_devn}' {nwln_str}"
             f"<b>Device seen as type:</b> '{KBTYPE}' {nwln_str}"
+            f"<b>Active keybd layout:</b> '{current_layout_name()}' {nwln_str}"
             f"{nwln_str}"
             f"<b>Toshy config file sees this environment:</b>  {nwln_str}"
             f"<b> • DISTRO_ID ____________</b> '{DISTRO_ID      }' {nwln_str}"
@@ -4062,7 +4063,7 @@ try:
             not ctx_app_is_remote
     )
 except NameError:
-    pass
+    error('SSHOT: setup_screenshot_keymaps not available')
 
 
 try:
@@ -4073,7 +4074,7 @@ try:
             not (ctx_app_is_terminal or ctx_app_is_remote)
     )
 except NameError:
-    pass
+    error('setup_level3_combos_via_left_alt not available')
 
 
 #################################  MISC APPS  #####################################
