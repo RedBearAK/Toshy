@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20260715'
+__version__ = '20260803'
 
 # Indicator tray icon menu app for Toshy, using pygobject/gi
 TOSHY_PART      = 'tray'   # CUSTOMIZE TO SPECIFIC TOSHY COMPONENT! (gui, tray, config)
@@ -382,6 +382,7 @@ if not runtime.barebones_config:
         set_item_active_thread_safe(Enter2Ent_Cmd_item, cnfg.Enter2Ent_Cmd)
         set_item_active_thread_safe(l_cmd_is_sup_and_cmd_item, cnfg.l_cmd_is_sup_and_cmd)
         set_item_active_thread_safe(l_opt_is_sup_and_opt_item, cnfg.l_opt_is_sup_and_opt)
+        set_item_active_thread_safe(swap_spotlight_item, cnfg.swap_spotlight_and_input)
 
     def save_prefs_settings(widget):
         new_values_dct = {
@@ -393,6 +394,7 @@ if not runtime.barebones_config:
             'Enter2Ent_Cmd':        Enter2Ent_Cmd_item.get_active(),
             'l_cmd_is_sup_and_cmd': l_cmd_is_sup_and_cmd_item.get_active(),
             'l_opt_is_sup_and_opt': l_opt_is_sup_and_opt_item.get_active(),
+            'swap_spotlight_and_input': swap_spotlight_item.get_active(),
         }
 
         # No-change guard: programmatic updates (settings monitor echoes)
@@ -445,6 +447,11 @@ if not runtime.barebones_config:
     ST3_in_VSCode_item.set_active(cnfg.ST3_in_VSCode)
     ST3_in_VSCode_item.connect('toggled', save_prefs_settings)
     prefs_submenu.append(ST3_in_VSCode_item)
+
+    swap_spotlight_item = Gtk.CheckMenuItem(label='Swap Spotlight & Input Switch')
+    swap_spotlight_item.set_active(cnfg.swap_spotlight_and_input)
+    swap_spotlight_item.connect('toggled', save_prefs_settings)
+    prefs_submenu.append(swap_spotlight_item)
 
     def load_capslock_mode_submenu_settings():
         cnfg.load_settings()
