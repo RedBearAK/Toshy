@@ -2,7 +2,7 @@
 
 
 # Show detected launcher and input-switching shortcuts and the keymaps
-# Toshy would build from them, after activating venv.
+# Toshy would build from them, after activating the Toshy Python runtime.
 
 # Check if the script is being run as root
 if [[ $EUID -eq 0 ]]; then
@@ -16,18 +16,9 @@ if [[ -z $USER ]] || [[ -z $HOME ]]; then
     exit 1
 fi
 
-# Absolute path to the venv
-VENV_PATH="$HOME/.config/toshy/.venv"
-
-# Verify the venv directory exists
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Error: Virtual environment not found at $VENV_PATH"
-    exit 1
-fi
-
-# Activate the venv for complete environment setup
+# Resolve and activate the Toshy Python runtime (venv or external)
 # shellcheck disable=SC1091
-source "${VENV_PATH}/bin/activate"
+source "$HOME/.config/toshy/scripts/toshy-runtime-env.sh" || exit 1
 
 # Launch the spotlight_input package diagnostic as a Python "module".
 # TOSHY_LAUNCHER_NAME tells the module's argparse help to display the
@@ -35,6 +26,6 @@ source "${VENV_PATH}/bin/activate"
 # command automatically shows its new name.
 export PYTHONPATH="${HOME}/.config/toshy:${PYTHONPATH}"
 export TOSHY_LAUNCHER_NAME="${0##*/}"
-exec "${VENV_PATH}/bin/python" -m toshy_common.spotlight_input "$@"
+exec "${TOSHY_PYTHON}" -m toshy_common.spotlight_input "$@"
 
 # End of file #

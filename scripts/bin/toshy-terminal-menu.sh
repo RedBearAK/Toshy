@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 # shellcheck disable=SC2034
-VERSION='20260804'
+VERSION='20260805'
 
 
 # Run the Toshy terminal menu: a terminal-based counterpart to the tray
@@ -20,21 +20,12 @@ if [[ -z $USER ]] || [[ -z $HOME ]]; then
 fi
 
 
-# Absolute path to the venv
-VENV_PATH="${HOME}/.config/toshy/.venv"
-
-# Verify the venv directory exists
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Error: Virtual environment not found at $VENV_PATH"
-    exit 1
-fi
-
-# Activate the venv for complete environment setup
+# Resolve and activate the Toshy Python runtime (venv or external)
 # shellcheck disable=SC1091
-source "${VENV_PATH}/bin/activate"
+source "$HOME/.config/toshy/scripts/toshy-runtime-env.sh" || exit 1
 
 # Need PYTHONPATH update to allow absolute imports from "toshy_common" package
 export PYTHONPATH="${HOME}/.config/toshy:${PYTHONPATH}"
 
-exec "${VENV_PATH}/bin/python" \
+exec "${TOSHY_PYTHON}" \
     "${HOME}/.config/toshy/toshy_common/terminal_menu/tmenu_main.py" "$@"
