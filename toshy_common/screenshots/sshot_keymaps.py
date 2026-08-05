@@ -32,13 +32,10 @@ Typical config usage (the entire config-side footprint):
 
     setup_screenshot_keymaps(globals(), when = lambda ctx: ...)
 """
-__version__ = '20260803'
+__version__ = '20260804'
 
-
-from subprocess import DEVNULL
 
 from toshy_common.logger import debug
-from toshy_common.proc_launcher import launch_detached
 from toshy_common.screenshots.sshot_defaults import (
     SLOT_AREA_TO_CLIPBOARD,
     SLOT_AREA_TO_FILE,
@@ -47,8 +44,12 @@ from toshy_common.screenshots.sshot_defaults import (
     SLOT_INTERACTIVE_UI,
     SLOT_WINDOW_TO_CLIPBOARD,
     SLOT_WINDOW_TO_FILE,
-    STATUS_RESOLVED,
     CMD_FALLBACKS_DCT,
+    CMD_OVERRIDES_DCT,
+)
+from toshy_common.shortcut_detect import (
+    STATUS_RESOLVED,
+    make_cmd_fallback_fn,
 )
 from toshy_common.screenshots.sshot_resolver import resolve_outputs
 
@@ -94,25 +95,13 @@ _OUTLET_KEYS_LST = ['Esc', 'Enter']
 _ESC_FIRST_DELAY_SEC = 0.2
 
 # DEs whose area-capture overlay must be dismissed (Esc + pause) before
-# the window shortcut can open the interactive window picker. Live-tested
-# on KDE (2026-08): emitting the window shortcut with Spectacle's region
-# overlay up completes/saves instead of shifting capture mode.
-_ESC_FIRST_DESKTOP_ENVS = frozenset({'kde', 'plasma'})
-
-
-def _make_cmd_fallback_fn(cmd_candidates_lst: 'list[list[str]]'):
-    """Build a keymap output callable that launches the first candidate
-    command found on PATH. launch_detached() returns False when the
-    executable is absent, so candidates double as version detection."""
-
-    def _sshot_cmd_fallback(ctx):
-        for cmd_lst in cmd_candidates_lst:
-            if launch_detached(cmd_lst, stdout=DEVNULL, stderr=DEVNULL):
-                return
-
-    # Self-description for diagnostics (rendered by the CLI check command).
-    _sshot_cmd_fallback.cmd_candidates_lst = cmd_candidates_lst
-    return _sshot_cmd_fallback
+# the window shortcut works. Live-tested:
+# - KDE (2026-08): emitting the window shortcut with Spectacle's region
+#   overlay up completes/saves instead of shifting capture mode.
+# - Cinnamon/Mint 22.3 (2026-08): gnome-screenshot's area crosshair does
+#   not mode-shift on the window shortcut, and a second gnome-screenshot
+#   invocation does not replace the first (no single-instance behavior).
+_ESC_FIRST_DESKTOP_ENVS = frozenset({'kde', 'plasma', 'cinnamon'})
 
 
 def _require_callable(name_str: str, obj):
@@ -127,7 +116,8 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
                                 input_combos_dct=None,
                                 enable_window_shift=True,
                                 window_shift_esc_first=None,
-                                enable_command_fallbacks=True) -> 'list':
+                                enable_command_fallbacks=True,
+                                results_dct=None) -> 'list':
     """Build and register screenshot keymaps for the current desktop
     environment. Returns the list of registered keymap objects.
 
@@ -144,7 +134,10 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
     enable_command_fallbacks: for slots with no native binding to emit,
     bind curated tool-launch commands from the library's per-DE table
     (e.g. Cinnamon's interactive UI). False disables all command
-    execution."""
+    execution.
+    results_dct: pre-resolved slot results (from resolve_outputs) to use
+    instead of resolving internally; lets diagnostics resolve once and
+    reuse, avoiding duplicated resolution logging."""
     required_names_lst = ['keymap', 'C', 'immediately']
     missing_names_lst = [name for name in required_names_lst
                             if config_globals_dct.get(name) is None]
@@ -180,13 +173,26 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
     if input_combos_dct is None:
         input_combos_dct = DEFAULT_INPUT_COMBOS_DCT
 
-    results_dct = resolve_outputs(desktop_env, de_maj_ver)
+    if results_dct is None:
+        results_dct = resolve_outputs(desktop_env, de_maj_ver)
 
     def _resolved_combo(slot_name: str) -> 'str | None':
         result = results_dct.get(slot_name)
         if result is None or result.status != STATUS_RESOLVED:
             return None
         return result.combo
+
+    de_cmd_overrides_dct = CMD_OVERRIDES_DCT.get(desktop_env_norm, {})
+
+    def _slot_output_action(slot_name: str):
+        """Output for a slot with override precedence: command override
+        wins over native combo; returns a callable, a combo string, or
+        None when neither is available."""
+        if enable_command_fallbacks:
+            override_candidates_lst = de_cmd_overrides_dct.get(slot_name)
+            if override_candidates_lst:
+                return make_cmd_fallback_fn(override_candidates_lst)
+        return _resolved_combo(slot_name)
 
     registered_lst = []
     shifted_area_slots_lst = []
@@ -197,8 +203,8 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
         for area_slot, window_slot in _WINDOW_SHIFT_PAIRS_LST:
             trigger_spellings_lst   = input_combos_dct.get(area_slot)
             area_combo              = _resolved_combo(area_slot)
-            window_combo            = _resolved_combo(window_slot)
-            if not trigger_spellings_lst or not area_combo or not window_combo:
+            window_action           = _slot_output_action(window_slot)
+            if not trigger_spellings_lst or not area_combo or window_action is None:
                 continue
 
             # One keymap per pair; one trigger entry per spelling, each
@@ -207,10 +213,14 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
             pair_mappings_dct = {}
             for trigger_spelling in trigger_spellings_lst:
 
-                if window_shift_esc_first:
-                    space_action = [C('Esc'), sleep(_ESC_FIRST_DELAY_SEC), C(window_combo)]
+                if callable(window_action):
+                    window_payload = window_action
                 else:
-                    space_action = C(window_combo)
+                    window_payload = C(window_action)
+                if window_shift_esc_first:
+                    space_action = [C('Esc'), sleep(_ESC_FIRST_DELAY_SEC), window_payload]
+                else:
+                    space_action = window_payload
 
                 # Held-chord Space variant derived from this trigger's own
                 # spelling: replace the trailing key with Space.
@@ -238,19 +248,27 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
     for slot_name, input_spellings_lst in input_combos_dct.items():
         if slot_name in shifted_area_slots_lst:
             continue
-        output_combo = _resolved_combo(slot_name)
+        output_action = _slot_output_action(slot_name)
+        if callable(output_action):
+            for input_spelling in input_spellings_lst:
+                flat_mappings_dct[C(input_spelling)] = output_action
+            cmds_str = ' | '.join(' '.join(cmd_lst) for cmd_lst in output_action.cmd_candidates_lst)
+            debug(f"SSHOT: Slot '{slot_name}' output overridden with command "
+                    f'(first found on PATH): {cmds_str}', ctx='DT')
+            continue
+        output_combo = output_action
         if output_combo is None:
             if not enable_command_fallbacks:
                 continue
             cmd_candidates_lst = de_cmd_fallbacks_dct.get(slot_name)
             if not cmd_candidates_lst:
                 continue
-            fallback_fn = _make_cmd_fallback_fn(cmd_candidates_lst)
+            fallback_fn = make_cmd_fallback_fn(cmd_candidates_lst)
             for input_spelling in input_spellings_lst:
                 flat_mappings_dct[C(input_spelling)] = fallback_fn
             cmds_str = ' | '.join(' '.join(cmd_lst) for cmd_lst in cmd_candidates_lst)
             debug(f"SSHOT: Slot '{slot_name}' has no native binding; using command "
-                    f'fallback (first found on PATH): {cmds_str}')
+                    f'fallback (first found on PATH): {cmds_str}', ctx='DT')
             continue
         for input_spelling in input_spellings_lst:
             flat_mappings_dct[C(input_spelling)] = C(output_combo)

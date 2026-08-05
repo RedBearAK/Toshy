@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260802'
+__version__ = '20260805'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -68,6 +68,15 @@ show_all_modules    = '--all' in user_args or '-a' in user_args
 # ~/.config/toshy/toshy_config.py
 # ~/.config/toshy/toshy_gui/main_gtk4.py
 # ~/.config/toshy/toshy_gui/main_tkinter.py
+
+    # ~/.config/toshy/toshy_common/terminal_menu/__init__.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_input.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_main.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_model.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_render.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_rgx.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_term.py
+
 # ~/.config/toshy/toshy_tray.py
 
 # ~/.config/toshy/toshy_common/env_context.py
@@ -76,6 +85,7 @@ show_all_modules    = '--all' in user_args or '-a' in user_args
 # ~/.config/toshy/toshy_common/monitoring.py            # Monitors settings and services
 # ~/.config/toshy/toshy_common/notification_manager.py
 # ~/.config/toshy/toshy_common/overlay_context.py
+# ~/.config/toshy/toshy_common/preference_items.py
 # ~/.config/toshy/toshy_common/proc_launcher.py
 # ~/.config/toshy/toshy_common/process_manager.py
 # ~/.config/toshy/toshy_common/runtime_utils.py
@@ -124,6 +134,8 @@ preferences_app_gtk4    = os.path.join(toshy_dir_path,
                             'toshy_gui', 'main_gtk4.py')
 preferences_app_tk      = os.path.join(toshy_dir_path,
                             'toshy_gui', 'main_tkinter.py')
+terminal_menu_path      = os.path.join(toshy_dir_path,
+                            'toshy_common', 'terminal_menu')        # package dir
 tray_indicator_path     = os.path.join(toshy_dir_path,
                             'toshy_tray.py')
 
@@ -137,6 +149,8 @@ notification_mgr_path   = os.path.join(toshy_dir_path,
                             'toshy_common', 'notification_manager.py')
 overlay_context_path    = os.path.join(toshy_dir_path,
                             'toshy_common', 'overlay_context.py')
+preference_items_path   = os.path.join(toshy_dir_path,
+                            'toshy_common', 'preference_items.py')
 proc_launcher_path      = os.path.join(toshy_dir_path,
                             'toshy_common', 'proc_launcher.py')
 process_mgr_path        = os.path.join(toshy_dir_path,
@@ -172,6 +186,12 @@ kblayout_symtable_path  = os.path.join(toshy_dir_path,
 screenshots_pkg_path    = os.path.join(toshy_dir_path,
                             'toshy_common', 'screenshots')          # package dir
 
+shortcut_detect_pkg_path = os.path.join(toshy_dir_path,
+                            'toshy_common', 'shortcut_detect')      # package dir
+
+spotlight_input_pkg_path = os.path.join(toshy_dir_path,
+                            'toshy_common', 'spotlight_input')      # package dir
+
 # These files are shell scripts, not Python scripts:
 config_svc_path         = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-config')
 sessmon_svc_path        = os.path.join(toshy_dir_path, 'scripts', 'tshysvc-sessmon')
@@ -200,10 +220,35 @@ def _sshot_module(filename):
     return os.path.join(screenshots_pkg_path, filename)
 
 
+# Shortcut Detection is a package; its per-module entries show only with --all.
+def _sc_det_module(filename):
+    return os.path.join(shortcut_detect_pkg_path, filename)
+
+
+# Spotlight/Input is a package; its per-module entries show only with --all.
+def _spli_module(filename):
+    return os.path.join(spotlight_input_pkg_path, filename)
+
+
+# Terminal Menu is a package; its per-module entries show only with --all.
+def _tmenu_module(filename):
+    return os.path.join(terminal_menu_path, filename)
+
+
 components = [
     ("Config File",                 config_file_path),
     ("Preferences App (GTK4)",      preferences_app_gtk4),
     ("Preferences App (Tk)",        preferences_app_tk),
+    ("Terminal Menu (pkg)",         terminal_menu_path),
+    (None, None, True),             # Spacing (detailed output only)
+    ("  TMenu: __init__",           _tmenu_module('__init__.py'),           True),
+    ("  TMenu: input",              _tmenu_module('tmenu_input.py'),        True),
+    ("  TMenu: main",               _tmenu_module('tmenu_main.py'),         True),
+    ("  TMenu: model",              _tmenu_module('tmenu_model.py'),        True),
+    ("  TMenu: render",             _tmenu_module('tmenu_render.py'),       True),
+    ("  TMenu: rgx patterns",       _tmenu_module('tmenu_rgx.py'),          True),
+    ("  TMenu: terminal ctrl",      _tmenu_module('tmenu_term.py'),         True),
+    (None, None, True),             # Spacing (detailed output only)
     ("Tray Indicator",              tray_indicator_path),
     (None, None),                   # Spacing
     ("Environment Context",         env_context_path),
@@ -211,6 +256,7 @@ components = [
     ("Modifier Modes",              modifier_modes_path),
     ("Notification Manager",        notification_mgr_path),
     ("Overlay Context",             overlay_context_path),
+    ("Preference Items",            preference_items_path),
     ("Process Launcher",            proc_launcher_path),
     ("Process Manager",             process_mgr_path),
     ("Runtime Utils",               runtime_utils_path),
@@ -245,11 +291,34 @@ components = [
     (None, None, True),             # Spacing (detailed output only)
     ("  Sshot: __init__",           _sshot_module('__init__.py'),           True),
     ("  Sshot: __main__",           _sshot_module('__main__.py'),           True),
-    ("  Sshot: accel regexes",      _sshot_module('sshot_accel_rgx.py'),    True),
+    ("  Sshot: command regexes",    _sshot_module('sshot_cmd_rgx.py'),      True),
     ("  Sshot: defaults",           _sshot_module('sshot_defaults.py'),     True),
     ("  Sshot: keymaps",            _sshot_module('sshot_keymaps.py'),      True),
     ("  Sshot: readers",            _sshot_module('sshot_readers.py'),      True),
     ("  Sshot: resolver",           _sshot_module('sshot_resolver.py'),     True),
+    (None, None),                   # Spacing
+    ("Shortcut Detection (pkg)",    shortcut_detect_pkg_path),
+    (None, None, True),             # Spacing (detailed output only)
+    ("  ScDet: __init__",           _sc_det_module('__init__.py'),           True),
+    ("  ScDet: __main__",           _sc_det_module('__main__.py'),           True),
+    ("  ScDet: accel normalizer",   _sc_det_module('sc_det_accel.py'),        True),
+    ("  ScDet: accel regexes",      _sc_det_module('sc_det_accel_rgx.py'),    True),
+    ("  ScDet: cmd fallback",       _sc_det_module('sc_det_fallback.py'),     True),
+    ("  ScDet: diagnostics",        _sc_det_module('sc_det_diag.py'),         True),
+    ("  ScDet: gsettings reader",   _sc_det_module('sc_det_gsettings.py'),    True),
+    ("  ScDet: KDE rc reader",      _sc_det_module('sc_det_kde_rc.py'),       True),
+    ("  ScDet: result model",       _sc_det_module('sc_det_result.py'),       True),
+    ("  ScDet: Spices reader",      _sc_det_module('sc_det_spices.py'),       True),
+    ("  ScDet: xfconf reader",      _sc_det_module('sc_det_xfconf.py'),       True),
+    (None, None),                   # Spacing
+    ("Spotlight/Input (pkg)",       spotlight_input_pkg_path),
+    (None, None, True),             # Spacing (detailed output only)
+    ("  SpIn: __init__",            _spli_module('__init__.py'),              True),
+    ("  SpIn: __main__",            _spli_module('__main__.py'),              True),
+    ("  SpIn: defaults",            _spli_module('spli_defaults.py'),         True),
+    ("  SpIn: keymaps",             _spli_module('spli_keymaps.py'),          True),
+    ("  SpIn: readers",             _spli_module('spli_readers.py'),          True),
+    ("  SpIn: resolver",            _spli_module('spli_resolver.py'),         True),
     (None, None),                   # Spacing
     ("SysD Svc: Keymapper Config",  config_svc_path),
     ("SysD Svc: Session Monitor",   sessmon_svc_path),
@@ -267,10 +336,22 @@ components = [
 
 # Helper function to extract version from file content
 def _format_version(version_raw):
-    # Format YYYYMMDD as YYYY.MM.DD for readability; pass anything else through.
-    if (version_raw.isdigit() and '.' not in version_raw and
-            2020 <= int(version_raw[:4]) <= 2038):
-        return f"{version_raw[:4]}.{version_raw[4:6]}.{version_raw[6:]}"
+    # Format YYYYMMDD as YYYY.MM.DD for readability; pass anything else
+    # through raw. A revision tag after the 8-digit date (letter suffix,
+    # 'build02', 'beta', 'patch3', with or without a '.', '-' or '_'
+    # separator) becomes one more dotted component, so hypothetical
+    # future version paradigms still display cleanly:
+    #   '20260804a'       -> '2026.08.04.a'
+    #   '20260805-beta'   -> '2026.08.05.beta'
+    #   '20260805_patch3' -> '2026.08.05.patch3'
+    #   '20260805build02' -> '2026.08.05.build02'
+    date_part = version_raw[:8]
+    if len(date_part) == 8 and date_part.isdigit() and 2020 <= int(date_part[:4]) <= 2038:
+        formatted_date = f"{date_part[:4]}.{date_part[4:6]}.{date_part[6:8]}"
+        suffix = version_raw[8:].lstrip('.-_')
+        if suffix:
+            return f"{formatted_date}.{suffix}"
+        return formatted_date
     return version_raw
 
 

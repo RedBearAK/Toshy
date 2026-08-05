@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260730'                        # CLI option "--version" will print this out.
+__version__ = '20260804'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -9,6 +9,7 @@ import pwd
 import sys
 import copy
 import glob
+import json
 import random
 import shutil
 import signal
@@ -19,6 +20,7 @@ import argparse
 import builtins
 import datetime
 import platform
+import tempfile
 import textwrap
 import subprocess
 
@@ -5170,8 +5172,223 @@ def apply_tweaks_Cinnamon():
     except subprocess.CalledProcessError as proc_err:
         error(f'Problem while installing Cinnamon extension:\n\t{proc_err}')
 
-    # Let user know how to get Cmd+Space to open the Cinnamon Menu applet
-    _show_cinnamon_menu_hotkey_reminder()
+    # Try to auto-configure the Cinnamon menu applet hotkey (Cmd+Space ->
+    # Ctrl+Escape) by rebinding the menu applet's 'overlay-key' primary.
+    # Only if that fails do we fall back to the manual reminder dialog.
+    overlay_ok, reloaded = _set_cinnamon_menu_overlay_key()
+    if overlay_ok:
+        if reloaded:
+            print('Set Cinnamon menu hotkey to Ctrl+Escape (for Cmd+Space) '
+                    'and reloaded the menu applet. Should work immediately.')
+        else:
+            # File written correctly but the running applet could not be
+            # reloaded live; Cinnamon re-reads its settings on next login.
+            cnfg.should_reboot = True
+            print('Set Cinnamon menu hotkey to Ctrl+Escape (for Cmd+Space). '
+                    'Takes effect after logout/reboot.')
+    else:
+        # Auto-config did not confirm success; fall back to the manual
+        # instructions so the user can still fix it by hand.
+        _show_cinnamon_menu_hotkey_reminder()
+
+
+def _reload_cinnamon_menu_applet() -> bool:
+    """Ask a running Cinnamon to reload the menu applet so it re-reads its
+    settings and re-registers the overlay-key grab, avoiding a logout.
+    Cinnamon's applet SettingsBase has no file monitor, so an out-of-band
+    write is invisible to the running applet until it reloads.
+
+    Cascades gdbus -> dbus-send -> qdbus (using cnfg.qdbus_cmd, the
+    already-resolved variant name), mirroring do_kwin_reconfigure().
+    Method: org.Cinnamon.ReloadXlet(uuid, type) on /org/Cinnamon.
+    Returns True as soon as one utility dispatches without error."""
+    dbus_dest   = 'org.Cinnamon'
+    dbus_path   = '/org/Cinnamon'
+    dbus_method = 'org.Cinnamon.ReloadXlet'
+    xlet_uuid   = 'menu@cinnamon.org'
+    xlet_type   = 'APPLET'
+
+    commands = ['gdbus', 'dbus-send', cnfg.qdbus_cmd]
+    for cmd in commands:
+        if shutil.which(cmd):
+            break
+    else:
+        error('No expected D-Bus command available. Cannot reload Cinnamon menu applet.')
+        return False
+
+    if shutil.which('gdbus'):
+        try:
+            cmd_lst = ['gdbus', 'call', '--session',
+                        '--dest', dbus_dest,
+                        '--object-path', dbus_path,
+                        '--method', dbus_method,
+                        xlet_uuid, xlet_type]
+            subprocess.run(cmd_lst, check=True, stdout=DEVNULL, stderr=DEVNULL, timeout=10)
+            return True
+        except (subprocess.SubprocessError, OSError) as proc_err:
+            error(f'Problem using "gdbus" to reload Cinnamon menu applet.\n\t{proc_err}')
+
+    if shutil.which('dbus-send'):
+        try:
+            # --print-reply is essential: without it dbus-send is
+            # fire-and-forget and exits 0 even if the method call fails,
+            # which would falsely report success and skip the reboot
+            # prompt the user actually needs.
+            cmd_lst = ['dbus-send', '--session', '--print-reply',
+                        '--type=method_call',
+                        f'--dest={dbus_dest}', dbus_path, dbus_method,
+                        f'string:{xlet_uuid}', f'string:{xlet_type}']
+            subprocess.run(cmd_lst, check=True, stdout=DEVNULL, stderr=DEVNULL, timeout=10)
+            return True
+        except (subprocess.SubprocessError, OSError) as proc_err:
+            error(f'Problem using "dbus-send" to reload Cinnamon menu applet.\n\t{proc_err}')
+
+    if shutil.which(cnfg.qdbus_cmd):
+        try:
+            cmd_lst = [cnfg.qdbus_cmd, dbus_dest, dbus_path, dbus_method,
+                        xlet_uuid, xlet_type]
+            subprocess.run(cmd_lst, check=True, stdout=DEVNULL, stderr=DEVNULL, timeout=10)
+            return True
+        except (subprocess.SubprocessError, OSError) as proc_err:
+            error(f'Problem using "{cnfg.qdbus_cmd}" to reload Cinnamon menu applet.\n\t{proc_err}')
+
+    error('Failed to reload Cinnamon menu applet. No available D-Bus utility worked.')
+    return False
+
+
+def remove_tweaks_Cinnamon():
+    """Utility function to remove the tweaks applied to Cinnamon: restore
+    the menu applet's overlay-key primary to Super_L, but only where it is
+    still our Ctrl+Escape binding (a user's own later choice is left
+    alone). Mirror image of the apply-time auto-config."""
+    changed = _rebind_cinnamon_overlay_primary(
+        _CINN_OVERLAY_DEFAULT, only_if_primary=_CINN_OVERLAY_TARGET)
+    if changed:
+        _reload_cinnamon_menu_applet()
+        print('Restored Cinnamon menu hotkey to default (Super_L).')
+    else:
+        print('Cinnamon menu hotkey left as-is '
+                '(not our binding, or no menu applet found).')
+
+
+# Cinnamon menu applet overlay-key: the launcher hotkey lives in the menu
+# applet's per-instance Spices JSON (NOT a gsettings schema):
+#   ~/.config/cinnamon/spices/menu@cinnamon.org/<instance-id>.json
+# (legacy: ~/.cinnamon/configs/menu@cinnamon.org/). Value is a
+# '::'-separated alternate list; default 'Super_L::Super_R'. Toshy sets
+# the primary alternate to <Primary>Escape so Cmd+Space -> Ctrl+Escape
+# opens the menu, preserving any secondary.
+_CINN_OVERLAY_TARGET    = '<Primary>Escape'
+_CINN_OVERLAY_DEFAULT   = 'Super_L'
+_CINN_MENU_UUID         = 'menu@cinnamon.org'
+
+
+def _cinn_overlay_instance_files() -> 'list[str]':
+    """Menu applet instance JSON files (current Spices dir first, legacy
+    configs dir as fallback), or [] if none found."""
+    config_home = os.environ.get('XDG_CONFIG_HOME', '') or os.path.join(home_dir, '.config')
+    candidate_dirs_lst = [
+        os.path.join(config_home, 'cinnamon', 'spices', _CINN_MENU_UUID),
+        os.path.join(home_dir, '.cinnamon', 'configs', _CINN_MENU_UUID),
+    ]
+    for spices_dir in candidate_dirs_lst:
+        if not os.path.isdir(spices_dir):
+            continue
+        json_files_lst = [os.path.join(spices_dir, name)
+                            for name in sorted(os.listdir(spices_dir))
+                            if name.endswith('.json')]
+        if json_files_lst:
+            return json_files_lst
+    return []
+
+
+def _rebind_cinnamon_overlay_primary(new_primary, only_if_primary=None) -> bool:
+    """Set the overlay-key primary alternate to new_primary in every menu
+    instance, preserving any secondary. If only_if_primary is given, an
+    instance is changed only when its current primary equals it (used by
+    restore so a user's own later choice is not clobbered). Atomic write
+    per file. Returns True if any file changed."""
+    changed_any = False
+
+    for file_path in _cinn_overlay_instance_files():
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file_obj:
+                data_dct = json.load(file_obj)
+        except (OSError, ValueError):
+            continue
+
+        key_obj = data_dct.get('overlay-key')
+        if not isinstance(key_obj, dict) or 'value' not in key_obj:
+            continue
+
+        current_value = str(key_obj['value'])
+        alternates_lst = current_value.split('::')
+        if only_if_primary is not None and alternates_lst[0] != only_if_primary:
+            continue
+
+        alternates_lst[0] = new_primary
+        new_value = '::'.join(alternates_lst)
+        if new_value == current_value:
+            continue        # idempotent no-op
+
+        key_obj['value'] = new_value
+
+        dir_name = os.path.dirname(file_path)
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp')
+        try:
+            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as tmp_obj:
+                json.dump(data_dct, tmp_obj, indent=4)
+                tmp_obj.write('\n')
+            os.replace(tmp_path, file_path)
+            changed_any = True
+        except OSError as write_err:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            error(f'Problem writing Cinnamon menu overlay-key:\n\t{write_err}')
+
+    return changed_any
+
+
+def _set_cinnamon_menu_overlay_key() -> 'tuple[bool, bool]':
+    """Rebind the menu applet overlay-key primary to Ctrl+Escape, then
+    confirm the on-disk value and attempt a live applet reload. Returns
+    (confirmed, reloaded): confirmed is True only if every instance now
+    leads with the intended binding; reloaded is True if the live reload
+    dispatched OK (so the caller can skip the reboot prompt)."""
+    _rebind_cinnamon_overlay_primary(_CINN_OVERLAY_TARGET)
+
+    # Confirm: every menu instance must now lead with the target binding.
+    # No instance files means we cannot confirm -> report failure so the
+    # manual dialog handles it.
+    instance_files_lst = _cinn_overlay_instance_files()
+    if not instance_files_lst:
+        return (False, False)
+
+    confirmed_cnt = 0
+    for file_path in instance_files_lst:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file_obj:
+                data_dct = json.load(file_obj)
+        except (OSError, ValueError):
+            return (False, False)
+        key_obj = data_dct.get('overlay-key')
+        if not isinstance(key_obj, dict) or 'value' not in key_obj:
+            # Not a menu instance settings file (mirrors the rebind
+            # function's leniency); a stray JSON must not fail the check.
+            continue
+        first_alt = str(key_obj['value']).split('::')[0]
+        if first_alt != _CINN_OVERLAY_TARGET:
+            return (False, False)
+        confirmed_cnt += 1
+
+    if confirmed_cnt == 0:
+        return (False, False)
+
+    # Written and confirmed; attempt the live reload (via setup's own
+    # cnfg.qdbus_cmd-based cascade) so the running applet re-registers the
+    # hotkey without requiring a logout.
+    reloaded = _reload_cinnamon_menu_applet()
+    return (True, reloaded)
 
 
 def apply_tweaks_GNOME():
@@ -5552,57 +5769,29 @@ def _show_cinnamon_menu_hotkey_reminder():
     """
     Show a reminder about configuring the Cinnamon menu hotkey for Cmd+Space.
 
-    Checks if the menu applet is using default Super_L shortcut, and if so,
-    shows instructions for manually configuring it to work with Toshy.
+    Checks the menu applet instance settings (current Spices path, legacy
+    path fallback, via _cinn_overlay_instance_files) and shows manual
+    instructions only if no instance is bound to Ctrl+Escape in either
+    GTK spelling ('<Primary>Escape' as we write it, '<Control>Escape' as
+    older manual configuration produced). Defaults to showing the
+    reminder if the settings cannot be read.
     """
-    import json
-
-    menu_uuid = 'menu@cinnamon.org'
-    configs_dir = os.path.join(home_dir, '.cinnamon', 'configs', menu_uuid)
     needs_reminder = True  # Default to showing reminder if checks fail
 
-    # Get enabled applets to find the menu instance ID(s)
-    try:
-        result = subprocess.run(
-            ['gsettings', 'get', 'org.cinnamon', 'enabled-applets'],
-            capture_output=True, text=True, check=True
-        )
-        enabled_applets_str = result.stdout.strip()
-    except subprocess.CalledProcessError:
-        enabled_applets_str = ''
-
-    # Parse the applet list to find menu@cinnamon.org instance IDs
-    # Format: 'panel1:left:0:menu@cinnamon.org:23'
-    instance_ids = []
-
-    if enabled_applets_str.startswith('[') and enabled_applets_str.endswith(']'):
-        applet_entries = enabled_applets_str[1:-1].split(', ')
-        for entry in applet_entries:
-            entry = entry.strip().strip("'")
-            if menu_uuid in entry:
-                parts = entry.split(':')
-                if len(parts) >= 5:
-                    instance_ids.append(parts[-1])
-
-    # Check if any menu applet still has default shortcut (needs configuration)
-    for instance_id in instance_ids:
-        config_file = os.path.join(configs_dir, f'{instance_id}.json')
-
-        if not os.path.isfile(config_file):
-            continue
-
+    for config_file in _cinn_overlay_instance_files():
         try:
-            with open(config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+            with open(config_file, 'r', encoding='utf-8') as file_obj:
+                config = json.load(file_obj)
         except (json.JSONDecodeError, OSError):
             continue
 
         overlay_key_value = ''
-        if 'overlay-key' in config:
-            overlay_key_value = config['overlay-key'].get('value', '')
+        if 'overlay-key' in config and isinstance(config['overlay-key'], dict):
+            overlay_key_value = str(config['overlay-key'].get('value', ''))
 
-        # Check if already configured for Toshy (has <Control>Escape)
-        if '<Control>Escape' in overlay_key_value:
+        # Already configured for Toshy if any alternate is Ctrl+Escape.
+        if ('<Primary>Escape' in overlay_key_value
+                or '<Control>Escape' in overlay_key_value):
             needs_reminder = False
             break
 
@@ -5716,6 +5905,10 @@ def remove_desktop_tweaks():
     if cnfg.DESKTOP_ENV == 'kde':
         print(f'Removing KDE Plasma desktop tweaks...')
         remove_tweaks_KDE()
+
+    if cnfg.DESKTOP_ENV == 'cinnamon':
+        print(f'Removing Cinnamon desktop tweaks...')
+        remove_tweaks_Cinnamon()
 
     print('Removed known desktop tweaks applied by installer.')
     show_task_completed_msg()

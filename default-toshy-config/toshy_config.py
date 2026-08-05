@@ -222,6 +222,7 @@ from toshy_common.proc_launcher         import launch_detached
 from toshy_common.runtime_utils         import sanitize_text
 from toshy_common.screenshots           import setup_screenshot_keymaps
 from toshy_common.settings_class        import Settings
+from toshy_common.spotlight_input       import setup_spotlight_input_keymaps
 from toshy_common.terminal_utils        import render_pango_text
 
 # Start up the mechanism that optionally auto-corrects keycodes that
@@ -4052,6 +4053,18 @@ keymap("User hardware keys", {
 #       cnfg.screen_has_focus and
 #       ctx_app_is_remote
 # )
+
+
+try:
+    setup_spotlight_input_keymaps(
+        globals(),
+        when = lambda ctx:
+            ctx_ovl_macos_globals and
+            cnfg.screen_has_focus and
+            not ctx_app_is_remote
+    )
+except NameError:
+    debug('SPOTL: setup_spotlight_input_keymaps not available; skipping.')
 
 
 try:

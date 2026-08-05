@@ -11,15 +11,19 @@ config snippets) can import everything from the package root:
     from toshy_common.screenshots import setup_screenshot_keymaps
     setup_screenshot_keymaps(globals(), when = lambda ctx: ...)
 
+Storage mechanics, accelerator normalization, the SlotResult model, and
+diagnostic rendering live in toshy_common.shortcut_detect; this package
+supplies the screenshot domain on top of them.
+
 Internal module layout:
     __main__.py         CLI diagnostic (python3 -m toshy_common.screenshots)
-    sshot_accel_rgx.py    compiled regex patterns (accelerator + command parsing)
-    sshot_defaults.py     slot model, status constants, static default tables
-    sshot_readers.py      per-DE readers and accelerator normalizers
-    sshot_resolver.py     resolution tiers, user overrides, SlotResult
+    sshot_cmd_rgx.py      compiled regex patterns (command classification)
+    sshot_defaults.py     slot model, static default tables, cmd fallbacks
+    sshot_readers.py      per-DE reader wrappers (maps + classification)
+    sshot_resolver.py     family dispatch, tiering, resolution logging
     sshot_keymaps.py      keymap builder (injected config-API)
 """
-__version__ = '20260801'
+__version__ = '20260803'
 
 
 from toshy_common.screenshots.sshot_defaults import (
@@ -31,6 +35,8 @@ from toshy_common.screenshots.sshot_defaults import (
     SLOT_NAMES,
     SLOT_WINDOW_TO_CLIPBOARD,
     SLOT_WINDOW_TO_FILE,
+)
+from toshy_common.shortcut_detect import (
     STATUS_DISABLED,
     STATUS_RESOLVED,
     STATUS_UNRESOLVED,

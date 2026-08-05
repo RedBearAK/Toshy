@@ -100,15 +100,6 @@ class SettingsPanel(Gtk.Box):
         )
         column.append(enter_cmd_control)
 
-        # Sublime Text 3 in VSCode switch
-        st3_control = self.create_switch_with_help(
-            "ST3 shortcuts in VSCode(s)",
-            "ST3_in_VSCode",
-            "ST3 shortcuts in VSCode(s)",
-            "Use shortcuts from Sublime Text 3 in Visual Studio Code (and variants)"
-        )
-        column.append(st3_control)
-
         # Forced Numpad switch
         numpad_control = self.create_switch_with_help(
             "Forced Numpad*",
@@ -130,6 +121,32 @@ class SettingsPanel(Gtk.Box):
             "Converts arrow keys that have \"media\" functions when used with Fn key, into PgUp/PgDn/Home/End keys"
         )
         column.append(media_control)
+
+        # Sublime Text 3 in VSCode switch
+        st3_control = self.create_switch_with_help(
+            "Sublime Text 3 shortcuts in VSCode(s)",
+            "ST3_in_VSCode",
+            "Sublime Text 3 shortcuts in VSCode(s)",
+            "Use shortcuts from Sublime Text 3 in Visual Studio Code (and variants)"
+        )
+        column.append(st3_control)
+
+        # Swap Spotlight & Input Switch toggle
+        swap_spotlight_control = self.create_switch_with_help(
+            "Swap Spotlight & Input Switch",
+            "swap_spotlight_and_input",
+            "Swap Spotlight & Input Switch",
+            "Swaps the launcher (\"Spotlight\") and input source switching shortcuts:\n"
+            "• Default: Cmd+Space opens the launcher, Ctrl+Space switches input source\n"
+            "• Swapped: Cmd+Space switches input source, Ctrl+Space opens the launcher\n\n"
+            "Before Mac OS X 10.4 \"Tiger\" introduced Spotlight in 2005, Cmd+Space was "
+            "the input source switch on the Mac, and Tiger upgraders using multiple input "
+            "sources kept that arrangement (with Spotlight on Ctrl+Space). This toggle "
+            "restores the classic arrangement for long-time multilingual Mac users.\n\n"
+            "Takes effect immediately when the config's Spotlight/input-switch keymaps "
+            "are active."
+        )
+        column.append(swap_spotlight_control)
 
         # Option-key special characters radio group (swapped over from the
         # right column to better balance the two column heights)
@@ -153,14 +170,15 @@ class SettingsPanel(Gtk.Box):
             column.append(placeholder)
             return column
 
+        # CapsLock mode radio group (replaces legacy Caps2Cmd/Caps2Esc_Cmd
+        # switches); ordered above Super Tap to match the tray Preferences menu
+        capslock_mode_control = self.create_capslock_mode_radio_group()
+        column.append(capslock_mode_control)
+
         # Super Tap Passthru group (swapped over from the left column to
         # better balance the two column heights)
         super_tap_control = self.create_super_tap_group()
         column.append(super_tap_control)
-
-        # CapsLock mode radio group (replaces legacy Caps2Cmd/Caps2Esc_Cmd switches)
-        capslock_mode_control = self.create_capslock_mode_radio_group()
-        column.append(capslock_mode_control)
 
         debug("Right column created")
         return column
@@ -688,7 +706,8 @@ class SettingsPanel(Gtk.Box):
         switch_settings = [
             'altgr_on_menu_key', 'multi_lang', 'ST3_in_VSCode',
             'Enter2Ent_Cmd', 'forced_numpad', 'media_arrows_fix',
-            'l_opt_is_sup_and_opt', 'l_cmd_is_sup_and_cmd'
+            'l_opt_is_sup_and_opt', 'l_cmd_is_sup_and_cmd',
+            'swap_spotlight_and_input'
         ]
         
         for setting_key in switch_settings:

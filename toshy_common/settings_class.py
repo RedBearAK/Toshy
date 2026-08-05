@@ -46,7 +46,7 @@ The `mru_layouts` table is handled separately (`_save_mru_layouts` plus its own
 query in `load_settings`) and does not follow the four-step pattern above.
 """
 
-__version__ = '20260714'
+__version__ = '20260803'
 
 import os
 import time
@@ -107,6 +107,15 @@ class Settings:
         self.capslock_mode          = CAPSLOCK_MODE_DEFAULT     # Default: 'caps_is_caps'
         self.Enter2Ent_Cmd          = False                     # Default: False
         self.ST3_in_VSCode          = False                     # Default: False
+
+        # Swap Cmd+Space (Spotlight/launcher) with Ctrl+Space (input switch).
+        # Historical provenance: before Mac OS X 10.4 Tiger (2005) claimed
+        # Cmd+Space for Spotlight, Cmd+Space was the input source switch;
+        # Tiger upgraders with the Input Menu enabled even kept Cmd+Space
+        # for input switching, with Spotlight remapped to Ctrl+Space. This
+        # toggle restores that arrangement for long-time multilingual Mac
+        # users. Consumed by keymap conditions for live switching.
+        self.swap_spotlight_and_input = False                   # Default: False
 
         # Super tap passthrough
         self.l_cmd_is_sup_and_cmd   = False                     # Default: False
@@ -291,7 +300,8 @@ class Settings:
             ('Enter2Ent_Cmd',               str(self.Enter2Ent_Cmd)),
             ('l_cmd_is_sup_and_cmd',        str(self.l_cmd_is_sup_and_cmd)),
             ('l_opt_is_sup_and_opt',        str(self.l_opt_is_sup_and_opt)),
-            ('ST3_in_VSCode',               str(self.ST3_in_VSCode))
+            ('ST3_in_VSCode',               str(self.ST3_in_VSCode)),
+            ('swap_spotlight_and_input',    str(self.swap_spotlight_and_input))
         ]
 
         for setting_name, setting_value in settings:
@@ -356,6 +366,7 @@ class Settings:
                 elif row[0] == 'l_cmd_is_sup_and_cmd'   : self.l_cmd_is_sup_and_cmd = setting_value
                 elif row[0] == 'l_opt_is_sup_and_opt'   : self.l_opt_is_sup_and_opt = setting_value
                 elif row[0] == 'ST3_in_VSCode'          : self.ST3_in_VSCode        = setting_value
+                elif row[0] == 'swap_spotlight_and_input': self.swap_spotlight_and_input = setting_value
 
             db_cursor.execute('''
                 SELECT layout_code, variant_code from mru_layouts 
@@ -506,6 +517,7 @@ class Settings:
         l_cmd_is_sup_and_cmd    = {self.l_cmd_is_sup_and_cmd}
         l_opt_is_sup_and_opt    = {self.l_opt_is_sup_and_opt}
         ST3_in_VSCode           = {self.ST3_in_VSCode}
+        swap_spotlight_and_input = {self.swap_spotlight_and_input}
         ------------------------------------------------------------------------------
         screen_has_focus        = {self.screen_has_focus}
         active_monitors         = {active_monitors}

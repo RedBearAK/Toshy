@@ -50,16 +50,8 @@ SLOT_NAMES = (
     SLOT_INTERACTIVE_UI,
 )
 
-# Per-slot resolution status values.
-STATUS_RESOLVED                 = 'resolved'      # combo available for emission
-STATUS_DISABLED                 = 'disabled'      # user explicitly disabled native shortcut
-STATUS_UNRESOLVED               = 'unresolved'    # no binding known; slot stays unmapped
-
-# Where a resolved combo came from (for logging/diagnostics).
-SOURCE_USER_OVERRIDE            = 'user_override'
-SOURCE_LIVE_SETTINGS            = 'live_settings'
-SOURCE_DEFAULTS_TABLE           = 'defaults_table'
-SOURCE_GENERIC_CONVENTION       = 'generic_convention'
+# Status and source constants live in toshy_common.shortcut_detect
+# (sc_det_result.py); this module holds only the screenshot domain.
 
 
 ###################################################################################################
@@ -182,11 +174,39 @@ XFCE_DEFAULTS_DCT = {
 #
 # Cinnamon: no interactive-UI action exists in the media-keys schema at
 # all (the six capture keys are the entire schema), so the interactive
-# slot can never resolve natively. csd-media-keys executes
-# 'cinnamon-screenshot' on Cinnamon 6.4+/Mint 22.1+ (flag set verified in
-# cinnamon-screenshot application.py argparse, incl. -i/--interactive,
-# linuxmint/cinnamon master 2026-08); older Cinnamon shipped
-# gnome-screenshot, which takes the same -i flag.
+# slot can never resolve natively. csd-media-keys on linuxmint master
+# (2026-08) executes 'cinnamon-screenshot' (flag set verified in its
+# application.py argparse, incl. -i/--interactive), but Mint 22.3 still
+# ships gnome-screenshot (live-verified 2026-08), which takes the same
+# -i flag. The candidate chain makes the transition timing irrelevant:
+# whichever tool is on PATH is the one that runs.
+# Command OVERRIDES: per-DE, per-slot candidates that take precedence
+# over emitting the slot's native combo, for slots where the native
+# action is semantically inferior to running the tool with arguments
+# (native shortcut paths are argument-blind: csd-media-keys hardcodes
+# its invocations). Same candidate-chain mechanics as the fallbacks.
+#
+# Cinnamon window capture: the native window-screenshot action captures
+# the focused window instantly (no picker, no delay control; live-tested
+# Mint 22.3, 2026-08). cinnamon-screenshot's --select-window flag is a
+# true interactive window picker (verified in screenshot_backend.py,
+# linuxmint master 2026-08) -- the faithful macOS camera-mode twin.
+# gnome-screenshot (current Mint) approximates with the interactive
+# dialog preseeded to Window mode + delay: press the button, then focus
+# the target window before the delay expires.
+CMD_OVERRIDES_DCT = {
+    'cinnamon': {
+        SLOT_WINDOW_TO_FILE: [
+            ['cinnamon-screenshot', '--select-window'],
+            ['gnome-screenshot', '--window', '--interactive', '--delay', '5'],
+        ],
+        SLOT_WINDOW_TO_CLIPBOARD: [
+            ['cinnamon-screenshot', '--select-window', '--clipboard'],
+            ['gnome-screenshot', '--window', '--interactive', '--delay', '5'],
+        ],
+    },
+}
+
 CMD_FALLBACKS_DCT = {
     'cinnamon': {
         SLOT_INTERACTIVE_UI: [
