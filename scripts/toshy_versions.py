@@ -336,10 +336,22 @@ components = [
 
 # Helper function to extract version from file content
 def _format_version(version_raw):
-    # Format YYYYMMDD as YYYY.MM.DD for readability; pass anything else through.
-    if (version_raw.isdigit() and '.' not in version_raw and
-            2020 <= int(version_raw[:4]) <= 2038):
-        return f"{version_raw[:4]}.{version_raw[4:6]}.{version_raw[6:]}"
+    # Format YYYYMMDD as YYYY.MM.DD for readability; pass anything else
+    # through raw. A revision tag after the 8-digit date (letter suffix,
+    # 'build02', 'beta', 'patch3', with or without a '.', '-' or '_'
+    # separator) becomes one more dotted component, so hypothetical
+    # future version paradigms still display cleanly:
+    #   '20260804a'       -> '2026.08.04.a'
+    #   '20260805-beta'   -> '2026.08.05.beta'
+    #   '20260805_patch3' -> '2026.08.05.patch3'
+    #   '20260805build02' -> '2026.08.05.build02'
+    date_part = version_raw[:8]
+    if len(date_part) == 8 and date_part.isdigit() and 2020 <= int(date_part[:4]) <= 2038:
+        formatted_date = f"{date_part[:4]}.{date_part[4:6]}.{date_part[6:8]}"
+        suffix = version_raw[8:].lstrip('.-_')
+        if suffix:
+            return f"{formatted_date}.{suffix}"
+        return formatted_date
     return version_raw
 
 
