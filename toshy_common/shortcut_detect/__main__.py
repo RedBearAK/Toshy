@@ -10,7 +10,7 @@ menu, pass a scheme name to run one directly, or --all for every scheme
 Adding a future detection scheme means one entry in _SCHEMES_LST here
 plus a run_report() function in the feature package's __main__.
 """
-__version__ = '20260804a'
+__version__ = '20260805'
 
 import os
 import sys
