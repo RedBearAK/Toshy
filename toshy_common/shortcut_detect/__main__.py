@@ -10,7 +10,7 @@ menu, pass a scheme name to run one directly, or --all for every scheme
 Adding a future detection scheme means one entry in _SCHEMES_LST here
 plus a run_report() function in the feature package's __main__.
 """
-__version__ = '20260804'
+__version__ = '20260804a'
 
 import os
 import sys
@@ -79,6 +79,8 @@ def main() -> int:
         prog=prog_str,
         description='Show detected native shortcuts and the keymaps Toshy '
                     'would build from them, per detection scheme.')
+    parser.add_argument('--version', action='version',
+                        version=f'{prog_str} version {__version__}')
     parser.add_argument('scheme', nargs='?', choices=scheme_keys_lst, default=None,
                         help='detection scheme to check (omit for a menu)')
     parser.add_argument('--all', action='store_true', dest='run_all',
@@ -95,6 +97,9 @@ def main() -> int:
         detect_note = 'EnvironmentInfo detection'
 
     if args.run_all:
+        # Identify the tool version in the full dump, since --all output
+        # is what lands in issue reports.
+        print(f'\n{prog_str} version {__version__} (--all)')
         chosen_keys_lst = scheme_keys_lst
     elif args.scheme is not None:
         chosen_keys_lst = [args.scheme]
