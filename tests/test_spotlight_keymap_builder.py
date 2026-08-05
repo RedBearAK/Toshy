@@ -48,12 +48,17 @@ class _FakeAPI:
         return ('COMBO', combo_str)
 
     def namespace(self, **extra_dct) -> dict:
+        class _FakeKey:
+            def __getattr__(self, name_str):
+                return ('KEY', name_str)
+
         ns_dct = {
             'keymap':       self._keymap,
             'C':            self.C,
             'iEF2NT':       lambda: ('IEF2NT',),
             'bind':         ('BIND',),
             'cnfg':         self.cnfg,
+            'Key':          _FakeKey(),
             'DESKTOP_ENV':  'kde',
             'DE_MAJ_VER':   '6',
         }
@@ -116,9 +121,29 @@ def test_kde_arrangements() -> bool:
     return all_ok
 
 
+def test_bare_super_launcher() -> bool:
+    """COSMIC-style DEs: launcher default 'Super' must be emitted as a
+    Key object tap (Key.LEFT_META), never C('Super'), which raises
+    KeyError in the combo parser at config load."""
+    api = _FakeAPI()
+    setup_spotlight_input_keymaps(api.namespace(DESKTOP_ENV='cosmic', DE_MAJ_VER=None))
+    default_rec = next(r for r in api.registered_lst if 'default' in r['name'])
+    launcher_val = default_rec['mappings'].get(('COMBO', 'RC-Space'))
+
+    all_ok = True
+    all_ok &= _check('cosmic launcher emitted as Key.LEFT_META tap',
+        launcher_val == [('IEF2NT',), ('KEY', 'LEFT_META')])
+    all_ok &= _check('no C("Super") combo anywhere in mappings',
+        ('COMBO', 'Super') not in [v[-1] for v in default_rec['mappings'].values()
+                                    if isinstance(v, list)])
+    print('\n--- bare-Super launcher (COSMIC) ---')
+    return all_ok
+
+
 def main():
     results_lst = [
         test_kde_arrangements(),
+        test_bare_super_launcher(),
     ]
     passed_cnt = sum(1 for result in results_lst if result)
     print(f'\nScore: {passed_cnt}/{len(results_lst)} test groups passed')

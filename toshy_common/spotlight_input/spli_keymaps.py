@@ -29,7 +29,7 @@ in one keymap per arrangement: the modmaps make them context-disjoint.
 Input primary = input_switch_last where the DE offers it (KDE, matching
 macOS), else input_switch_next; secondary = next-after-last, or prev.
 """
-__version__ = '20260804'
+__version__ = '20260805'
 
 from toshy_common.logger import debug
 from toshy_common.spotlight_input.spli_defaults import (
@@ -81,6 +81,14 @@ def setup_spotlight_input_keymaps(config_globals_dct: dict, when=None,
             return result.combo
         return None
 
+    # Bare-modifier launcher "combos" (a Super tap opening an overview or
+    # menu) cannot be expressed as C('Super'): a modifier-only string is
+    # not a valid combo and raises KeyError in the combo parser. They must
+    # be emitted as Key objects (the tap form the old static entries used:
+    # Key.LEFT_META). Applies to e.g. COSMIC/GNOME-family overview taps
+    # and a Cinnamon menu applet still on its default Super_L overlay-key.
+    _BARE_TAP_KEY_DCT = {'Super': 'LEFT_META', 'RSuper': 'RIGHT_META'}
+
     launcher_combo = _combo(SLOT_LAUNCHER_UI)
     last_combo     = _combo(SLOT_INPUT_SWITCH_LAST)
     next_combo     = _combo(SLOT_INPUT_SWITCH_NEXT)
@@ -98,7 +106,17 @@ def setup_spotlight_input_keymaps(config_globals_dct: dict, when=None,
                 f"'{desktop_env}'; no keymaps registered.", ctx='DT')
         return registered_lst
 
-    launcher_action = [iEF2NT(), C(launcher_combo)] if launcher_combo else None
+    launcher_action = None
+    if launcher_combo in _BARE_TAP_KEY_DCT:
+        Key = config_globals_dct.get('Key')
+        if Key is None:
+            raise ValueError(
+                "setup_spotlight_input_keymaps() needs 'Key' in the provided "
+                f"namespace to emit a bare {launcher_combo} tap for the "
+                'launcher. Pass the config globals() as the first argument.')
+        launcher_action = [iEF2NT(), getattr(Key, _BARE_TAP_KEY_DCT[launcher_combo])]
+    elif launcher_combo:
+        launcher_action = [iEF2NT(), C(launcher_combo)]
 
     def _when_default(ctx):
         base_ok = when(ctx) if when is not None else True

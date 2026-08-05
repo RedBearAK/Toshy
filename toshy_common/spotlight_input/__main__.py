@@ -6,7 +6,7 @@ CLI diagnostic for Spotlight/input-switching shortcut discovery:
     toshy-spotlight-check [--de DE] [--de-ver VER]
 Shows slot resolution and the literal keymaps for BOTH arrangements.
 """
-__version__ = '20260804'
+__version__ = '20260805'
 
 import os
 import sys
@@ -31,6 +31,23 @@ def _detect_environment() -> 'tuple[str, str | None]':
 
 class _FakeCnfg:
     swap_spotlight_and_input = False
+
+
+class _ReprKeyAttr:
+    """Renders as Key.<NAME> in the literal keymap output."""
+
+    def __init__(self, name_str):
+        self._name_str = name_str
+
+    def __repr__(self):
+        return f'Key.{self._name_str}'
+
+
+class _FakeKey:
+    """Stand-in for the xwaykeyz Key enum in the recording namespace."""
+
+    def __getattr__(self, name_str):
+        return _ReprKeyAttr(name_str)
 
 
 def run_report(desktop_env, de_maj_ver, detect_note='') -> int:
@@ -59,7 +76,8 @@ def run_report(desktop_env, de_maj_ver, detect_note='') -> int:
     api = RecordingAPI()
     ns_dct = api.namespace(
         DESKTOP_ENV=desktop_env, DE_MAJ_VER=de_maj_ver,
-        iEF2NT=lambda: 'iEF2NT()', bind='bind', cnfg=_FakeCnfg())
+        iEF2NT=lambda: 'iEF2NT()', bind='bind', cnfg=_FakeCnfg(),
+        Key=_FakeKey())
     setup_spotlight_input_keymaps(ns_dct, results_dct=results_dct)
     print_keymap_records(api.registered_lst)
     print()
