@@ -5170,8 +5170,88 @@ def apply_tweaks_Cinnamon():
     except subprocess.CalledProcessError as proc_err:
         error(f'Problem while installing Cinnamon extension:\n\t{proc_err}')
 
-    # Let user know how to get Cmd+Space to open the Cinnamon Menu applet
-    _show_cinnamon_menu_hotkey_reminder()
+    # Try to auto-configure the Cinnamon menu applet hotkey (Cmd+Space ->
+    # Ctrl+Escape) by rebinding the menu applet's 'overlay-key' primary.
+    # Only if that fails do we fall back to the manual reminder dialog.
+    if _set_cinnamon_menu_overlay_key():
+        # A successful rebind is a live-config change the running Cinnamon
+        # session may not fully pick up until re-login; ensure the user is
+        # prompted to reboot/log out by the end-of-install notice.
+        cnfg.should_reboot = True
+        print('Set Cinnamon menu hotkey to Ctrl+Escape (for Cmd+Space). '
+                'Takes effect after logout/reboot.')
+    else:
+        # Auto-config did not confirm success; fall back to the manual
+        # instructions so the user can still fix it by hand.
+        _show_cinnamon_menu_hotkey_reminder()
+
+
+def remove_tweaks_Cinnamon():
+    """Utility function to remove the tweaks applied to Cinnamon: restore
+    the menu applet's overlay-key primary to Super_L, but only where it is
+    still our Ctrl+Escape binding (a user's own later choice is left
+    alone). Mirror image of the apply-time auto-config."""
+    try:
+        sys.path.insert(0, os.path.join(this_file_dir, 'scripts', 'lib'))
+        from cinnamon_menu_overlay_key import restore_menu_overlay_key_primary
+    except ImportError as import_err:
+        error(f'Could not load Cinnamon overlay-key helper:\n\t{import_err}')
+        return
+
+    try:
+        if restore_menu_overlay_key_primary():
+            print('Restored Cinnamon menu hotkey to default (Super_L).')
+        else:
+            print('Cinnamon menu hotkey left as-is '
+                    '(not our binding, or no menu applet found).')
+    except OSError as restore_err:
+        error(f'Problem restoring Cinnamon menu overlay-key:\n\t{restore_err}')
+
+
+def _set_cinnamon_menu_overlay_key() -> bool:
+    """Rebind the menu applet overlay-key primary to Ctrl+Escape via the
+    standalone helper, then confirm the on-disk value. Returns True only
+    if the resulting value's first alternate is the intended binding, so
+    the caller can decide whether the manual dialog is still needed."""
+    try:
+        sys.path.insert(0, os.path.join(this_file_dir, 'scripts', 'lib'))
+        from cinnamon_menu_overlay_key import (
+            set_menu_overlay_key_primary,
+            TARGET_PRIMARY_BINDING,
+            _instance_files,
+        )
+        import json as _json
+    except ImportError as import_err:
+        error(f'Could not load Cinnamon overlay-key helper:\n\t{import_err}')
+        return False
+
+    try:
+        set_menu_overlay_key_primary()
+    except OSError as set_err:
+        error(f'Problem setting Cinnamon menu overlay-key:\n\t{set_err}')
+        return False
+
+    # Confirm: every menu instance file must now lead with the target
+    # binding. If there are no instance files at all, we cannot confirm,
+    # so report failure and let the manual dialog handle it.
+    instance_files_lst = _instance_files()
+    if not instance_files_lst:
+        return False
+
+    for file_path in instance_files_lst:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file_obj:
+                data_dct = _json.load(file_obj)
+        except (OSError, ValueError):
+            return False
+        key_obj = data_dct.get('overlay-key')
+        if not isinstance(key_obj, dict) or 'value' not in key_obj:
+            return False
+        first_alt = str(key_obj['value']).split('::')[0]
+        if first_alt != TARGET_PRIMARY_BINDING:
+            return False
+
+    return True
 
 
 def apply_tweaks_GNOME():
@@ -5716,6 +5796,10 @@ def remove_desktop_tweaks():
     if cnfg.DESKTOP_ENV == 'kde':
         print(f'Removing KDE Plasma desktop tweaks...')
         remove_tweaks_KDE()
+
+    if cnfg.DESKTOP_ENV == 'cinnamon':
+        print(f'Removing Cinnamon desktop tweaks...')
+        remove_tweaks_Cinnamon()
 
     print('Removed known desktop tweaks applied by installer.')
     show_task_completed_msg()
