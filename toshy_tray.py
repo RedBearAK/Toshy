@@ -163,8 +163,31 @@ def show_cinnamon_wayland_warning():
         error("Cinnamon Wayland has known bugs affecting tray icon menus (zenity not available).")
 
 
-# Cinnamon Wayland: Show warning about known tray menu bugs
-if DESKTOP_ENV == 'cinnamon' and SESSION_TYPE == 'wayland':
+def cinnamon_version_below(threshold_tup) -> bool:
+    """Compare the running Cinnamon version (from 'cinnamon --version',
+    e.g. 'Cinnamon 6.6.9') against a (major, minor) threshold. Returns
+    True when the version is known and BELOW the threshold; also returns
+    True when the version cannot be determined, so version-gated warnings
+    err toward still showing."""
+    try:
+        proc = subprocess.run(['cinnamon', '--version'],
+                                capture_output=True, text=True, timeout=5)
+        version_str = proc.stdout.strip().split()[-1]
+        parts_lst = version_str.split('.')
+        version_tup = (int(parts_lst[0]), int(parts_lst[1]))
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return True     # unknown version: keep showing the warning
+    return version_tup < threshold_tup
+
+
+# Cinnamon Wayland: Show warning about known tray menu bugs.
+# Cinnamon 6.8 ships the Wayland popup mapping fixes ("Proper mapping
+# (sizing and positioning) for new windows, applet popup menus and
+# context menus" -- Mint blog, next release scheduled around Christmas
+# 2026), so the warning is gated to versions below 6.8. If the fix turns
+# out incomplete, lower/adjust the threshold or remove the gate.
+if (DESKTOP_ENV == 'cinnamon' and SESSION_TYPE == 'wayland'
+        and cinnamon_version_below((6, 8))):
     show_cinnamon_wayland_warning()
 
 
