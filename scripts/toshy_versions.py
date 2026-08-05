@@ -277,7 +277,17 @@ components = [
     ("  ScDet: gsettings reader",   _sc_det_module('sc_det_gsettings.py'),    True),
     ("  ScDet: KDE rc reader",      _sc_det_module('sc_det_kde_rc.py'),       True),
     ("  ScDet: result model",       _sc_det_module('sc_det_result.py'),       True),
+    ("  ScDet: Spices reader",      _sc_det_module('sc_det_spices.py'),       True),
     ("  ScDet: xfconf reader",      _sc_det_module('sc_det_xfconf.py'),       True),
+    (None, None),                   # Spacing
+    ("Spotlight/Input (pkg)",       spotlight_input_pkg_path),
+    (None, None, True),             # Spacing (detailed output only)
+    ("  SpIn: __init__",            _spli_module('__init__.py'),              True),
+    ("  SpIn: __main__",            _spli_module('__main__.py'),              True),
+    ("  SpIn: defaults",            _spli_module('spli_defaults.py'),         True),
+    ("  SpIn: keymaps",             _spli_module('spli_keymaps.py'),          True),
+    ("  SpIn: readers",             _spli_module('spli_readers.py'),          True),
+    ("  SpIn: resolver",            _spli_module('spli_resolver.py'),         True),
     (None, None),                   # Spacing
     ("SysD Svc: Keymapper Config",  config_svc_path),
     ("SysD Svc: Session Monitor",   sessmon_svc_path),
