@@ -476,46 +476,6 @@ if not runtime.barebones_config:
     swap_spotlight_item.connect('toggled', save_prefs_settings)
     prefs_submenu.append(swap_spotlight_item)
 
-    # def load_capslock_mode_submenu_settings():
-    #     cnfg.load_settings()
-    #     active_item = capslock_mode_items_dct.get(cnfg.capslock_mode)
-    #     if active_item:
-    #         set_item_active_thread_safe(active_item, True)
-
-    # def save_capslock_mode_setting(menu_item, mode):
-    #     if not menu_item.get_active():
-    #         return
-
-    #     # Programmatic updates (settings monitor echoes, startup load) re-fire
-    #     # 'toggled'; cnfg has already auto-reloaded by then, so a no-change
-    #     # save here would just write the DB again and double the settings
-    #     # emission in the config's verbose log.
-    #     if cnfg.capslock_mode == mode:
-    #         return
-
-    #     cnfg.capslock_mode = mode
-    #     cnfg.save_settings()
-    #     load_capslock_mode_submenu_settings()
-
-    # # CapsLock Mode radio submenu (replaces legacy Caps2Cmd/Caps2Esc_Cmd toggles).
-    # # Items built from the canonical mode tuple; radio group provides exclusivity.
-    # capslock_mode_submenu = Gtk.Menu()
-    # capslock_mode_submenu_item = Gtk.MenuItem(label='CapsLock Mode')
-    # capslock_mode_submenu_item.set_submenu(capslock_mode_submenu)
-    # prefs_submenu.append(capslock_mode_submenu_item)
-
-    # capslock_mode_items_dct = {}
-    # group_capslock_mode = None
-    # for caps_mode in CAPSLOCK_MODES:
-    #     mode_label = CAPSLOCK_MODE_LABELS.get(caps_mode, caps_mode)
-    #     mode_item = Gtk.RadioMenuItem.new_with_label(group_capslock_mode, mode_label)
-    #     mode_item.connect('toggled', save_capslock_mode_setting, caps_mode)
-    #     capslock_mode_submenu.append(mode_item)
-    #     capslock_mode_items_dct[caps_mode] = mode_item
-    #     if group_capslock_mode is None:
-    #         group_capslock_mode = mode_item.get_group()
-
-
     prefs_submenu.append(Gtk.SeparatorMenuItem())
 
     super_tap_passthru_label_item = Gtk.MenuItem(label='--- Super Tap Passthru ---')
@@ -783,18 +743,27 @@ if not runtime.barebones_config:
     separator_below_kbtype_submenu_item = Gtk.SeparatorMenuItem()
     main_menu.append(separator_below_kbtype_submenu_item)  #-------------------------------------#
 
+###############################################################
+# Tools submenu
+tools_submenu   = Gtk.Menu()
+tools_item      = Gtk.MenuItem(label='Tools')
+tools_item.set_submenu(tools_submenu)
+main_menu.append(tools_item)
+
+if not runtime.barebones_config:
+
     preferences_item = Gtk.MenuItem(label="Open Preferences App")
     preferences_item.connect("activate", fn_open_preferences)
-    main_menu.append(preferences_item)
+    tools_submenu.append(preferences_item)
 
 open_config_folder_item = Gtk.MenuItem(label="Open Config Folder")
 open_config_folder_item.connect("activate", fn_open_config_folder)
-main_menu.append(open_config_folder_item)
+tools_submenu.append(open_config_folder_item)
 
 if runtime.is_systemd:
     show_services_log_item = Gtk.MenuItem(label="Show Services Log")
     show_services_log_item.connect("activate", fn_show_services_log)
-    main_menu.append(show_services_log_item)
+    tools_submenu.append(show_services_log_item)
 
 separator_above_remove_icon_item = Gtk.SeparatorMenuItem()
 main_menu.append(separator_above_remove_icon_item)  #-------------------------------------#
