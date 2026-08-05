@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260802'
+__version__ = '20260805'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -68,6 +68,15 @@ show_all_modules    = '--all' in user_args or '-a' in user_args
 # ~/.config/toshy/toshy_config.py
 # ~/.config/toshy/toshy_gui/main_gtk4.py
 # ~/.config/toshy/toshy_gui/main_tkinter.py
+
+    # ~/.config/toshy/toshy_common/terminal_menu/__init__.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_input.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_main.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_model.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_render.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_rgx.py
+    # ~/.config/toshy/toshy_common/terminal_menu/tmenu_term.py
+
 # ~/.config/toshy/toshy_tray.py
 
 # ~/.config/toshy/toshy_common/env_context.py
@@ -76,6 +85,7 @@ show_all_modules    = '--all' in user_args or '-a' in user_args
 # ~/.config/toshy/toshy_common/monitoring.py            # Monitors settings and services
 # ~/.config/toshy/toshy_common/notification_manager.py
 # ~/.config/toshy/toshy_common/overlay_context.py
+# ~/.config/toshy/toshy_common/preference_items.py
 # ~/.config/toshy/toshy_common/proc_launcher.py
 # ~/.config/toshy/toshy_common/process_manager.py
 # ~/.config/toshy/toshy_common/runtime_utils.py
@@ -124,6 +134,8 @@ preferences_app_gtk4    = os.path.join(toshy_dir_path,
                             'toshy_gui', 'main_gtk4.py')
 preferences_app_tk      = os.path.join(toshy_dir_path,
                             'toshy_gui', 'main_tkinter.py')
+terminal_menu_path      = os.path.join(toshy_dir_path,
+                            'toshy_common', 'terminal_menu')        # package dir
 tray_indicator_path     = os.path.join(toshy_dir_path,
                             'toshy_tray.py')
 
@@ -137,6 +149,8 @@ notification_mgr_path   = os.path.join(toshy_dir_path,
                             'toshy_common', 'notification_manager.py')
 overlay_context_path    = os.path.join(toshy_dir_path,
                             'toshy_common', 'overlay_context.py')
+preference_items_path   = os.path.join(toshy_dir_path,
+                            'toshy_common', 'preference_items.py')
 proc_launcher_path      = os.path.join(toshy_dir_path,
                             'toshy_common', 'proc_launcher.py')
 process_mgr_path        = os.path.join(toshy_dir_path,
@@ -216,10 +230,25 @@ def _spli_module(filename):
     return os.path.join(spotlight_input_pkg_path, filename)
 
 
+# Terminal Menu is a package; its per-module entries show only with --all.
+def _tmenu_module(filename):
+    return os.path.join(terminal_menu_path, filename)
+
+
 components = [
     ("Config File",                 config_file_path),
     ("Preferences App (GTK4)",      preferences_app_gtk4),
     ("Preferences App (Tk)",        preferences_app_tk),
+    ("Terminal Menu (pkg)",         terminal_menu_path),
+    (None, None, True),             # Spacing (detailed output only)
+    ("  TMenu: __init__",           _tmenu_module('__init__.py'),           True),
+    ("  TMenu: input",              _tmenu_module('tmenu_input.py'),        True),
+    ("  TMenu: main",               _tmenu_module('tmenu_main.py'),         True),
+    ("  TMenu: model",              _tmenu_module('tmenu_model.py'),        True),
+    ("  TMenu: render",             _tmenu_module('tmenu_render.py'),       True),
+    ("  TMenu: rgx patterns",       _tmenu_module('tmenu_rgx.py'),          True),
+    ("  TMenu: terminal ctrl",      _tmenu_module('tmenu_term.py'),         True),
+    (None, None, True),             # Spacing (detailed output only)
     ("Tray Indicator",              tray_indicator_path),
     (None, None),                   # Spacing
     ("Environment Context",         env_context_path),
@@ -227,6 +256,7 @@ components = [
     ("Modifier Modes",              modifier_modes_path),
     ("Notification Manager",        notification_mgr_path),
     ("Overlay Context",             overlay_context_path),
+    ("Preference Items",            preference_items_path),
     ("Process Launcher",            proc_launcher_path),
     ("Process Manager",             process_mgr_path),
     ("Runtime Utils",               runtime_utils_path),
