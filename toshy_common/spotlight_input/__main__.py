@@ -33,23 +33,10 @@ class _FakeCnfg:
     swap_spotlight_and_input = False
 
 
-def main() -> int:
-    prog_str = os.environ.get('TOSHY_LAUNCHER_NAME') or 'python3 -m toshy_common.spotlight_input'
-    parser = argparse.ArgumentParser(
-        prog=prog_str,
-        description='Show detected launcher and input-switching shortcuts '
-                    'and the keymaps Toshy would build from them.')
-    parser.add_argument('--de', metavar='DESKTOP_ENV', default=None)
-    parser.add_argument('--de-ver', metavar='DE_MAJ_VER', default=None)
-    args = parser.parse_args()
-
-    if args.de is not None:
-        desktop_env, de_maj_ver = args.de, args.de_ver
-        detect_note = 'command line override'
-    else:
-        desktop_env, de_maj_ver = _detect_environment()
-        detect_note = 'EnvironmentInfo detection'
-
+def run_report(desktop_env, de_maj_ver, detect_note='') -> int:
+    """Print the full detection report for one environment. Called by
+    main() here and by the generic toshy-detector-check dispatcher
+    (python3 -m toshy_common.shortcut_detect)."""
     print()
     print('Toshy Spotlight/input shortcut discovery')
     print(f"  Environment: DESKTOP_ENV={desktop_env!r}  DE_MAJ_VER={de_maj_ver!r}  ({detect_note})")
@@ -73,10 +60,30 @@ def main() -> int:
     ns_dct = api.namespace(
         DESKTOP_ENV=desktop_env, DE_MAJ_VER=de_maj_ver,
         iEF2NT=lambda: 'iEF2NT()', bind='bind', cnfg=_FakeCnfg())
-    setup_spotlight_input_keymaps(ns_dct)
+    setup_spotlight_input_keymaps(ns_dct, results_dct=results_dct)
     print_keymap_records(api.registered_lst)
     print()
     return 0
+
+
+def main() -> int:
+    prog_str = os.environ.get('TOSHY_LAUNCHER_NAME') or 'python3 -m toshy_common.spotlight_input'
+    parser = argparse.ArgumentParser(
+        prog=prog_str,
+        description='Show detected launcher and input-switching shortcuts '
+                    'and the keymaps Toshy would build from them.')
+    parser.add_argument('--de', metavar='DESKTOP_ENV', default=None)
+    parser.add_argument('--de-ver', metavar='DE_MAJ_VER', default=None)
+    args = parser.parse_args()
+
+    if args.de is not None:
+        desktop_env, de_maj_ver = args.de, args.de_ver
+        detect_note = 'command line override'
+    else:
+        desktop_env, de_maj_ver = _detect_environment()
+        detect_note = 'EnvironmentInfo detection'
+
+    return run_report(desktop_env, de_maj_ver, detect_note)
 
 
 if __name__ == '__main__':

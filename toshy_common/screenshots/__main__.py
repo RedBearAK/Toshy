@@ -52,12 +52,13 @@ def _detect_environment() -> 'tuple[str, str | None]':
     return (env_info_dct.get('DESKTOP_ENV'), env_info_dct.get('DE_MAJ_VER'))
 
 
-def _print_literal_keymaps(desktop_env, de_maj_ver):
+def _print_literal_keymaps(desktop_env, de_maj_ver, results_dct):
     print()
     print('Generated keymaps (literal; when= conditions supplied by the config):')
     api = RecordingAPI()
     setup_screenshot_keymaps(api.namespace(
-        DESKTOP_ENV=desktop_env, DE_MAJ_VER=de_maj_ver))
+        DESKTOP_ENV=desktop_env, DE_MAJ_VER=de_maj_ver),
+        results_dct=results_dct)
     print_keymap_records(api.registered_lst)
 
 
@@ -140,6 +141,28 @@ def _print_keymap_preview(results_dct: dict, desktop_env: str):
         print('    (no entries)')
 
 
+def run_report(desktop_env, de_maj_ver, detect_note='') -> int:
+    """Print the full detection report for one environment. Called by
+    main() here and by the generic toshy-detector-check dispatcher
+    (python3 -m toshy_common.shortcut_detect)."""
+    print()
+    print('Toshy screenshot shortcut discovery')
+    print(f"  Environment: DESKTOP_ENV='{desktop_env}'  DE_MAJ_VER='{de_maj_ver}'"
+            f'  ({detect_note})')
+    print()
+
+    results_dct = resolve_outputs(desktop_env, de_maj_ver)
+    print()
+    print('Slot resolution:')
+    _print_slot_table(results_dct)
+    print()
+    print('Keymap preview (default input combos):')
+    _print_keymap_preview(results_dct, desktop_env)
+    _print_literal_keymaps(desktop_env, de_maj_ver, results_dct)
+    print()
+    return 0
+
+
 def main() -> int:
     # Launcher stubs export TOSHY_LAUNCHER_NAME so --help shows the command
     # the user actually typed; direct module launch shows the module form.
@@ -156,29 +179,14 @@ def main() -> int:
 
     if args.de:
         desktop_env, de_maj_ver = (args.de, args.de_ver)
-        env_source_str = 'command-line override'
+        detect_note = 'command-line override'
     else:
         desktop_env, de_maj_ver = _detect_environment()
         if args.de_ver:
             de_maj_ver = args.de_ver
-        env_source_str = 'EnvironmentInfo detection'
+        detect_note = 'EnvironmentInfo detection'
 
-    print()
-    print('Toshy screenshot shortcut discovery')
-    print(f"  Environment: DESKTOP_ENV='{desktop_env}'  DE_MAJ_VER='{de_maj_ver}'"
-            f'  ({env_source_str})')
-    print()
-
-    results_dct = resolve_outputs(desktop_env, de_maj_ver)
-    print()
-    print('Slot resolution:')
-    _print_slot_table(results_dct)
-    print()
-    print('Keymap preview (default input combos):')
-    _print_keymap_preview(results_dct, desktop_env)
-    _print_literal_keymaps(desktop_env, de_maj_ver)
-    print()
-    return 0
+    return run_report(desktop_env, de_maj_ver, detect_note)
 
 
 if __name__ == '__main__':

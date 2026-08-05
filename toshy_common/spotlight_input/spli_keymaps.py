@@ -51,10 +51,14 @@ def _require(name_str, config_globals_dct):
     return obj
 
 
-def setup_spotlight_input_keymaps(config_globals_dct: dict, when=None) -> 'list':
+def setup_spotlight_input_keymaps(config_globals_dct: dict, when=None,
+                                    results_dct=None) -> 'list':
     """Build and register both arrangements of the Spotlight/input
     keymaps from resolved native shortcuts. Pass globals() and a base
-    when= conditional; the swap preference gating is composed in here."""
+    when= conditional; the swap preference gating is composed in here.
+    results_dct: pre-resolved slot results (from resolve_outputs) to use
+    instead of resolving internally; lets diagnostics resolve once and
+    reuse, avoiding duplicated resolution logging."""
     keymap  = _require('keymap', config_globals_dct)
     C       = _require('C', config_globals_dct)
     iEF2NT  = _require('iEF2NT', config_globals_dct)
@@ -68,7 +72,8 @@ def setup_spotlight_input_keymaps(config_globals_dct: dict, when=None) -> 'list'
             'setup_spotlight_input_keymaps() needs DESKTOP_ENV in the '
             'provided namespace. Pass the config globals() as the first argument.')
 
-    results_dct = resolve_outputs(desktop_env, de_maj_ver)
+    if results_dct is None:
+        results_dct = resolve_outputs(desktop_env, de_maj_ver)
 
     def _combo(slot_name):
         result = results_dct.get(slot_name)

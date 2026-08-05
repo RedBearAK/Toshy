@@ -270,6 +270,7 @@ components = [
     ("Shortcut Detection (pkg)",    shortcut_detect_pkg_path),
     (None, None, True),             # Spacing (detailed output only)
     ("  ScDet: __init__",           _sc_det_module('__init__.py'),           True),
+    ("  ScDet: __main__",           _sc_det_module('__main__.py'),           True),
     ("  ScDet: accel normalizer",   _sc_det_module('sc_det_accel.py'),        True),
     ("  ScDet: accel regexes",      _sc_det_module('sc_det_accel_rgx.py'),    True),
     ("  ScDet: cmd fallback",       _sc_det_module('sc_det_fallback.py'),     True),

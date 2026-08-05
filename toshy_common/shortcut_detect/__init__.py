@@ -20,6 +20,7 @@ helper carry it intrinsically; feature packages pass ctx='DT' only on
 their own one-off detection-related messages.
 
 Internal module layout:
+    __main__.py          generic detection check CLI (toshy-detector-check)
     sc_det_accel_rgx.py    compiled regex patterns for accel parsing
     sc_det_accel.py        KDE/GTK accelerator -> combo normalization
     sc_det_kde_rc.py       kglobalshortcutsrc component reader mechanics

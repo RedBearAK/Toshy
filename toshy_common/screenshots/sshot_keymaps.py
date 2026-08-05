@@ -32,7 +32,7 @@ Typical config usage (the entire config-side footprint):
 
     setup_screenshot_keymaps(globals(), when = lambda ctx: ...)
 """
-__version__ = '20260803'
+__version__ = '20260804'
 
 
 from toshy_common.logger import debug
@@ -116,7 +116,8 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
                                 input_combos_dct=None,
                                 enable_window_shift=True,
                                 window_shift_esc_first=None,
-                                enable_command_fallbacks=True) -> 'list':
+                                enable_command_fallbacks=True,
+                                results_dct=None) -> 'list':
     """Build and register screenshot keymaps for the current desktop
     environment. Returns the list of registered keymap objects.
 
@@ -133,7 +134,10 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
     enable_command_fallbacks: for slots with no native binding to emit,
     bind curated tool-launch commands from the library's per-DE table
     (e.g. Cinnamon's interactive UI). False disables all command
-    execution."""
+    execution.
+    results_dct: pre-resolved slot results (from resolve_outputs) to use
+    instead of resolving internally; lets diagnostics resolve once and
+    reuse, avoiding duplicated resolution logging."""
     required_names_lst = ['keymap', 'C', 'immediately']
     missing_names_lst = [name for name in required_names_lst
                             if config_globals_dct.get(name) is None]
@@ -169,7 +173,8 @@ def setup_screenshot_keymaps(config_globals_dct: dict, *, when=None,
     if input_combos_dct is None:
         input_combos_dct = DEFAULT_INPUT_COMBOS_DCT
 
-    results_dct = resolve_outputs(desktop_env, de_maj_ver)
+    if results_dct is None:
+        results_dct = resolve_outputs(desktop_env, de_maj_ver)
 
     def _resolved_combo(slot_name: str) -> 'str | None':
         result = results_dct.get(slot_name)

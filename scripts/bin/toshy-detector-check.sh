@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 
-# Show detected screenshot shortcuts and the keymaps Toshy would build
-# from them, after activating venv.
+# Show detected native shortcuts (screenshots, Spotlight/input switching,
+# and future detection schemes) and the keymaps Toshy would build from
+# them, after activating venv.
 
 # Check if the script is being run as root
 if [[ $EUID -eq 0 ]]; then
@@ -29,12 +30,12 @@ fi
 # shellcheck disable=SC1091
 source "${VENV_PATH}/bin/activate"
 
-# Launch the screenshots package diagnostic as a Python "module".
+# Launch the shortcut_detect package dispatcher as a Python "module".
 # TOSHY_LAUNCHER_NAME tells the module's argparse help to display the
 # command name as invoked (the ~/.local/bin symlink name), so a renamed
 # command automatically shows its new name.
 export PYTHONPATH="${HOME}/.config/toshy:${PYTHONPATH}"
 export TOSHY_LAUNCHER_NAME="${0##*/}"
-exec "${VENV_PATH}/bin/python" -m toshy_common.screenshots "$@"
+exec "${VENV_PATH}/bin/python" -m toshy_common.shortcut_detect "$@"
 
 # End of file #
