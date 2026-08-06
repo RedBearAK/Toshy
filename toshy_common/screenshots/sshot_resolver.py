@@ -44,6 +44,7 @@ from toshy_common.shortcut_detect import (
 from toshy_common.shortcut_detect.sc_det_accel_rgx import _rgx_combo_valid
 from toshy_common.screenshots.sshot_defaults import (
     CINNAMON_DEFAULTS_DCT,
+    COSMIC_DEFAULTS_DCT,
     GENERIC_DEFAULTS_DCT,
     GNOME_42_DEFAULTS_DCT,
     GNOME_LEGACY_DEFAULTS_DCT,
@@ -59,6 +60,7 @@ from toshy_common.screenshots.sshot_readers import (
     read_kde,
     read_mate,
     read_xfce,
+    read_cosmic,
 )
 
 
@@ -71,6 +73,7 @@ _FAMILY_TABLES_DCT = {
     'gnome':        None,   # version-dependent, handled in _defaults_for()
     'budgie':       GNOME_LEGACY_DEFAULTS_DCT,
     'cinnamon':     CINNAMON_DEFAULTS_DCT,
+    'cosmic':       COSMIC_DEFAULTS_DCT,
     'mate':         MATE_DEFAULTS_DCT,
     'xfce':         XFCE_DEFAULTS_DCT,
 }
@@ -115,6 +118,8 @@ def _run_reader(desktop_env_str: str, de_maj_ver: 'int | None') -> dict:
         return read_budgie()
     if desktop_env_str == 'cinnamon':
         return read_cinnamon()
+    if desktop_env_str == 'cosmic':
+        return read_cosmic()
     if desktop_env_str == 'mate':
         return read_mate()
     if desktop_env_str == 'xfce':

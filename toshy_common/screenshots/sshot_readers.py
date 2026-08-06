@@ -212,4 +212,18 @@ def read_xfce() -> dict:
 
     return results_dct
 
+# COSMIC: sole screenshot action System(Screenshot) in cosmic-config
+# layered RON files; Print by default. Reader mechanics shared with the
+# spotlight package (sc_det_cosmic).
+from toshy_common.shortcut_detect.sc_det_cosmic import read_cosmic_shortcuts
+
+_COSMIC_ACTION_SLOT_DCT = {
+    'Screenshot':   SLOT_INTERACTIVE_UI,
+}
+
+
+def read_cosmic() -> dict:
+    return read_cosmic_shortcuts(_COSMIC_ACTION_SLOT_DCT)
+
+
 # End of file #

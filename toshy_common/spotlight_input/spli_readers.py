@@ -5,7 +5,7 @@ toshy_common/spotlight_input/spli_readers.py
 Per-DE readers for launcher and input-source-switching shortcuts. Thin
 domain wrappers over toshy_common.shortcut_detect mechanics.
 """
-__version__ = '20260804'
+__version__ = '20260805'
 
 from toshy_common.logger import error
 from toshy_common.shortcut_detect import (
@@ -19,6 +19,7 @@ from toshy_common.shortcut_detect.sc_det_gsettings import (
     gsettings_get,
     parse_gvariant_accel_value,
 )
+from toshy_common.shortcut_detect.sc_det_cosmic import read_cosmic_shortcuts
 from toshy_common.shortcut_detect.sc_det_spices import read_spices_setting
 from toshy_common.spotlight_input.spli_defaults import (
     SLOT_INPUT_SWITCH_LAST,
@@ -144,11 +145,27 @@ def read_cinnamon() -> dict:
     return results_dct
 
 
+# COSMIC: shortcuts in cosmic-config layered RON files (no gsettings).
+# The sole input-switch action is System(InputSourceSwitch), default
+# Super+Space (cosmic-comp data/keybindings.ron line 102, 2026-08); a
+# forward cycle, so it maps to the 'next' slot. The launcher is
+# System(Launcher), default bare Super (modifier-only binding).
+_COSMIC_ACTION_SLOT_DCT = {
+    'InputSourceSwitch':    SLOT_INPUT_SWITCH_NEXT,
+    'Launcher':             SLOT_LAUNCHER_UI,
+}
+
+
+def read_cosmic() -> dict:
+    return read_cosmic_shortcuts(_COSMIC_ACTION_SLOT_DCT)
+
+
 READERS_DCT = {
     'kde':      lambda ver: read_kde(),
     'plasma':   lambda ver: read_kde(),
     'gnome':    read_gnome,
     'cinnamon': lambda ver: read_cinnamon(),
+    'cosmic':   lambda ver: read_cosmic(),
 }
 
 # End of file #
