@@ -309,6 +309,8 @@ components = [
     ("  ScDet: KDE rc reader",      _sc_det_module('sc_det_kde_rc.py'),       True),
     ("  ScDet: result model",       _sc_det_module('sc_det_result.py'),       True),
     ("  ScDet: Spices reader",      _sc_det_module('sc_det_spices.py'),       True),
+    ("  ScDet: COSMIC reader",      _sc_det_module('sc_det_cosmic.py'),       True),
+    ("  ScDet: COSMIC regexes",     _sc_det_module('sc_det_cosmic_rgx.py'),   True),
     ("  ScDet: xfconf reader",      _sc_det_module('sc_det_xfconf.py'),       True),
     (None, None),                   # Spacing
     ("Spotlight/Input (pkg)",       spotlight_input_pkg_path),

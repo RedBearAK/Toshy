@@ -207,7 +207,28 @@ CMD_OVERRIDES_DCT = {
     },
 }
 
+# COSMIC: the compositor binds exactly one screenshot action -- bare
+# Print -> System(Screenshot) (cosmic-comp data/keybindings.ron:114,
+# 2026-08), which the settings daemon maps to running 'cosmic-screenshot'
+# (cosmic-settings-daemon data/system_actions.ron). The tool has NO
+# per-mode flags (only --interactive/--modal/--notify/--save-dir,
+# verified in its main.rs clap args): output/window/rectangle selection
+# happens INSIDE the portal overlay UI. So per-mode native emission is
+# impossible; capture slots run the overlay via command fallbacks, and
+# only the interactive slot has a native shortcut to detect.
+COSMIC_DEFAULTS_DCT = {
+    SLOT_INTERACTIVE_UI:            'Print',
+}
+
 CMD_FALLBACKS_DCT = {
+    'cosmic': {
+        SLOT_FULLSCREEN_TO_FILE:        [['cosmic-screenshot']],
+        SLOT_FULLSCREEN_TO_CLIPBOARD:   [['cosmic-screenshot']],
+        SLOT_AREA_TO_FILE:              [['cosmic-screenshot']],
+        SLOT_AREA_TO_CLIPBOARD:         [['cosmic-screenshot']],
+        SLOT_WINDOW_TO_FILE:            [['cosmic-screenshot']],
+        SLOT_WINDOW_TO_CLIPBOARD:       [['cosmic-screenshot']],
+    },
     'cinnamon': {
         SLOT_INTERACTIVE_UI: [
             ['cinnamon-screenshot', '-i'],

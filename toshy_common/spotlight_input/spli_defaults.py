@@ -10,7 +10,7 @@ Defaults are seeded from Toshy's long-standing static per-DE remaps in
 the default config (battle-tested provenance), pending per-DE source
 verification passes.
 """
-__version__ = '20260804'
+__version__ = '20260805'
 
 
 SLOT_LAUNCHER_UI            = 'launcher_ui'
@@ -55,6 +55,9 @@ LAUNCHER_GNOME_PRE45 = 'Super-s'
 # Input switching defaults per DE: slot -> combo. KDE matches macOS
 # (primary = last-used); GNOME-family offers forward/backward cycling.
 INPUT_DEFAULTS_DCT = {
+    'cosmic': {
+        SLOT_INPUT_SWITCH_NEXT:     'Super-Space',
+    },
     'kde': {
         SLOT_INPUT_SWITCH_LAST:     'Alt-Super-L',
         SLOT_INPUT_SWITCH_NEXT:     'Alt-Super-K',
