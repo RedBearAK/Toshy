@@ -1132,6 +1132,7 @@ distro_groups_map = {
         'linuxmint',
         'lmde',
         'peppermint',
+        'pikaos',               # Debian-based gaming distro
         'q4os',
     ],
 
