@@ -15,7 +15,9 @@ from evdev import InputDevice, InputEvent, ecodes
 from evdev.eventio import EventIO
 
 from . import config_api, transform
-from .device_quirks import DeviceQuirk, initialize_device_quirks
+from .device_quirks import (
+    DeviceQuirk, initialize_device_quirks, shutdown_device_quirks
+)
 from .devices import DeviceFilter, DeviceGrabError, DeviceRegistry
 from .lib import logger
 from .lib.asyncio_utils import get_or_create_event_loop
@@ -32,6 +34,8 @@ _active_quirks_lst: 'list[DeviceQuirk]' = []
 
 
 def shutdown():
+    # Undo any device state a quirk is holding (e.g., Fn held on a Touch Bar Mac).
+    shutdown_device_quirks(_active_quirks_lst)
     loop = get_or_create_event_loop()
     loop.stop()
     transform.shutdown()

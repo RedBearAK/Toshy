@@ -669,6 +669,16 @@ toshy-fnmode --info             (show current status of fnmode)
 toshy-fnmode [--option] [mode]  (change fnmode non-interactively)
 ```
 
+On MacBooks with a Touch Bar (T1 or T2 models), the keymapper takes over the job of switching the Touch Bar between media keys and function keys while the `Fn` key is held. If the Touch Bar ever ends up showing the wrong set of keys, or you just want to change what it shows, use this command. It does nothing on machines without a supported Touch Bar driver:  
+
+```
+toshy-touchbar                  (show status, then change mode with prompts)
+toshy-touchbar --help           (show usage/options)
+toshy-touchbar --status         (show current Touch Bar mode, change nothing)
+toshy-touchbar --reset          (undo an interrupted Fn key mode switch)
+toshy-touchbar [mode]           (change mode non-interactively)
+```
+
 To activate the Toshy Python virtual environment for doing things like running the keymapper command directly instead of through one of the launcher scripts, it is necessary to first run this command:  
 
 ```
