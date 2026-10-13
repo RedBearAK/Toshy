@@ -259,9 +259,9 @@ class DeskflowMonitor(SharedDeviceMonitorInterface):
 
     def parse_log_line(self, line: str) -> 'bool | None':
         """Parse Deskflow log line for focus events"""
-        if "leaving screen" in line.lower():
+        if "leaving screen" in line.lower() or "leaving computer" in line.lower():
             return False
-        elif "entering screen" in line.lower():
+        elif "entering screen" in line.lower() or "entering computer" in line.lower():
             return True
         return None
 
@@ -436,9 +436,9 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
 
     def parse_log_line(self, line: str) -> Optional[bool]:
         """Parse Synergy log line for focus events"""
-        if "leaving screen" in line.lower():
+        if "leaving screen" in line.lower() or "leaving computer" in line.lower():
             return False
-        elif "entering screen" in line.lower():
+        elif "entering screen" in line.lower() or "entering computer" in line.lower():
             return True
         return None
 
