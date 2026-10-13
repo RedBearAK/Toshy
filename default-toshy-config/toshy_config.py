@@ -489,6 +489,7 @@ terminals = [
     "contour",
     "cutefish-terminal",
     "deepin-terminal",
+    "dev.limux.linux",
     "dev.warp.Warp",
     "eterm",
     ".*ghostty.*",
