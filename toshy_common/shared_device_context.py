@@ -258,11 +258,10 @@ class DeskflowMonitor(SharedDeviceMonitorInterface):
         return None
 
     def parse_log_line(self, line: str) -> 'bool | None':
-        """Parse legacy 'screen' and newer 'computer' focus messages."""
-        text = line.lower()
-        if "leaving screen" in text or "leaving computer" in text:
+        """Parse Deskflow log line for focus events"""
+        if "leaving screen" in line.lower() or "leaving computer" in line.lower():
             return False
-        elif "entering screen" in text or "entering computer" in text:
+        elif "entering screen" in line.lower() or "entering computer" in line.lower():
             return True
         return None
 
