@@ -503,6 +503,7 @@ terminals = [
     "kitty",
     "Kgx",
     "konsole",
+    "dev.limux.linux",
     "lxterminal",
     "mate-terminal",
     "MateTerminal",
