@@ -198,6 +198,9 @@ def receive_input(device: EventIO):
 
         on_event(event, device)
 
+    # The registry inspects the batch after the fact (stuck-key repair).
+    return events
+
 
 _add_timer: Optional[TimerHandle] = None
 _notify_events = []
