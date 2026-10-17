@@ -445,13 +445,12 @@ class DeviceRegistry:
         idle_ok = await self._wait_for_device_idle(device, max_idle_wait, quiet_period)
 
         if not idle_ok:
-            # Check if it's because of timeout vs device error
+            # Check if it's because of timeout vs device error. Keys still held
+            # are reported once, by the post-grab check below, which has the
+            # fresher reading; only the no-keys-held case is logged here.
             try:
                 active = device.active_keys()
-                if active:
-                    info(f"Device '{device.name}' still has keys held after {max_idle_wait}s: {active}")
-                    info("Grabbing anyway - stuck keys will be repaired when released")
-                else:
+                if not active:
                     info(f"Device '{device.name}' had continuous activity for {max_idle_wait}s")
                     info("Grabbing anyway - user may experience input glitches")
             except OSError:

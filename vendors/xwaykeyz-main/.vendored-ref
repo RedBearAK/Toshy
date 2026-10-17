@@ -2,5 +2,5 @@
 # The upstream repo is the source of truth; local changes are overwritten on sync.
 url=https://github.com/RedBearAK/xwaykeyz
 branch=main
-sha=7d6904cf64dee3bb52f1cea75040ae943bc8fe32
-synced=2026-08-03T06:34:45Z
+sha=4dfe0e5af5bdfec01f2dedfd9fbf3be95a181622
+synced=2026-10-17T09:31:33Z
