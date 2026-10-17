@@ -28,7 +28,18 @@ _synth_id_prefix_rgx = re.compile(
 
 
 def check_input_permissions():
-    """Check if user has appropriate permissions to /dev/input/ without requiring a keyboard"""
+    """
+    Advisory check of the user's access to '/dev/input/' event nodes.
+
+    Returns a (perms_ok, message) tuple. The check fails only when NO event
+    node is readable and writable, which usually means the user is not in the
+    'input' group or the udev rule has not been applied. A node that just
+    appeared (e.g. a Bluetooth device reconnecting at login) stays root-only
+    for a moment until udev applies the group/mode/ACL, so a few inaccessible
+    nodes alongside accessible ones is normal and is reported as a warning
+    message with perms_ok still True. Devices.all() skips nodes it cannot
+    open, and the inotify ATTRIB handler grabs them once udev fixes them.
+    """
 
     # Check if /dev/input/ directory exists and is accessible
     if not os.path.exists('/dev/input'):
@@ -41,23 +52,30 @@ def check_input_permissions():
         if not device_files:
             return True, "'/dev/input/' directory is empty but accessible"
 
-        # Check permissions on at least one event device if available
-        for file in device_files:
-            if file.startswith('event'):
-                event_path = f'/dev/input/{file}'
+        event_nodes = [f for f in device_files if f.startswith('event')]
+        if not event_nodes:
+            return True, "No event devices found, but '/dev/input/' is accessible"
 
-                # Check read permission
-                if not os.access(event_path, os.R_OK):
-                    return False, f"No read permission on '{event_path}'"
+        inaccessible = []
+        for file in event_nodes:
+            event_path = f'/dev/input/{file}'
+            if not os.access(event_path, os.R_OK | os.W_OK):
+                inaccessible.append(file)
 
-                # Check write permission
-                if not os.access(event_path, os.W_OK):
-                    return False, f"No write permission on '{event_path}'"
+        if len(inaccessible) == len(event_nodes):
+            return False, (
+                f"No read/write access to any of the {len(event_nodes)} "
+                f"event device(s) in '/dev/input/'"
+            )
 
-                # Found at least one accessible event device
-                return True, None
+        if inaccessible:
+            return True, (
+                f"{len(inaccessible)} of {len(event_nodes)} event device(s) not yet "
+                f"accessible (udev may still be applying permissions): {inaccessible}"
+            )
 
-        return True, "No event devices found, but '/dev/input/' is accessible"
+        # Every event device is accessible
+        return True, None
 
     except PermissionError as e:
         return False, f"Permission error accessing '/dev/input/': {e}"
@@ -199,6 +217,10 @@ class DeviceRegistry:
         self._loop: AbstractEventLoop = loop
         self._input_cb = input_cb
         self._filter: DeviceFilter = filterer
+        # Keys pressed on each grabbed device since we grabbed it, by device
+        # path. A release of any OTHER key means its press reached the desktop
+        # before the grab, so the desktop still has that key down.
+        self._down_since_grab: dict = {}
 
     def __contains__(self, device):
         return device in self._devices
@@ -208,7 +230,9 @@ class DeviceRegistry:
 
     def _safe_input_cb(self, device):
         try:
-            self._input_cb(device)
+            events = self._input_cb(device)
+            if isinstance(events, list) and isinstance(device, InputDevice):
+                self._repair_stuck_keys(device, events)
         except OSError as e:
             if e.errno == errno.ENODEV:
                 error(f"ENODEV on '{device.name}' ({device.path}) - device removed")
@@ -224,14 +248,18 @@ class DeviceRegistry:
         Async version of autodetect - finds keyboards and grabs them,
         waiting for each device to be idle (no keys held) before grabbing.
         """
-        # First check permissions independently of device availability
+        # Advisory permission check. This must NOT return early: a single node
+        # that udev has not fixed up yet would otherwise block grabbing every
+        # keyboard that IS accessible. Devices.all() skips what it cannot open,
+        # and the hotplug handler grabs nodes once their permissions change.
         perms_ok, perms_msg = check_input_permissions()
         if not perms_ok:
             error(f"Input permission issue: {perms_msg}")
-            error("Please ensure you have r/w permissions on /dev/input/*")
-            # Continue running instead of exiting, but log clearly
-            info("Waiting for permissions to be fixed...")
-            return
+            error("Please ensure you have r/w permissions on /dev/input/* "
+                  "(membership in 'input' group, udev rules applied)")
+            info("Continuing anyway. Devices will be grabbed if/when they become accessible.")
+        elif perms_msg:
+            info(f"Input permission note: {perms_msg}")
 
         # Get all available devices (regardless of type)
         all_devices = Devices.all()
@@ -317,10 +345,89 @@ class DeviceRegistry:
         # Timed out
         return False
 
+    @staticmethod
+    def _drain_buffered_events(device: InputDevice):
+        """
+        Discard events queued on our fd. Called right after a grab: anything
+        buffered at that point also reached the desktop directly, so replaying
+        it would type those keys twice.
+        """
+        try:
+            while device.read_one() is not None:
+                pass
+        except BlockingIOError:
+            pass
+        except OSError:
+            pass
+
+    def _repair_stuck_keys(self, device: InputDevice, events: list):
+        """
+        Clear keys stuck down in the desktop because their press reached it
+        before our grab, and their release reached only us.
+
+        libinput only accepts a release from the device that pressed the key,
+        and the kernel drops a release for a key it already has up. So inject
+        a press and a release into the device's own evdev node while
+        ungrabbed: libinput ignores the press (it has the key down already)
+        and takes the release. Only keyboard keys, never mouse buttons or
+        touchpad touches.
+        """
+        down = self._down_since_grab.get(device.path)
+        if down is None:
+            return
+
+        stuck = []
+        for event in events:
+            if not isinstance(event, InputEvent):
+                continue
+            if event.type != ecodes.EV_KEY or event.code >= ecodes.BTN_MISC:
+                continue
+            if event.value == 1:
+                down.add(event.code)
+            elif event.value == 0:
+                if event.code in down:
+                    down.discard(event.code)
+                else:
+                    stuck.append(event.code)
+
+        if not stuck:
+            return
+
+        info(f"Releasing keys stuck in the desktop from '{device.name}': {stuck}")
+        try:
+            device.ungrab()
+            for code in stuck:
+                device.write(ecodes.EV_KEY, code, 1)
+                device.write(ecodes.EV_SYN, ecodes.SYN_REPORT, 0)
+                device.write(ecodes.EV_KEY, code, 0)
+                device.write(ecodes.EV_SYN, ecodes.SYN_REPORT, 0)
+            # Everything queued while ungrabbed, our injected events included,
+            # also reached the desktop directly.
+            self._drain_buffered_events(device)
+        except OSError as err:
+            error(f"{err.__class__.__name__} repairing stuck keys on '{device.name}': {err}")
+
+        try:
+            device.grab()
+        except OSError as err:
+            # Ungrabbed but still being read by us would double every keystroke.
+            # Drop the device entirely; hotplug handling can bring it back.
+            error(f"{err.__class__.__name__} re-grabbing '{device.name}' after repair: {err}")
+            self.ungrab(device)
+
     async def grab(self, device):
         """
         Async grab that waits for device to be idle before grabbing.
-        This prevents state corruption when users have keys held during startup.
+
+        A grab must not span a key release the desktop is waiting for. If a
+        key goes down before the grab and comes up after it, the desktop saw
+        the press but only we get the release, and libinput then treats the
+        key as held forever (ignoring every later press of it, from any
+        device). So: wait for idle, grab, then verify with the kernel's exact
+        key state. If anything is held, let go so the release reaches the
+        desktop, wait for idle again, and retry. Past the time budget we grab
+        anyway and _repair_stuck_keys() clears the key when its release
+        arrives.
         """
         if not isinstance(device, InputDevice):
             return
@@ -330,26 +437,30 @@ class DeviceRegistry:
         # ─── WAIT FOR DEVICE TO BE IDLE ─────────────────────────────────────────────
         # Wait for sustained quiet period with no keys held and no buffered events.
         # This catches both held keys and rapid tap-tap-tap patterns.
-        
+
         max_idle_wait           = 5.0       # Maximum seconds to wait for device to be idle
         quiet_period            = 0.15      # Require 150ms of silence before grabbing
-        
+        held_deadline           = time.monotonic() + max_idle_wait
+
         idle_ok = await self._wait_for_device_idle(device, max_idle_wait, quiet_period)
-        
+
         if not idle_ok:
-            # Check if it's because of timeout vs device error
+            # Check if it's because of timeout vs device error. Keys still held
+            # are reported once, by the post-grab check below, which has the
+            # fresher reading; only the no-keys-held case is logged here.
             try:
                 active = device.active_keys()
-                if active:
-                    info(f"Device '{device.name}' still has keys held after {max_idle_wait}s: {active}")
-                else:
+                if not active:
                     info(f"Device '{device.name}' had continuous activity for {max_idle_wait}s")
-                info("Grabbing anyway - user may experience input glitches")
+                    info("Grabbing anyway - user may experience input glitches")
             except OSError:
                 error(f"Device '{device.name}' disappeared while waiting for idle")
                 return
 
         # ─── ATTEMPT GRAB WITH RETRIES ──────────────────────────────────────────────
+        # Grab immediately after the idle wait. Any delay here reopens the window
+        # for a key to go down before the grab. Sleep only before retrying after
+        # a failed grab (EBUSY from another grabber, permissions not settled, etc).
         tries                   = 9
         loop_cnt                = 1
         delay                   = 0.2
@@ -357,27 +468,63 @@ class DeviceRegistry:
 
         while loop_cnt <= tries:
             try:
-                await asyncio.sleep(delay)
                 device.grab()
-                # Only add reader AFTER successful grab - this is the key fix!
-                # Previously add_reader was called before grab, creating a window
-                # where events could arrive before we had exclusive access.
-                self._loop.add_reader(device, self._safe_input_cb, device)
-                self._devices.append(device)
-                info(f"Successfully grabbed '{device.name}' ({device.path})", ctx="+K")
-                return
             except OSError as err:
                 # OSError also inherits/catches PermissionError and IOError
                 error(f"{err.__class__.__name__} grabbing '{device.name}' ({device.path})")
                 error(f"Grab attempt {loop_cnt} of {tries}. The error was:\n\t{err}")
-            loop_cnt           += 1
-            delay               = min(delay * 2, delay_max)   # exponential backoff strategy
+                loop_cnt       += 1
+                await asyncio.sleep(delay)
+                delay           = min(delay * 2, delay_max)   # exponential backoff strategy
+                continue
+
+            # Grabbed. From here on only we receive this device's events.
+            self._drain_buffered_events(device)
+
+            try:
+                held = device.active_keys()
+            except OSError:
+                error(f"Device '{device.name}' disappeared right after grab")
+                try:
+                    device.ungrab()
+                except OSError:
+                    pass
+                return
+
+            if held and time.monotonic() < held_deadline:
+                # Kernel state is exact here: these keys went down before the
+                # grab, so the desktop saw the press and needs the release.
+                # The deadline shares the idle-wait budget, so a key held the
+                # whole time costs max_idle_wait in total, not twice that.
+                try:
+                    device.ungrab()
+                except OSError:
+                    pass
+                info(f"Keys held on '{device.name}' at grab: {held}. "
+                     f"Released grab so the desktop gets the key release, retrying.")
+                await self._wait_for_device_idle(device,
+                                                 held_deadline - time.monotonic(),
+                                                 quiet_period)
+                continue
+
+            if held:
+                info(f"Keys still held on '{device.name}' after {max_idle_wait}s: {held}")
+                info("Grabbing anyway - stuck keys will be repaired when released")
+
+            self._down_since_grab[device.path] = set()
+            # Only add reader AFTER successful grab, so no events arrive before
+            # we have exclusive access (and before the drain above).
+            self._loop.add_reader(device, self._safe_input_cb, device)
+            self._devices.append(device)
+            info(f"Successfully grabbed '{device.name}' ({device.path})", ctx="+K")
+            return
 
         error(f"Device grab was tried {tries} times and failed. Maybe, another instance is running?")
         error(f"Continuing without device: '{device.name}' ({device.path})")
 
     def ungrab(self, device: InputDevice):
         info(f"Ungrabbing: '{device.name}' (removed)", ctx="-K")
+        self._down_since_grab.pop(device.path, None)
         self._loop.remove_reader(device)
         if device in self._devices:
             self._devices.remove(device)

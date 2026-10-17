@@ -2,6 +2,8 @@
 
 # Script to change the function keys mode of keyboards that use `hid_apple` device driver
 
+SCRIPT_VERSION='20261001'
+
 
 safe_shutdown() {
     local exit_code=0
@@ -69,6 +71,7 @@ fn_show_help() {
     echo "Options:"
     echo "  -P, --persistent    Make the mode change persistent across reboots."
     echo "  -i, --info          Show current live and persistent state, and exit."
+    echo "  -V, --version       Show the version of this script and exit."
     echo "  -h, --help          Show this help message and exit."
     echo ""
     echo "Arguments:"
@@ -251,6 +254,11 @@ while (( $# )); do
             ;;
         -i|--info)
             fn_show_info
+            safe_shutdown
+            ;;
+        -V|--version)
+            echo ""
+            echo "toshy-fnmode version ${SCRIPT_VERSION}"
             safe_shutdown
             ;;
         -P|--persistent)
