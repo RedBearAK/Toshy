@@ -6101,8 +6101,10 @@ keymap("General GUI", {
     C("Fn-Numlock"):            toggle_forced_numpad,           # Turn the Forced Numpad feature on and off
     C("Numlock"):               isNumlockClearKey,              # Numlock key is "Clear" (Esc) if cnfg.forced_numpad is True
 
-    C("Shift-RC-Left_Brace"):   C("C-Page_Up"),                 # Tab navigation: Go to prior (left) tab
-    C("Shift-RC-Right_Brace"):  C("C-Page_Down"),               # Tab navigation: Go to next (right) tab
+    # Tab navigation in browsers/terminals; elsewhere preserve native Ctrl+Shift+bracket.
+    # Blanket Ctrl+PgUp/PgDn mapping hijacks actions such as object stacking in editors.
+    C("Shift-RC-Left_Brace"):   lambda ctx: C("C-Page_Up") if (hmp_is_browser(ctx) or hmp_is_terminal(ctx)) else C("Shift-C-Left_Brace"),
+    C("Shift-RC-Right_Brace"):  lambda ctx: C("C-Page_Down") if (hmp_is_browser(ctx) or hmp_is_terminal(ctx)) else C("Shift-C-Right_Brace"),
     C("RC-Space"):             [iEF2NT(),C("Alt-F1")],          # Default SL - Launch Application Menu (gnome/kde)
     C("RC-F3"):                 C("Super-d"),                   # Default SL - Show Desktop (gnome/kde,elementary)
     C("RC-Super-f"):            C("Alt-F10"),                   # Default SL - Maximize app (gnome/kde)
