@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20260726'
+__version__ = '20261023'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -5221,7 +5221,9 @@ keymap("Cmd+W dialog fix - Alt+F4", {
 ### Various fixes for supporting tab navigation shortcuts like Shift+Cmd+Braces
 
 
+# Apps that use Ctrl+Shift+Tab/Ctrl+Tab for tab nav (Shift+Cmd+Braces remap)
 tab_UI_fix_CtrlShiftTab_lst = [
+    "ai.storyteller.figcraft",
     "com.raggesilver.BlackBox",
     "com.system76.CosmicTerm",
     "org.gnome.Console|Console",
@@ -5231,6 +5233,19 @@ tab_UI_fix_CtrlShiftTab_lst = [
     "Kgx",
 ]
 tab_UI_fix_CtrlShiftTab_Str = toRgxStr(tab_UI_fix_CtrlShiftTab_lst)
+
+# Apps where Shift+Cmd+Left/Right should ALSO do Ctrl+Shift+Tab/Ctrl+Tab tab nav.
+# Overrides "Extend Selection to Beginning/End of Line" from General GUI, so no text-editing apps here.
+tab_UI_fix_CtrlShiftTab_arrows_lst = [
+    "com.raggesilver.BlackBox",
+    "com.system76.CosmicTerm",
+    "org.gnome.Console|Console",
+    "deepin-terminal",
+    "hyper",
+    "kitty",
+    "Kgx",
+]
+tab_UI_fix_CtrlShiftTab_arrows_Str = toRgxStr(tab_UI_fix_CtrlShiftTab_arrows_lst)
 
 tab_UI_fix_CtrlAltPgUp_lst = [
     "gedit",
@@ -5266,12 +5281,21 @@ hmp_is_tab_UI_fix_CtrlShiftTab  = matchProps(clas=tab_UI_fix_CtrlShiftTab_Str)
 keymap("Tab Nav fix for apps that use Ctrl+Shift+Tab/Ctrl+Tab", {
     C("Shift-RC-Left_Brace"):  [bind,C("C-Shift-Tab")],         # Tab nav: Go to prior tab (left)
     C("Shift-RC-Right_Brace"): [bind,C("C-Tab")],               # Tab nav: Go to next tab (right)
+}, when = lambda ctx:
+    cnfg.screen_has_focus and
+    ctx_ovl_dialog_ergo and
+    hmp_is_tab_UI_fix_CtrlShiftTab(ctx)
+)
+
+# Shift+Cmd+Left/Right tab navigation for apps that use Ctrl+Shift+Tab/Ctrl+Tab (not for text-editing apps)
+hmp_is_tab_UI_fix_CtrlShiftTab_arrows = matchProps(clas=tab_UI_fix_CtrlShiftTab_arrows_Str)
+keymap("Tab Nav fix for apps that use Ctrl+Shift+Tab/Ctrl+Tab - Shift+Cmd+Arrows", {
     C("Shift-RC-Left"):        [bind,C("C-Shift-Tab")],         # Tab nav: Go to prior tab (left)
     C("Shift-RC-Right"):       [bind,C("C-Tab")],               # Tab nav: Go to next tab (right)
 }, when = lambda ctx:
     cnfg.screen_has_focus and
     ctx_ovl_dialog_ergo and
-    hmp_is_tab_UI_fix_CtrlShiftTab(ctx)
+    hmp_is_tab_UI_fix_CtrlShiftTab_arrows(ctx)
 )
 
 # Tab navigation overrides for tabbed UI apps that use Ctrl+Alt+PgUp/PgDn instead of Ctrl+PgUp/PgDn
