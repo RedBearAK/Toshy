@@ -5238,6 +5238,29 @@ tab_UI_fix_CtrlAltPgUp_lst = [
 ]
 tab_UI_fix_CtrlAltPgUp_Str = toRgxStr(tab_UI_fix_CtrlAltPgUp_lst)
 
+# Apps that need literal Ctrl+Shift+[ / ] instead of the Shift+Cmd+Braces tab nav remaps.
+# Usually Adobe-like "Send to Back / Bring to Front", or Excel-like "select all precedents/dependents".
+tab_nav_braces_exempt_lst = [
+    "ai.storyteller.deckcraft",                 # Arrange: Send to Back / Bring to Front
+    "ai.storyteller.designcraft",               # Arrange: Send to Back / Bring to Front
+    "ai.storyteller.filmcraft",                 # Arrange: Send to Back / Bring to Front
+    "ai.storyteller.gridcraft",                 # Select all precedents / all dependents
+    "ai.storyteller.photocraft",                # Layer arrange: Send to Back / Bring to Front
+    "ai.storyteller.vectorcraft",               # Arrange: Send to Back / Bring to Front
+]
+tab_nav_braces_exempt_Str = toRgxStr(tab_nav_braces_exempt_lst)
+
+# Exempt listed apps from ALL Shift+Cmd+Braces tab nav remaps (must precede "Tab Nav fix" keymaps)
+hmp_is_tab_nav_braces_exempt    = matchProps(clas=tab_nav_braces_exempt_Str)
+keymap("Tab Nav exemption - literal Shift+Cmd+Braces", {
+    C("Shift-RC-Left_Brace"):   C("C-Shift-Left_Brace"),        # Literal Ctrl+Shift+[ (not tab nav)
+    C("Shift-RC-Right_Brace"):  C("C-Shift-Right_Brace"),       # Literal Ctrl+Shift+] (not tab nav)
+}, when = lambda ctx:
+    cnfg.screen_has_focus and
+    not ctx_app_is_remote and
+    hmp_is_tab_nav_braces_exempt(ctx)
+)
+
 # Tab navigation overrides for tabbed UI apps that use Ctrl+Shift+Tab/Ctrl+Tab instead of Ctrl+PgUp/PgDn
 hmp_is_tab_UI_fix_CtrlShiftTab  = matchProps(clas=tab_UI_fix_CtrlShiftTab_Str)
 keymap("Tab Nav fix for apps that use Ctrl+Shift+Tab/Ctrl+Tab", {
@@ -6101,10 +6124,8 @@ keymap("General GUI", {
     C("Fn-Numlock"):            toggle_forced_numpad,           # Turn the Forced Numpad feature on and off
     C("Numlock"):               isNumlockClearKey,              # Numlock key is "Clear" (Esc) if cnfg.forced_numpad is True
 
-    # Tab navigation in browsers/terminals; elsewhere preserve native Ctrl+Shift+bracket.
-    # Blanket Ctrl+PgUp/PgDn mapping hijacks actions such as object stacking in editors.
-    C("Shift-RC-Left_Brace"):   lambda ctx: C("C-Page_Up") if (hmp_is_browser(ctx) or hmp_is_terminal(ctx)) else C("Shift-C-Left_Brace"),
-    C("Shift-RC-Right_Brace"):  lambda ctx: C("C-Page_Down") if (hmp_is_browser(ctx) or hmp_is_terminal(ctx)) else C("Shift-C-Right_Brace"),
+    C("Shift-RC-Left_Brace"):   C("C-Page_Up"),                 # Tab navigation: Go to prior (left) tab
+    C("Shift-RC-Right_Brace"):  C("C-Page_Down"),               # Tab navigation: Go to next (right) tab
     C("RC-Space"):             [iEF2NT(),C("Alt-F1")],          # Default SL - Launch Application Menu (gnome/kde)
     C("RC-F3"):                 C("Super-d"),                   # Default SL - Show Desktop (gnome/kde,elementary)
     C("RC-Super-f"):            C("Alt-F10"),                   # Default SL - Maximize app (gnome/kde)
