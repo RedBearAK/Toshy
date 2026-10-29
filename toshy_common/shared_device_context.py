@@ -25,43 +25,93 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from toshy_common.logger import debug, error, warn
-from toshy_common.shared_device_log_rgx import log_timestamp_rgx
+from toshy_common.shared_device_log_rgx import log_timestamp_rgx, iso_timestamp_rgx
 from toshy_common.deskflow_pgrep_patterns import (
     deskflow_core_client_rgx,
     deskflow_core_server_rgx,
 )
 
 
-LEGACY_TS_FORMAT_SPACE = '%Y-%m-%d %H:%M:%S'
-LEGACY_TS_FORMAT_T = '%Y-%m-%dT%H:%M:%S'
+ISO_TS_FORMAT = '%Y-%m-%dT%H:%M:%S'
+
+# Epoch values above this are read as milliseconds rather than seconds. In
+# seconds it is the year 5138; in milliseconds it is March 1973.
+EPOCH_MILLISECONDS_THRESHOLD = 1e11
 
 
-def parse_legacy_timestamp_local(ts_str: str) -> 'float | None':
+def parse_log_timestamp(ts_str: str, naive_is_utc: bool = False) -> 'float | None':
     """
-    Parse a bare 'YYYY-MM-DD HH:MM:SS' or 'YYYY-MM-DDTHH:MM:SS' string as
-    LOCAL time and return epoch seconds, or None if it does not parse.
+    Parse an ISO-8601 / RFC 3339 style date-time string and return epoch
+    seconds (float), or None if it does not parse.
+
+    Accepted shapes, so that upstream changes of mind do not break us:
+
+        2026-10-28T17:36:20            naive (see naive_is_utc)
+        2026-10-28 17:36:20            space separator
+        2026-10-28T17:36:20.041Z       fractional seconds, any length, '.' or ','
+        2026-10-28T17:36:20Z           'Z' or 'z' = UTC
+        2026-10-28T17:36:20-08:00      numeric offset, also '+0530' and '+05'
+        2026-10-28 17:36:20 +0000      whitespace before the offset
+
+    A naive stamp (no zone designator) is read as local time by default,
+    which is what the legacy plain-text logs have always meant. Callers
+    that know their source writes UTC pass naive_is_utc=True.
+
+    :param ts_str: The date-time string
+    :param naive_is_utc: How to read a stamp that carries no zone designator
+    :returns: Epoch seconds, or None if the string is not a valid timestamp
     """
-    format_str = LEGACY_TS_FORMAT_SPACE if ' ' in ts_str else LEGACY_TS_FORMAT_T
+    match = iso_timestamp_rgx.fullmatch(ts_str)
+    if not match:
+        return None
+    (year, month, day, hour, minute, second,
+        fraction, zulu, offset_sign, offset_hours, offset_minutes) = match.groups()
+
     try:
-        return time.mktime(time.strptime(ts_str, format_str))
+        struct = time.strptime(
+            f'{year}-{month}-{day}T{hour}:{minute}:{second}', ISO_TS_FORMAT)
     except ValueError:
         return None
 
+    fraction_secs = float(f'0.{fraction}') if fraction else 0.0
 
-def parse_iso_timestamp_utc(ts_str: str) -> 'float | None':
+    if zulu:
+        return calendar.timegm(struct) + fraction_secs
+
+    if offset_sign:
+        offset_hrs_int = int(offset_hours)
+        offset_min_int = int(offset_minutes) if offset_minutes else 0
+        if offset_hrs_int > 23 or offset_min_int > 59:
+            return None
+        offset_secs = offset_hrs_int * 3600 + offset_min_int * 60
+        if offset_sign == '-':
+            offset_secs = -offset_secs
+        return calendar.timegm(struct) - offset_secs + fraction_secs
+
+    if naive_is_utc:
+        return calendar.timegm(struct) + fraction_secs
+    return time.mktime(struct) + fraction_secs
+
+
+def epoch_from_json_value(ts_value) -> 'float | None':
     """
-    Parse an ISO-8601 UTC string like '2026-10-28T17:36:20.041Z' and return
-    epoch seconds, or None if it does not parse. Fractional seconds are
-    dropped. Only strings explicitly marked UTC (trailing 'Z') are accepted;
-    anything else is handed back as None so the caller can fall through to
-    local-time parsing rather than silently misreading the zone.
+    Turn the timestamp field of a JSON log entry into epoch seconds.
+
+    A string goes through parse_log_timestamp() with naive stamps read as
+    UTC, since JSON logs that omit the zone designator are conventionally
+    UTC. A number is taken as an epoch in seconds, or in milliseconds when
+    it is too large to be seconds. Anything else (bool, None, nested) gives
+    None.
     """
-    if not ts_str.endswith('Z'):
+    if isinstance(ts_value, bool):
         return None
-    try:
-        return float(calendar.timegm(time.strptime(ts_str[:19], LEGACY_TS_FORMAT_T)))
-    except ValueError:
-        return None
+    if isinstance(ts_value, (int, float)):
+        if ts_value > EPOCH_MILLISECONDS_THRESHOLD:
+            return ts_value / 1000.0
+        return float(ts_value)
+    if isinstance(ts_value, str):
+        return parse_log_timestamp(ts_value, naive_is_utc=True)
+    return None
 
 
 class SharedDeviceMonitorInterface(abc.ABC):
@@ -111,9 +161,10 @@ class SharedDeviceMonitorInterface(abc.ABC):
         Pull a timestamp out of a log line and return it as epoch seconds.
 
         Default behavior covers the legacy plain-text format shared by all
-        supported software: a bracketed local-time stamp. Subclasses override
-        this when their software writes a different format or a different
-        time zone (see SynergyMonitor for the Synergy 3.9+ JSON Lines case).
+        supported software: a bracketed stamp, read as local time unless it
+        carries its own zone designator. Subclasses override this when their
+        software writes a different format (see SynergyMonitor for the
+        Synergy 3.9+ JSON Lines case).
 
         :param line: A line from the log file
         :returns: Epoch seconds, or None if no parseable timestamp was found
@@ -121,7 +172,7 @@ class SharedDeviceMonitorInterface(abc.ABC):
         timestamp_match = log_timestamp_rgx.search(line)
         if not timestamp_match:
             return None
-        return parse_legacy_timestamp_local(timestamp_match.group(1))
+        return parse_log_timestamp(timestamp_match.group(1))
 
     @abc.abstractmethod
     def is_server(self) -> bool:
@@ -456,6 +507,10 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
     LOG_NAME_JSONL = 'synergy.jsonl'
     LOG_NAME_LEGACY = 'synergy.log'
 
+    # Keys that may hold the timestamp in a JSON Lines entry, in the order
+    # they are tried. Synergy 3.9 uses 'ts'; the rest are common alternatives.
+    JSONL_TIMESTAMP_KEYS = ('ts', 'time', 'timestamp', '@timestamp')
+
     def __init__(self):
         self.process_names = ['synergy', 'synergys', 'synergyc', 'synergy-core']
         self.server_process_names = ['synergys', 'synergy', 'synergy-core']  # 'synergy' can be both
@@ -517,8 +572,9 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
 
     def extract_line_timestamp(self, line: str) -> 'float | None':
         """
-        JSON Lines entries carry an ISO-8601 UTC 'ts' field; anything else is
-        handed to the base class legacy local-time parser.
+        JSON Lines entries carry an ISO-8601 'ts' field, UTC unless it says
+        otherwise; anything that is not JSON is handed to the base class
+        legacy parser.
         """
         if not line.lstrip().startswith('{'):
             return super().extract_line_timestamp(line)
@@ -528,10 +584,11 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
             return None
         if not isinstance(entry, dict):
             return None
-        ts_value = entry.get('ts')
-        if not isinstance(ts_value, str):
-            return None
-        return parse_iso_timestamp_utc(ts_value)
+        for key in self.JSONL_TIMESTAMP_KEYS:
+            if key not in entry:
+                continue
+            return epoch_from_json_value(entry[key])
+        return None
 
     def is_running(self):
         """Check if any Synergy process is running"""
