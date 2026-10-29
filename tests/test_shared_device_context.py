@@ -7,6 +7,8 @@ support: the 'synergy.jsonl' vs 'synergy.log' sibling preference by mtime,
 UTC parsing of JSON Lines timestamps versus local parsing of legacy stamps,
 tolerance for ISO-8601 variants (offsets, fractions, separators) in both,
 focus-event parsing of both formats, and the once-only "ignoring" debug line.
+The process time zone is pinned to Asia/Kolkata so results do not depend on
+the machine running the tests.
 
 Runnable standalone (accumulates a score in main) and collectable by
 pytest (bool-returning test functions).
@@ -21,6 +23,14 @@ import calendar
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
+# Pin the process time zone BEFORE importing the module under test or computing
+# any expected epoch. The bug these tests guard against (UTC stamps read as
+# local) is invisible on a machine whose local zone is UTC, and the handler
+# test only catches it east of UTC. Kolkata is east of UTC with a half-hour
+# offset, so hour-granular mistakes and sign mistakes both show up.
+os.environ['TZ'] = 'Asia/Kolkata'
+time.tzset()
 
 # Stub the logger BEFORE importing the module under test. Sibling test files
 # install their own stubs of 'toshy_common.logger' (without 'warn') into
