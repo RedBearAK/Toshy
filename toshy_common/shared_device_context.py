@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260318'
+__version__ = '20261028'
 
 # NOTE: This new context module for monitoring keyboard-mouse sharing software was
 # originally produced by Claude 3.7 Sonnet, based on the window_context module in
@@ -392,25 +392,54 @@ class DeskflowMonitor(SharedDeviceMonitorInterface):
 class SynergyMonitor(SharedDeviceMonitorInterface):
     """Monitor for Synergy software"""
 
+    LOG_NAME_JSONL = 'synergy.jsonl'    # Synergy 3.9+ (JSON Lines)
+    LOG_NAME_LEGACY = 'synergy.log'     # Older versions (plain text)
+
     def __init__(self):
         self.process_names = ['synergy', 'synergys', 'synergyc', 'synergy-core']
         self.server_process_names = ['synergys', 'synergy', 'synergy-core']  # 'synergy' can be both
         self.client_process_names = ['synergyc', 'synergy', 'synergy-core']  # 'synergy' can be both
-        self.log_paths = [
+
+        # Synergy 3.9+ writes JSON Lines to 'synergy.jsonl'; older versions write
+        # plain text to 'synergy.log'. Both names are checked in every directory,
+        # and get_active_log_file_paths() drops the legacy log wherever the newer
+        # one exists alongside it.
+        log_dirs = [
             # Observed in the wild
-            os.path.expanduser("~/.local/state/Synergy/synergy.log"),
+            os.path.expanduser("~/.local/state/Synergy"),
             # Additional possibilities
-            os.path.expanduser("~/.local/share/Synergy/synergy.log"),
-            os.path.expanduser("~/.config/Synergy/synergy.log"),
-            os.path.expanduser("~/synergy.log"),
+            os.path.expanduser("~/.local/share/Synergy"),
+            os.path.expanduser("~/.config/Synergy"),
+            os.path.expanduser("~"),
             # Older versions
-            os.path.expanduser("~/.synergy/synergy.log"),
+            os.path.expanduser("~/.synergy"),
+        ]
+        self.log_paths = [
+            os.path.join(log_dir, log_name)
+            for log_dir in log_dirs
+            for log_name in (self.LOG_NAME_JSONL, self.LOG_NAME_LEGACY)
         ]
         self._server_status = None  # Cache for server status
 
     @classmethod
     def get_supported_software(cls):
         return ['synergy']
+
+    def get_active_log_file_paths(self, max_age_hours=8) -> List[Tuple[str, float]]:
+        """
+        Same as the base implementation, except that a legacy 'synergy.log' is
+        skipped whenever a 'synergy.jsonl' exists in the same directory, so only
+        the current log format gets watched on Synergy 3.9+.
+        """
+        preferred_logs = []
+        for path, score in super().get_active_log_file_paths(max_age_hours):
+            if os.path.basename(path) == self.LOG_NAME_LEGACY:
+                jsonl_sibling = os.path.join(os.path.dirname(path), self.LOG_NAME_JSONL)
+                if os.path.exists(jsonl_sibling):
+                    debug(f"Ignoring legacy log file {path} (newer {jsonl_sibling} exists)")
+                    continue
+            preferred_logs.append((path, score))
+        return preferred_logs
 
     def is_running(self):
         """Check if any Synergy process is running"""
