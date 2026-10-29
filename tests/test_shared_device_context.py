@@ -23,9 +23,11 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 # Stub the logger BEFORE importing the module under test. Sibling test files
-# install their own stubs of 'toshy_common.logger' (without 'warn'), and the
-# one installed first wins when pytest collects the whole folder in one
-# process, so this file carries a complete stub of its own.
+# install their own stubs of 'toshy_common.logger' (without 'warn') into
+# sys.modules, and whichever stub is present when shared_device_context is
+# first imported is the one it binds to. When pytest collects the whole
+# folder in one process that may be a sibling's stub, so this file installs
+# a complete one of its own just before the import.
 _fake_logger = types.ModuleType('toshy_common.logger')
 _fake_logger.debug = lambda *args, **kwargs: None
 _fake_logger.error = lambda *args, **kwargs: None
@@ -228,6 +230,24 @@ def test_timestamp_syntax_variants() -> bool:
             '{"other":"2026-10-28T17:36:20Z","msg":"entering screen"}'
         all_ok = _report(f'json reject {label_str} -> None',
                          mon.extract_line_timestamp(line) is None) and all_ok
+
+    # Hostile numeric and structural shapes: None back, never an exception,
+    # because an exception here would kill the watchdog observer thread.
+    hostile_lst = [
+        ('huge integer ts',  _jsonl('1' + '0' * 400)),
+        ('NaN ts',           _jsonl('NaN')),
+        ('Infinity ts',      _jsonl('Infinity')),
+        ('-Infinity ts',     _jsonl('-Infinity')),
+        ('deeply nested',    '{"msg":' + '[' * 200000),
+    ]
+    for label_str, line in hostile_lst:
+        try:
+            result = mon.extract_line_timestamp(line)
+            ok = result is None
+        except Exception as exc:
+            print(f'        raised {type(exc).__name__}')
+            ok = False
+        all_ok = _report(f'json hostile {label_str} -> None, no exception', ok) and all_ok
 
     # Legacy path: a stamp that carries its own offset is honored regardless
     # of the machine's zone; a bare stamp stays local as before.

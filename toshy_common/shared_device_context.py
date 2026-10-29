@@ -16,6 +16,7 @@ __version__ = '20261029'
 import os
 import abc
 import json
+import math
 import time
 import calendar
 import subprocess
@@ -106,9 +107,18 @@ def epoch_from_json_value(ts_value) -> 'float | None':
     if isinstance(ts_value, bool):
         return None
     if isinstance(ts_value, (int, float)):
-        if ts_value > EPOCH_MILLISECONDS_THRESHOLD:
-            return ts_value / 1000.0
-        return float(ts_value)
+        # JSON allows integers of any size, and Python's json module also
+        # accepts NaN and Infinity. None of those is a usable timestamp, and
+        # an unguarded float() of a huge int raises OverflowError.
+        try:
+            epoch_secs = float(ts_value)
+        except OverflowError:
+            return None
+        if not math.isfinite(epoch_secs):
+            return None
+        if epoch_secs > EPOCH_MILLISECONDS_THRESHOLD:
+            return epoch_secs / 1000.0
+        return epoch_secs
     if isinstance(ts_value, str):
         return parse_log_timestamp(ts_value, naive_is_utc=True)
     return None
@@ -507,8 +517,9 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
     LOG_NAME_JSONL = 'synergy.jsonl'
     LOG_NAME_LEGACY = 'synergy.log'
 
-    # Keys that may hold the timestamp in a JSON Lines entry, in the order
-    # they are tried. Synergy 3.9 uses 'ts'; the rest are common alternatives.
+    # Keys that may hold the timestamp in a JSON Lines entry. The first key
+    # present in the entry is the one consulted; later names are not tried
+    # as fallbacks. Synergy 3.9 uses 'ts'; the rest are common alternatives.
     JSONL_TIMESTAMP_KEYS = ('ts', 'time', 'timestamp', '@timestamp')
 
     def __init__(self):
@@ -580,7 +591,11 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
             return super().extract_line_timestamp(line)
         try:
             entry = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):
+            # ValueError covers malformed JSON; RecursionError is what a
+            # pathologically deep nesting raises. Either way the line has
+            # no usable timestamp, and raising here would kill the watchdog
+            # observer thread that calls into this method.
             return None
         if not isinstance(entry, dict):
             return None
