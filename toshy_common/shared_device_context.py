@@ -215,7 +215,7 @@ class SharedDeviceMonitorInterface(abc.ABC):
                 # If file is very old, give it a low score but still include it
                 if age_hours > max_age_hours:
                     score = 0.1  # Very low but non-zero score
-                    debug(f"Log file {path} is old (modified {age_hours:.1f} hours ago)")
+                    debug(f"Log file '{path}' is old (modified {age_hours:.1f} hours ago)")
                 else:
                     # Score based on recency (newer files get higher scores)
                     # 1.0 for just modified, approaching 0.1 as age approaches max_age_hours
@@ -234,7 +234,7 @@ class SharedDeviceMonitorInterface(abc.ABC):
 
                 log_files.append((path, score))
             except Exception as e:
-                error(f"Error checking log file {path}: {e}")
+                error(f"Error checking log file '{path}': {e}")
 
         # Sort by score (descending)
         return sorted(log_files, key=lambda x: x[1], reverse=True)
@@ -275,7 +275,7 @@ class SharedDeviceMonitorInterface(abc.ABC):
                     newest_timestamp = line_timestamp
 
             if newest_timestamp is None:
-                debug(f"No valid timestamps found in log file {log_path}")
+                debug(f"No valid timestamps found in log file '{log_path}'")
                 return 0.1  # Very low but non-zero score
 
             # Calculate age in hours
@@ -286,7 +286,7 @@ class SharedDeviceMonitorInterface(abc.ABC):
                 score = 1.0 - (0.9 * age_hours / max_age_hours)
                 return score
             else:
-                debug(f"Log file {log_path} has no recent entries (newest is {age_hours:.1f} hours old)")
+                debug(f"Log file '{log_path}' has no recent entries (newest is {age_hours:.1f} hours old)")
                 return 0.0
         except Exception as e:
             error(f"Error checking log file activity: {e}")
@@ -366,7 +366,7 @@ class DeskflowMonitor(SharedDeviceMonitorInterface):
         if active_logs:
             path, score = active_logs[0]
             if score < 0.5:
-                warn(f"Log file {path} seems to be inactive (activity score: {score:.2f})")
+                warn(f"Log file '{path}' seems to be inactive (activity score: {score:.2f})")
             return path
         return None
 
@@ -569,7 +569,7 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
             try:
                 jsonl_newer = os.path.getmtime(path) >= os.path.getmtime(legacy_sibling)
             except OSError as e:
-                error(f"Error comparing Synergy log file ages in {os.path.dirname(path)}: {e}")
+                error(f"Error comparing Synergy log file ages in '{os.path.dirname(path)}': {e}")
                 continue
             stale_paths.add(legacy_sibling if jsonl_newer else path)
 
@@ -577,7 +577,7 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
             if stale_path in self._announced_stale_logs:
                 continue
             self._announced_stale_logs.add(stale_path)
-            debug(f"Ignoring Synergy log file {stale_path} (a newer sibling log exists)")
+            debug(f"Ignoring Synergy log file '{stale_path}' (a newer sibling log exists)")
 
         return [(path, score) for path, score in scored_logs if path not in stale_paths]
 
@@ -623,7 +623,7 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
         if active_logs:
             path, score = active_logs[0]
             if score < 0.5:
-                warn(f"Log file {path} seems to be inactive (activity score: {score:.2f})")
+                warn(f"Log file '{path}' seems to be inactive (activity score: {score:.2f})")
             return path
         return None
 
@@ -685,7 +685,7 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
             try:
                 file_size = os.path.getsize(log_path)
                 if file_size < 50:  # Less than 50 bytes
-                    warn(f"Found empty/minimal log file: {log_path}. Server detection may be unreliable.")
+                    warn(f"Found empty/minimal log file: '{log_path}'. Server detection may be unreliable.")
 
                 # Only check the first 50 lines for server initialization messages
                 with open(log_path, 'r') as f:
@@ -746,7 +746,7 @@ class InputLeapMonitor(SharedDeviceMonitorInterface):
         if active_logs:
             path, score = active_logs[0]
             if score < 0.5:
-                warn(f"Log file {path} seems to be inactive (activity score: {score:.2f})")
+                warn(f"Log file '{path}' seems to be inactive (activity score: {score:.2f})")
             return path
         return None
 
@@ -810,7 +810,7 @@ class InputLeapMonitor(SharedDeviceMonitorInterface):
             try:
                 file_size = os.path.getsize(log_path)
                 if file_size < 50:  # Less than 50 bytes
-                    warn(f"Found empty/minimal log file: {log_path}. Server detection may be unreliable.")
+                    warn(f"Found empty/minimal log file: '{log_path}'. Server detection may be unreliable.")
 
                 # Only check the first 50 lines for server initialization messages
                 with open(log_path, 'r') as f:
@@ -884,7 +884,7 @@ class BarrierMonitor(SharedDeviceMonitorInterface):
         if active_logs:
             path, score = active_logs[0]
             if score < 0.5:
-                warn(f"Log file {path} seems to be inactive (activity score: {score:.2f})")
+                warn(f"Log file '{path}' seems to be inactive (activity score: {score:.2f})")
             return path
         return None
 
@@ -953,7 +953,7 @@ class BarrierMonitor(SharedDeviceMonitorInterface):
             try:
                 file_size = os.path.getsize(log_path)
                 if file_size < 50:  # Less than 50 bytes
-                    warn(f"Found empty/minimal log file: {log_path}. Server detection may be unreliable.")
+                    warn(f"Found empty/minimal log file: '{log_path}'. Server detection may be unreliable.")
 
                 # Only check the first 50 lines for server initialization messages
                 with open(log_path, 'r') as f:
@@ -1045,7 +1045,7 @@ class LogWatcherHandler(FileSystemEventHandler):
 
                     # Ignore entries from before we started monitoring
                     if line_timestamp < self.startup_time:
-                        debug(f"Ignoring focus event from before monitor startup: {line_to_process}")
+                        debug(f"Ignoring focus event from before monitor startup: '{line_to_process}'")
                         continue
 
                 # Process the line for focus change events
@@ -1164,13 +1164,13 @@ class SharedDeviceContext:
             if len(active_logs) > 1:
                 debug(f"Found multiple potential log files for {', '.join(supported_software)}:")
                 for path, score in active_logs:
-                    debug(f"  - {path} (activity score: {score:.2f})")
+                    debug(f"  - '{path}' (activity score: {score:.2f})")
 
             # Monitor all potential log files, but prefer the most likely active ones
             for log_path, score in active_logs:
                 log_dir = os.path.dirname(log_path)
                 if not os.path.exists(log_dir):
-                    warn(f"Log directory does not exist: {log_dir}")
+                    warn(f"Log directory does not exist: '{log_dir}'")
                     continue
 
                 # Create a handler for this log file
@@ -1188,11 +1188,11 @@ class SharedDeviceContext:
 
                 if os.path.exists(log_path):
                     if score < 0.5:
-                        warn(f"Monitoring possibly inactive log file: {log_path} (score: {score:.2f})")
+                        warn(f"Monitoring possibly inactive log file: '{log_path}' (score: {score:.2f})")
                     else:
-                        debug(f"Monitoring log file: {log_path} (score: {score:.2f})")
+                        debug(f"Monitoring log file: '{log_path}' (score: {score:.2f})")
                 else:
-                    debug(f"Watching for future log file: {log_path}")
+                    debug(f"Watching for future log file: '{log_path}'")
 
         # Start the observer if we have any handlers
         if self.handlers:
@@ -1250,7 +1250,7 @@ class SharedDeviceContext:
                     top_path, top_score = active_logs[0]
                     # If we found a highly active log we're not currently monitoring, refresh
                     if top_score > 0.8 and top_path not in self.handlers:
-                        debug(f"Health check: Found new active log file: {top_path}")
+                        debug(f"Health check: Found new active log file: '{top_path}'")
                         return False
         else:
             # For clients, check if we might actually be a server
