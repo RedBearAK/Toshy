@@ -1,25 +1,67 @@
 #!/usr/bin/env python3
-__version__ = '20261028'
+"""
+toshy_common/shared_device_context.py
+
+Focus tracking for keyboard-mouse sharing (KVM) software: Synergy, Deskflow,
+Input Leap and Barrier. Detects which software is running, whether this
+machine is the server, and watches the server's log file for screen
+enter/leave events so the keymapper can stand down when focus is elsewhere.
+"""
+__version__ = '20261029'
 
 # NOTE: This new context module for monitoring keyboard-mouse sharing software was
 # originally produced by Claude 3.7 Sonnet, based on the window_context module in
 # the keymapper (xwaykeyz) as a template. [2025-02-25]
 
 import os
-import re
 import abc
+import json
 import time
+import calendar
 import subprocess
 
-from typing import List, Optional, Set, Callable, Tuple
+from collections.abc import Callable
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
 from toshy_common.logger import debug, error, warn
+from toshy_common.shared_device_log_rgx import log_timestamp_rgx
 from toshy_common.deskflow_pgrep_patterns import (
-    deskflow_core_server_rgx,
     deskflow_core_client_rgx,
+    deskflow_core_server_rgx,
 )
+
+
+LEGACY_TS_FORMAT_SPACE = '%Y-%m-%d %H:%M:%S'
+LEGACY_TS_FORMAT_T = '%Y-%m-%dT%H:%M:%S'
+
+
+def parse_legacy_timestamp_local(ts_str: str) -> 'float | None':
+    """
+    Parse a bare 'YYYY-MM-DD HH:MM:SS' or 'YYYY-MM-DDTHH:MM:SS' string as
+    LOCAL time and return epoch seconds, or None if it does not parse.
+    """
+    format_str = LEGACY_TS_FORMAT_SPACE if ' ' in ts_str else LEGACY_TS_FORMAT_T
+    try:
+        return time.mktime(time.strptime(ts_str, format_str))
+    except ValueError:
+        return None
+
+
+def parse_iso_timestamp_utc(ts_str: str) -> 'float | None':
+    """
+    Parse an ISO-8601 UTC string like '2026-10-28T17:36:20.041Z' and return
+    epoch seconds, or None if it does not parse. Fractional seconds are
+    dropped. Only strings explicitly marked UTC (trailing 'Z') are accepted;
+    anything else is handed back as None so the caller can fall through to
+    local-time parsing rather than silently misreading the zone.
+    """
+    if not ts_str.endswith('Z'):
+        return None
+    try:
+        return float(calendar.timegm(time.strptime(ts_str[:19], LEGACY_TS_FORMAT_T)))
+    except ValueError:
+        return None
 
 
 class SharedDeviceMonitorInterface(abc.ABC):
@@ -55,7 +97,7 @@ class SharedDeviceMonitorInterface(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def parse_log_line(self, line: str) -> Optional[bool]:
+    def parse_log_line(self, line: str) -> 'bool | None':
         """
         Parses a line from the log file to determine if it indicates a focus change.
 
@@ -63,6 +105,23 @@ class SharedDeviceMonitorInterface(abc.ABC):
         :returns: True if focus entered, False if focus left, None if not a focus change event
         """
         pass
+
+    def extract_line_timestamp(self, line: str) -> 'float | None':
+        """
+        Pull a timestamp out of a log line and return it as epoch seconds.
+
+        Default behavior covers the legacy plain-text format shared by all
+        supported software: a bracketed local-time stamp. Subclasses override
+        this when their software writes a different format or a different
+        time zone (see SynergyMonitor for the Synergy 3.9+ JSON Lines case).
+
+        :param line: A line from the log file
+        :returns: Epoch seconds, or None if no parseable timestamp was found
+        """
+        timestamp_match = log_timestamp_rgx.search(line)
+        if not timestamp_match:
+            return None
+        return parse_legacy_timestamp_local(timestamp_match.group(1))
 
     @abc.abstractmethod
     def is_server(self) -> bool:
@@ -73,7 +132,7 @@ class SharedDeviceMonitorInterface(abc.ABC):
         """
         pass
 
-    def get_active_log_file_paths(self, max_age_hours=8) -> List[Tuple[str, float]]:
+    def get_active_log_file_paths(self, max_age_hours=8) -> 'list[tuple[str, float]]':
         """
         Returns all existing log file paths sorted by likelihood of being active.
 
@@ -148,18 +207,11 @@ class SharedDeviceMonitorInterface(abc.ABC):
             newest_timestamp = None
 
             for line in lines:
-                timestamp_match = re.search(r'(?:.*\[|\[)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})(?:\])?', line)
-                if timestamp_match:
-                    line_time_str = timestamp_match.group(1)
-                    try:
-                        format_str = "%Y-%m-%d %H:%M:%S" if " " in line_time_str else "%Y-%m-%dT%H:%M:%S"
-                        line_time = time.strptime(line_time_str, format_str)
-                        line_timestamp = time.mktime(line_time)
-
-                        if newest_timestamp is None or line_timestamp > newest_timestamp:
-                            newest_timestamp = line_timestamp
-                    except ValueError:
-                        pass
+                line_timestamp = self.extract_line_timestamp(line)
+                if line_timestamp is None:
+                    continue
+                if newest_timestamp is None or line_timestamp > newest_timestamp:
+                    newest_timestamp = line_timestamp
 
             if newest_timestamp is None:
                 debug(f"No valid timestamps found in log file {log_path}")
@@ -390,20 +442,24 @@ class DeskflowMonitor(SharedDeviceMonitorInterface):
 
 
 class SynergyMonitor(SharedDeviceMonitorInterface):
-    """Monitor for Synergy software"""
+    """Monitor for Synergy software
 
-    LOG_NAME_JSONL = 'synergy.jsonl'    # Synergy 3.9+ (JSON Lines)
-    LOG_NAME_LEGACY = 'synergy.log'     # Older versions (plain text)
+    Synergy 3.9+ writes JSON Lines to 'synergy.jsonl' with UTC timestamps:
+
+        {"ts":"2026-10-28T17:36:20.041Z","source":"core","level":"INFO","msg":"entering screen"}
+
+    Older versions write plain text to 'synergy.log' with local-time stamps.
+    Both names are checked in every candidate directory; where both exist
+    side by side only the more recently modified one is watched.
+    """
+
+    LOG_NAME_JSONL = 'synergy.jsonl'
+    LOG_NAME_LEGACY = 'synergy.log'
 
     def __init__(self):
         self.process_names = ['synergy', 'synergys', 'synergyc', 'synergy-core']
         self.server_process_names = ['synergys', 'synergy', 'synergy-core']  # 'synergy' can be both
         self.client_process_names = ['synergyc', 'synergy', 'synergy-core']  # 'synergy' can be both
-
-        # Synergy 3.9+ writes JSON Lines to 'synergy.jsonl'; older versions write
-        # plain text to 'synergy.log'. Both names are checked in every directory,
-        # and get_active_log_file_paths() drops the legacy log wherever the newer
-        # one exists alongside it.
         log_dirs = [
             # Observed in the wild
             os.path.expanduser("~/.local/state/Synergy"),
@@ -420,26 +476,62 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
             for log_name in (self.LOG_NAME_JSONL, self.LOG_NAME_LEGACY)
         ]
         self._server_status = None  # Cache for server status
+        self._announced_stale_logs = set()  # Paths already reported as superseded
 
     @classmethod
     def get_supported_software(cls):
         return ['synergy']
 
-    def get_active_log_file_paths(self, max_age_hours=8) -> List[Tuple[str, float]]:
+    def get_active_log_file_paths(self, max_age_hours=8) -> 'list[tuple[str, float]]':
         """
-        Same as the base implementation, except that a legacy 'synergy.log' is
-        skipped whenever a 'synergy.jsonl' exists in the same directory, so only
-        the current log format gets watched on Synergy 3.9+.
+        Same as the base implementation, except that when 'synergy.jsonl' and
+        'synergy.log' both exist in one directory, only the more recently
+        modified of the two is kept. This picks the current format on
+        Synergy 3.9+ and does not get stuck on a stale '.jsonl' after a
+        downgrade.
         """
-        preferred_logs = []
-        for path, score in super().get_active_log_file_paths(max_age_hours):
-            if os.path.basename(path) == self.LOG_NAME_LEGACY:
-                jsonl_sibling = os.path.join(os.path.dirname(path), self.LOG_NAME_JSONL)
-                if os.path.exists(jsonl_sibling):
-                    debug(f"Ignoring legacy log file {path} (newer {jsonl_sibling} exists)")
-                    continue
-            preferred_logs.append((path, score))
-        return preferred_logs
+        scored_logs = super().get_active_log_file_paths(max_age_hours)
+        existing_paths = {path for path, _ in scored_logs}
+        stale_paths = set()
+
+        for path in existing_paths:
+            if os.path.basename(path) != self.LOG_NAME_JSONL:
+                continue
+            legacy_sibling = os.path.join(os.path.dirname(path), self.LOG_NAME_LEGACY)
+            if legacy_sibling not in existing_paths:
+                continue
+            try:
+                jsonl_newer = os.path.getmtime(path) >= os.path.getmtime(legacy_sibling)
+            except OSError as e:
+                error(f"Error comparing Synergy log file ages in {os.path.dirname(path)}: {e}")
+                continue
+            stale_paths.add(legacy_sibling if jsonl_newer else path)
+
+        for stale_path in sorted(stale_paths):
+            if stale_path in self._announced_stale_logs:
+                continue
+            self._announced_stale_logs.add(stale_path)
+            debug(f"Ignoring Synergy log file {stale_path} (a newer sibling log exists)")
+
+        return [(path, score) for path, score in scored_logs if path not in stale_paths]
+
+    def extract_line_timestamp(self, line: str) -> 'float | None':
+        """
+        JSON Lines entries carry an ISO-8601 UTC 'ts' field; anything else is
+        handed to the base class legacy local-time parser.
+        """
+        if not line.lstrip().startswith('{'):
+            return super().extract_line_timestamp(line)
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            return None
+        if not isinstance(entry, dict):
+            return None
+        ts_value = entry.get('ts')
+        if not isinstance(ts_value, str):
+            return None
+        return parse_iso_timestamp_utc(ts_value)
 
     def is_running(self):
         """Check if any Synergy process is running"""
@@ -463,7 +555,7 @@ class SynergyMonitor(SharedDeviceMonitorInterface):
             return path
         return None
 
-    def parse_log_line(self, line: str) -> Optional[bool]:
+    def parse_log_line(self, line: str) -> 'bool | None':
         """Parse Synergy log line for focus events"""
         if "leaving screen" in line.lower() or "leaving computer" in line.lower():
             return False
@@ -586,7 +678,7 @@ class InputLeapMonitor(SharedDeviceMonitorInterface):
             return path
         return None
 
-    def parse_log_line(self, line: str) -> Optional[bool]:
+    def parse_log_line(self, line: str) -> 'bool | None':
         """Parse Input Leap log line for focus events"""
         if "leaving screen" in line.lower():
             return False
@@ -724,7 +816,7 @@ class BarrierMonitor(SharedDeviceMonitorInterface):
             return path
         return None
 
-    def parse_log_line(self, line: str) -> Optional[bool]:
+    def parse_log_line(self, line: str) -> 'bool | None':
         """
         Parse Barrier log line for focus events
 
@@ -813,11 +905,14 @@ class BarrierMonitor(SharedDeviceMonitorInterface):
 class LogWatcherHandler(FileSystemEventHandler):
     """Handler for log file changes"""
 
-    def __init__(self, log_path: str, parse_func: Callable[[str], Optional[bool]],
-                    on_focus_change: Callable[[bool], None]):
+    def __init__(self, log_path: str,
+                    parse_func: 'Callable[[str], bool | None]',
+                    timestamp_func: 'Callable[[str], float | None]',
+                    on_focus_change: 'Callable[[bool], None]'):
         super().__init__()
         self.log_path = log_path
         self.parse_func = parse_func
+        self.timestamp_func = timestamp_func
         self.on_focus_change = on_focus_change
         self.last_position = 0
         self.initialized = False
@@ -867,28 +962,19 @@ class LogWatcherHandler(FileSystemEventHandler):
             for line in lines:
                 line_to_process = line.strip()
 
-                # Try to extract a timestamp from the log line
-                timestamp_match = re.search(r'(?:.*\[|\[)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})(?:\])?', line_to_process)
+                # Try to extract a timestamp from the log line (epoch seconds).
+                # A line with no parseable timestamp is processed anyway.
+                line_timestamp = self.timestamp_func(line_to_process)
 
-                if timestamp_match:
-                    line_time_str = timestamp_match.group(1)
-                    try:
-                        # Handle both formats: '2025-02-24 18:13:23' and '2025-02-24T18:13:23'
-                        format_str = "%Y-%m-%d %H:%M:%S" if " " in line_time_str else "%Y-%m-%dT%H:%M:%S"
-                        line_time = time.strptime(line_time_str, format_str)
-                        line_timestamp = time.mktime(line_time)
+                if line_timestamp is not None:
+                    # Update newest timestamp
+                    if newest_timestamp is None or line_timestamp > newest_timestamp:
+                        newest_timestamp = line_timestamp
 
-                        # Update newest timestamp
-                        if newest_timestamp is None or line_timestamp > newest_timestamp:
-                            newest_timestamp = line_timestamp
-
-                        # Ignore entries from before we started monitoring
-                        if line_timestamp < self.startup_time:
-                            debug(f"Ignoring focus event from before monitor startup: {line_to_process}")
-                            continue
-                    except ValueError:
-                        # If we can't parse the timestamp, process the line anyway
-                        pass
+                    # Ignore entries from before we started monitoring
+                    if line_timestamp < self.startup_time:
+                        debug(f"Ignoring focus event from before monitor startup: {line_to_process}")
+                        continue
 
                 # Process the line for focus change events
                 state = self.parse_func(line_to_process)
@@ -943,7 +1029,7 @@ class SharedDeviceContext:
                         for software in monitor.get_supported_software()]
         debug(f"SharedDeviceContext initialized with support for: {', '.join(software_list)}")
 
-    def detect_active_software(self) -> Set[str]:
+    def detect_active_software(self) -> 'set[str]':
         """
         Detects which shared device software is currently running
 
@@ -1019,6 +1105,7 @@ class SharedDeviceContext:
                 handler = LogWatcherHandler(
                     log_path=log_path,
                     parse_func=monitor.parse_log_line,
+                    timestamp_func=monitor.extract_line_timestamp,
                     on_focus_change=self.on_focus_change
                 )
 
