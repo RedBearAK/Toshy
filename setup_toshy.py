@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260820'                        # CLI option "--version" will print this out.
+__version__ = '20261104'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1431,6 +1431,7 @@ pkg_groups_map = {
         'python3-pip',
         'python3-tkinter',
         'systemd-devel',
+        'wayland-protocols-devel',
         'wayland-devel',
         'xset',
         'zenity',
