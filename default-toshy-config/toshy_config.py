@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20261023'
+__version__ = '20261104'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -553,6 +553,7 @@ vscodes = [
     "code",
     "code - oss",
     "code-oss",
+    "com.microsoft.VSCode",
     "cursor",           # New VSCode variant with A.I.
     "vscodium",
 ]

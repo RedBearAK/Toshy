@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260820'                        # CLI option "--version" will print this out.
+__version__ = '20261104'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -1280,6 +1280,7 @@ pkg_groups_map = {
         'python-setuptools',
         'python-virtualenv',
         'wayland-devel',
+        'wayland-protocols-devel',
         'zenity',
     ],
 
@@ -1313,9 +1314,11 @@ pkg_groups_map = {
         'python3-dev',
         'shadow',
         'wayland-dev',
+        'wayland-protocols',
         'zenity',
     ],
 
+    # 'libwayland-devel' and 'wayland-protocols-devel' names are predicted, not verified.
     'alt-based': [
         'evtest',
         'gcc',
@@ -1327,12 +1330,14 @@ pkg_groups_map = {
         'libdbus-devel',
         'libinput-tools',
         'libnotify',
+        'libwayland-devel',             # UNTESTED but should prevent a build problem
         'libxkbcommon-devel',
         'python3-dev',
         'python3-module-dbus',
         'python3-module-pip',
         'python3-modules-tkinter',
         'systemd-devel',
+        'wayland-protocols-devel',      # UNTESTED but should fix a build problem
         'xset',
         'zenity',
     ],
@@ -1354,6 +1359,8 @@ pkg_groups_map = {
         'python-pip',
         'systemd',
         'tk',
+        'wayland',
+        'wayland-protocols',
         'zenity',
     ],
 
@@ -1374,6 +1381,7 @@ pkg_groups_map = {
         'python-evdev',
         'python-pip',
         'wayland-devel',
+        'wayland-protocols',
         'zenity',
     ],
 
@@ -1405,7 +1413,7 @@ pkg_groups_map = {
         'python3-pip',
         'python3-tk',
         'python3-venv',
-        'libwayland-dev',
+        'wayland-protocols',
         'zenity',
     ],
 
@@ -1432,6 +1440,7 @@ pkg_groups_map = {
         'python3-tkinter',
         'systemd-devel',
         'wayland-devel',
+        'wayland-protocols-devel',
         'xset',
         'zenity',
     ],
@@ -1459,6 +1468,7 @@ pkg_groups_map = {
         'python3-tkinter',
         'systemd-devel',
         'wayland-devel',
+        'wayland-protocols-devel',
         'xset',
         'zenity',
     ],
@@ -1501,6 +1511,7 @@ pkg_groups_map = {
         'tk',
         'typelib-1_0-AyatanaAppIndicator3-0_1',
         'wayland-devel',
+        'wayland-protocols-devel',
         'zenity',
     ],
 
@@ -1523,6 +1534,7 @@ pkg_groups_map = {
         'python3-tkinter',
         'systemd-devel',
         'wayland-devel',
+        'wayland-protocols-devel',
         'xset',
         'zenity',
     ],
@@ -1541,6 +1553,7 @@ pkg_groups_map = {
         'lib64cairo-gobject2',
         'lib64python-devel',
         'lib64systemd-devel',
+        'lib64wayland-devel',
         'lib64xkbcommon-devel',
         'libnotify',
         'python-dbus',
@@ -1549,6 +1562,8 @@ pkg_groups_map = {
         'python3-pip',
         'task-devel',
         'tkinter',
+        'wayland-devel',
+        'wayland-protocols-devel',
         'xset',
         'zenity',
     ],
@@ -1576,6 +1591,7 @@ pkg_groups_map = {
         'tk',
         'typelib-1_0-AyatanaAppIndicator3-0_1',
         'wayland-devel',
+        'wayland-protocols-devel',
         'zenity',
     ],
 
@@ -1609,6 +1625,7 @@ pkg_groups_map = {
         'python3-tkinter',
         'systemd-devel',
         'wayland-devel',
+        'wayland-protocols-devel',
         # The 'xdg-open' and 'xdg-mime' utils were missing on CentOS Stream 10,
         # necessitating adding 'xdg-utils' as dependency. Very unusual.
         'xdg-utils',
@@ -1635,6 +1652,7 @@ pkg_groups_map = {
         'python-gobject-devel',
         'systemd-devel',
         'wayland-devel',
+        'wayland-protocols-devel',
         'zenity',
     ],
 
@@ -1664,6 +1682,7 @@ pkg_groups_map = {
         'tk',
         'typelib-1_0-AyatanaAppIndicator3-0_1',
         'wayland-devel',
+        'wayland-protocols-devel',
         'zenity',
     ],
 
@@ -1692,7 +1711,7 @@ pkg_groups_map = {
         'python3-pip',
         'python3-tk',
         'python3-venv',
-        'libwayland-dev',
+        'wayland-protocols',
         'zenity',
     ],
 
@@ -1715,6 +1734,7 @@ pkg_groups_map = {
         'python3-pkgconfig',
         'python3-tkinter',
         'wayland-devel',
+        'wayland-protocols',
         'wget',
         'xset',
         'zenity',
