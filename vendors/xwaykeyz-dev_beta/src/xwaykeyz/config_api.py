@@ -22,9 +22,9 @@ from pprint import pformat as ppf
 from .layout_correction import get_symbol_table, keystrokes_for_symbol
 from .lib.logger import error, debug, warn, FLUSH
 from .lib.conditional_guard import (
-    check_conditional_names,
-    get_broken_conditionals,
-    set_error_handler,
+    check_conditional_names as _check_conditional_names,
+    get_broken_conditionals as _get_broken_conditionals,
+    set_error_handler as _set_conditional_error_handler,
 )
 from .lib.key_context import KeyContext
 from .lib.window_context import WindowContextProviderInterface as WCPI
@@ -582,12 +582,12 @@ def on_conditional_error(handler_fn):
     clear. The keymapper never depends on it and ignores exceptions it raises.
     Keep it quick or hand off to a subprocess: it runs in the input path.
     """
-    set_error_handler(handler_fn)
+    _set_conditional_error_handler(handler_fn)
 
 
 def broken_conditionals():
     """Snapshot dict of {(kind, name): {'exc': str, 'count': int}} so far."""
-    return get_broken_conditionals()
+    return _get_broken_conditionals()
 
 
 def all_conditionals():
@@ -606,7 +606,7 @@ def check_conditionals():
     Runs after the whole config has executed (hoists may be defined after
     the keymaps that use them). Returns the number of conditionals flagged.
     """
-    return check_conditional_names(all_conditionals())
+    return _check_conditional_names(all_conditionals())
 
 
 # ─── HOTKEYS ─────────────────────────────────────────────────────────────────

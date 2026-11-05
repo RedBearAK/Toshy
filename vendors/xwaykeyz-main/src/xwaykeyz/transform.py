@@ -478,7 +478,7 @@ def _resolve_timeout(ctx, key):
             value = rule.get(key)
             if value is None:
                 continue
-            if not rule.conditional(ctx):
+            if not rule.matches(ctx):
                 continue
             return (value, rule)
     return (_TIMEOUTS[key], None)
@@ -602,7 +602,7 @@ def apply_modmap(keystate: Keystate, ctx: KeyContext):
     if conditional_modmaps:
         for modmap in conditional_modmaps:
             if inkey in modmap:
-                if modmap.conditional(ctx):
+                if modmap.matches(ctx):
                     active_modmap = modmap
                     break
     if active_modmap and inkey in active_modmap:
@@ -616,7 +616,7 @@ def apply_multi_modmap(keystate: Keystate, ctx: KeyContext):
     if conditional_multimaps:
         for modmap in conditional_multimaps:
             if keystate.inkey in modmap:
-                if modmap.conditional(ctx):
+                if modmap.matches(ctx):
                     active_multi_modmap = modmap
                     break
 
