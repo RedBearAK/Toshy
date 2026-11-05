@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20261104'
+__version__ = '20261105'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -885,6 +885,11 @@ not_win_type_rgx    = re.compile("IBM|Chromebook|Apple", re.I)
 
 
 # Suggested location for customizing lists and variables for use with the "when" conditions.
+# List entries are regex patterns (case is ignored). A literal "*" or "+" in an app class
+# must be escaped, or replaced with ".*" to match the rest of the class.
+# After changing a list, rebuild its pattern string. For example:
+#     remotes.append("Some-Game.*")
+#     remoteStr = toRgxStr(remotes)
 ###################################################################################################
 ###  SLICE_MARK_START: user_custom_lists  ###  EDITS OUTSIDE THESE MARKS WILL BE LOST ON UPGRADE
 
@@ -1234,7 +1239,7 @@ hmp_is_remote                   = matchProps(clas=remoteStr)        # Only neede
 # hmp_not_remote                  = matchProps(not_clas=remoteStr)                # not used currently
 hmp_is_terminal                 = matchProps(clas=termStr)
 # hmp_not_term_or_remote          = matchProps(not_clas=terms_and_remotes_Str)    # not used currently
-hmp_not_vscode_or_remote        = matchProps(not_clas=vscodes_and_remotes_Str)
+# hmp_not_vscode_or_remote        = matchProps(not_clas=vscodes_and_remotes_Str)  # not used currently
 hmp_is_vscode                   = matchProps(clas=vscodeStr)
 hmp_numlk_off                   = matchProps(numlk=False)           # Used for forced numpad feat.
 hmp_is_browser                  = matchProps(clas=browsers_allStr)
@@ -4919,7 +4924,8 @@ keymap("Wordwise - not vscode", {
     #
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    hmp_not_vscode_or_remote(ctx)
+    not ctx_app_is_remote and
+    not hmp_is_vscode(ctx)
 )
 
 # Keybindings for VS Code and variants
