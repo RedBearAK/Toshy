@@ -903,6 +903,29 @@ not_win_type_rgx    = re.compile("IBM|Chromebook|Apple", re.I)
 ntfy = NotificationManager(icon_file_active, title='Toshy Alert (Config)')
 
 
+_broken_cond_notify_cnt = 0
+_broken_cond_notify_max = 2
+
+
+def _on_broken_conditional(kind, name, exc):
+    """Surface a broken `when` conditional on the desktop, at most twice."""
+    global _broken_cond_notify_cnt
+    _broken_cond_notify_cnt += 1
+    if _broken_cond_notify_cnt > _broken_cond_notify_max:
+        return
+    if _broken_cond_notify_cnt == 1:
+        message = (f"Config error: {kind} '{name}' is disabled. "
+                    f"{exc.__class__.__name__}: {exc}. "
+                    f'Run "toshy-services-log" for details.')
+    else:
+        message = ('Config error: more than one keymap/modmap conditional is '
+                    'disabled. Run "toshy-services-log" for the full list.')
+    ntfy.send_notification(message=message, urgency='critical', replace_previous=False)
+
+
+on_conditional_error(_on_broken_conditional)
+
+
 def _purge_legacy_caps_prefs():
     """One-shot: legacy Caps2Cmd/Caps2Esc_Cmd booleans were replaced by the
     string-valued 'capslock_mode' setting, with no automatic migration. If a

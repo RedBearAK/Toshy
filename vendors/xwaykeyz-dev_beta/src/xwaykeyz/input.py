@@ -1,8 +1,10 @@
 # src/xwaykeyz/input.py
 # Async startup version - waits for devices to be idle before grabbing
 
+import os
 import signal
 import asyncio
+import traceback
 
 from asyncio import Task, TimerHandle
 from copy import copy
@@ -21,6 +23,7 @@ from .device_quirks import (
 from .devices import DeviceFilter, DeviceGrabError, DeviceRegistry
 from .lib import logger
 from .lib.asyncio_utils import get_or_create_event_loop
+from .lib.conditional_guard import report_failure
 from .lib.dummy_device import DummyDevice
 from .lib.logger import debug, error, info
 from .models.action import Action, PRESS, RELEASE, REPEAT
@@ -90,6 +93,11 @@ def main_loop(arg_devices, device_watch, ignore_devices=None):
     inotify = None
 
     boot_config()
+
+    # Static check for `when` conditionals that reference names the config
+    # never defined (a hoist removed in an upgrade, a typo). Non-fatal: the
+    # runtime guard disables those conditionals, this just says so up front.
+    config_api.check_conditionals()
 
     # We will handle device quirks that we cause, if we can.
     # Canonical example: keymapper blocks function of Fn key on
@@ -196,10 +204,43 @@ def receive_input(device: EventIO):
             for quirk in _active_quirks_lst:
                 quirk.handle_key_event(event.code, event.value, device)
 
-        on_event(event, device)
+        _dispatch_event(event, device)
 
     # The registry inspects the batch after the fact (stuck-key repair).
     return events
+
+
+def _dispatch_event(event: InputEvent, device):
+    """
+    Hand one event to the transform layer without letting an exception take
+    the rest of the batch with it.
+
+    If on_event() raises, the batch would never be returned to the device
+    registry, its presses would never be recorded, and every later release
+    would look like a key stuck from before the grab. The registry would then
+    ungrab the device to inject it raw, on every keystroke. The event itself
+    is lost either way; the bookkeeping and the rest of the batch are not.
+
+    Exception, not BaseException: the emergency eject exits via SystemExit
+    and must still get out.
+    """
+    try:
+        on_event(event, device)
+    except Exception as exc:
+        # Key the report on exception type and raise site, not on the key,
+        # so a systemic bug produces one traceback rather than one per key.
+        site = 'unknown'
+        frames = traceback.extract_tb(exc.__traceback__)
+        if frames:
+            site = f'{os.path.basename(frames[-1].filename)}:{frames[-1].lineno}'
+        code_str = f'code={event.code} value={event.value}'
+        if event.type == ecodes.EV_KEY:
+            try:
+                code_str = f'{Key(event.code).name} {Action(event.value).name}'
+            except (ValueError, KeyError):
+                pass
+        report_failure('event dispatch', f'{exc.__class__.__name__} at {site}', exc,
+                        where=f"{code_str} from '{getattr(device, 'name', device)}'")
 
 
 _add_timer: Optional[TimerHandle] = None

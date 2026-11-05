@@ -6,6 +6,8 @@
 # timeout values. Only the values explicitly passed are stored; everything else
 # stays None to mean "no opinion for this key, fall through to the default".
 
+from ..lib.conditional_guard import call_conditional
+
 
 class TimeoutRule:
     def __init__(self, name, values, when=None):
@@ -18,6 +20,9 @@ class TimeoutRule:
 
     def get(self, key):
         return self.values.get(key)
+
+    def matches(self, ctx):
+        return call_conditional('timeout rule', self.name, self.conditional, ctx)
 
 
 # End of file #

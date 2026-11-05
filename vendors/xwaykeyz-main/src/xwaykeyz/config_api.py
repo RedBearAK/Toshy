@@ -21,6 +21,11 @@ from pprint import pformat as ppf
 
 from .layout_correction import get_symbol_table, keystrokes_for_symbol
 from .lib.logger import error, debug, warn, FLUSH
+from .lib.conditional_guard import (
+    check_conditional_names as _check_conditional_names,
+    get_broken_conditionals as _get_broken_conditionals,
+    set_error_handler as _set_conditional_error_handler,
+)
 from .lib.key_context import KeyContext
 from .lib.window_context import WindowContextProviderInterface as WCPI
 from .models.action import Action
@@ -560,6 +565,48 @@ def get_configuration():
                 expansion_dict, when = pending['when'])
 
     return (_MODMAPS, _MULTI_MODMAPS, _KEYMAPS, _TIMEOUTS, _TIMEOUT_RULES)
+
+
+# ─── CONDITIONAL GUARD ───────────────────────────────────────────────────────
+#
+# A `when` conditional that raises at keystroke time is caught, logged once
+# with a traceback and the keymap/modmap name, and treated as non-matching.
+# Nothing here is required by the config; the hook below is an optional extra
+# so a front end (Toshy) can surface the failure on the desktop.
+
+
+def on_conditional_error(handler_fn):
+    """
+    Register an optional callback `fn(kind, name, exc)` that fires once per
+    broken conditional. Not required for the guard to work; pass None to
+    clear. The keymapper never depends on it and ignores exceptions it raises.
+    Keep it quick or hand off to a subprocess: it runs in the input path.
+    """
+    _set_conditional_error_handler(handler_fn)
+
+
+def broken_conditionals():
+    """Snapshot dict of {(kind, name): {'exc': str, 'count': int}} so far."""
+    return _get_broken_conditionals()
+
+
+def all_conditionals():
+    """Every (kind, name, conditional) registered, for the load-time check."""
+    items_lst = []
+    items_lst += [('modmap', mm.name, mm.conditional) for mm in _MODMAPS]
+    items_lst += [('multipurpose_modmap', mm.name, mm.conditional) for mm in _MULTI_MODMAPS]
+    items_lst += [('keymap', km.name, km.conditional) for km in _KEYMAPS]
+    items_lst += [('timeout rule', tr.name, tr.conditional) for tr in _TIMEOUT_RULES]
+    return items_lst
+
+
+def check_conditionals():
+    """
+    Static check that no conditional references an undefined global name.
+    Runs after the whole config has executed (hoists may be defined after
+    the keymaps that use them). Returns the number of conditionals flagged.
+    """
+    return _check_conditional_names(all_conditionals())
 
 
 # ─── HOTKEYS ─────────────────────────────────────────────────────────────────
