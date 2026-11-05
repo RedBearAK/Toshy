@@ -1,3 +1,8 @@
+# src/xwaykeyz/models/keymap.py
+
+from ..lib.conditional_guard import call_conditional
+
+
 class Keymap:
     def __init__(self, name, mappings, when=None):
         self.name = name
@@ -11,4 +16,7 @@ class Keymap:
         return self.mappings[item]
 
     def matches(self, ctx):
-        return self.conditional is None or self.conditional(ctx)
+        return call_conditional('keymap', self.name, self.conditional, ctx)
+
+
+# End of file #

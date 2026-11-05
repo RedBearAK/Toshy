@@ -10,6 +10,7 @@ import time
 
 from asyncio import AbstractEventLoop
 from evdev import ecodes, InputDevice, InputEvent, list_devices
+from evdev.eventio import EvdevError
 from typing import List
 
 from .lib.logger import debug, error, info
@@ -217,10 +218,12 @@ class DeviceRegistry:
         self._loop: AbstractEventLoop = loop
         self._input_cb = input_cb
         self._filter: DeviceFilter = filterer
-        # Keys pressed on each grabbed device since we grabbed it, by device
-        # path. A release of any OTHER key means its press reached the desktop
-        # before the grab, so the desktop still has that key down.
-        self._down_since_grab: dict = {}
+        # Keys the kernel reported held on each device at the moment we
+        # grabbed it, by device path. Their press reached the desktop and
+        # their release can only reach us, so those are the only keys the
+        # stuck-key repair may ever inject. Usually empty; emptied again as
+        # each one is released. Nothing else is tracked per key event.
+        self._held_at_grab: dict = {}
 
     def __contains__(self, device):
         return device in self._devices
@@ -371,9 +374,13 @@ class DeviceRegistry:
         ungrabbed: libinput ignores the press (it has the key down already)
         and takes the release. Only keyboard keys, never mouse buttons or
         touchpad touches.
+
+        Only keys the kernel reported held at grab time qualify, each once.
+        No per-event press tracking: a release of anything else is just a
+        release, whatever happened to its press on the way through us.
         """
-        down = self._down_since_grab.get(device.path)
-        if down is None:
+        held = self._held_at_grab.get(device.path)
+        if not held:
             return
 
         stuck = []
@@ -382,13 +389,9 @@ class DeviceRegistry:
                 continue
             if event.type != ecodes.EV_KEY or event.code >= ecodes.BTN_MISC:
                 continue
-            if event.value == 1:
-                down.add(event.code)
-            elif event.value == 0:
-                if event.code in down:
-                    down.discard(event.code)
-                else:
-                    stuck.append(event.code)
+            if event.value == 0 and event.code in held:
+                held.discard(event.code)
+                stuck.append(event.code)
 
         if not stuck:
             return
@@ -404,12 +407,14 @@ class DeviceRegistry:
             # Everything queued while ungrabbed, our injected events included,
             # also reached the desktop directly.
             self._drain_buffered_events(device)
-        except OSError as err:
+        except (OSError, EvdevError) as err:
+            # EvdevError is not an OSError: evdev raises it when the node was
+            # opened without write access. Must not escape past the regrab.
             error(f"{err.__class__.__name__} repairing stuck keys on '{device.name}': {err}")
 
         try:
             device.grab()
-        except OSError as err:
+        except (OSError, EvdevError) as err:
             # Ungrabbed but still being read by us would double every keystroke.
             # Drop the device entirely; hotplug handling can bring it back.
             error(f"{err.__class__.__name__} re-grabbing '{device.name}' after repair: {err}")
@@ -511,7 +516,7 @@ class DeviceRegistry:
                 info(f"Keys still held on '{device.name}' after {max_idle_wait}s: {held}")
                 info("Grabbing anyway - stuck keys will be repaired when released")
 
-            self._down_since_grab[device.path] = set()
+            self._held_at_grab[device.path] = set(held)
             # Only add reader AFTER successful grab, so no events arrive before
             # we have exclusive access (and before the drain above).
             self._loop.add_reader(device, self._safe_input_cb, device)
@@ -524,7 +529,7 @@ class DeviceRegistry:
 
     def ungrab(self, device: InputDevice):
         info(f"Ungrabbing: '{device.name}' (removed)", ctx="-K")
-        self._down_since_grab.pop(device.path, None)
+        self._held_at_grab.pop(device.path, None)
         self._loop.remove_reader(device)
         if device in self._devices:
             self._devices.remove(device)

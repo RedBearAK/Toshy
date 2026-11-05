@@ -1,3 +1,8 @@
+# src/xwaykeyz/models/modmap.py
+
+from ..lib.conditional_guard import call_conditional
+
+
 class Modmap:
     def __init__(self, name, mappings, when=None):
         self.name = name
@@ -9,6 +14,9 @@ class Modmap:
 
     def __getitem__(self, item):
         return self.mappings[item]
+
+    def matches(self, ctx):
+        return call_conditional('modmap', self.name, self.conditional, ctx)
 
 
 class MultiModmap:
@@ -25,3 +33,9 @@ class MultiModmap:
 
     def items(self):
         return self.mappings.items()
+
+    def matches(self, ctx):
+        return call_conditional('multipurpose_modmap', self.name, self.conditional, ctx)
+
+
+# End of file #
