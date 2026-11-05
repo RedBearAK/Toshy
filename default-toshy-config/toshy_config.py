@@ -653,8 +653,17 @@ vscodes_and_remotes_lod = [
     {lst: remotes_lod                    },
 ]
 
+# Brave has more than one app class string
+browsers_brave = [
+    "Brave-browser.*",          # Catches "brave-browser-beta", "brave-browser-nightly"
+    "com.brave.Browser.*",      # Flatpak app ID
+]
+browsers_brave          = [x.casefold() for x in browsers_brave]
+browsers_braveStr       = "|".join('^'+x+'$' for x in browsers_brave)
+
 browsers_chrome = [
-    "Brave-browser",
+    # unpack Brave list into this Chrome-based browser list
+    *browsers_brave,
     "Chromium",
     "Chromium-browser",
     "Falkon",
@@ -4717,7 +4726,7 @@ keymap("Overrides for Falkon browser", {
     hmp_is_falkon_browser(ctx) )
 
 # Brave is a Chromium-based web browser
-hmp_is_brave_browser            = matchProps(clas="^brave-browser$")
+hmp_is_brave_browser            = matchProps(clas=browsers_braveStr)
 keymap("Brave Browser Overrides", {
     # This won't do anything unless Brave's "Exit" shortcut is set to use Ctrl+Q
     C("RC-q"):                  C("RC-q"),                      # Quit Brave browser with Cmd+Q
