@@ -23,6 +23,7 @@
 # pressed. It only sees NameErrors, which is why both halves exist.
 
 import dis
+import sys
 import types
 import difflib
 import builtins
@@ -90,6 +91,18 @@ def _did_you_mean(exc: Exception, conditional) -> str:
     return f' Did you mean: {", ".join(repr(c) for c in close_lst)}?'
 
 
+def _flush_stdout():
+    """
+    Error reports must reach the journal now, not when the process exits.
+    Under systemd stdout is a pipe, so without --flush the logger's prints
+    sit in a block buffer; a user told to read the log would see nothing.
+    """
+    try:
+        sys.stdout.flush()
+    except (OSError, ValueError):
+        pass
+
+
 def _notify_handler(kind: str, name: str, exc: Exception):
     if _error_handler_fn is None:
         return
@@ -119,12 +132,14 @@ def report_failure(kind: str, name: str, exc: Exception, conditional=None, where
         tb_str = ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         for line in tb_str.rstrip().splitlines():
             error(f'    {line}')
+        _flush_stdout()
         _notify_handler(kind, name, exc)
         return
     entry['count'] += 1
     if entry['count'] % REPEAT_SUMMARY_INTERVAL == 0:
         error(f'{LOG_PREFIX}: {kind} {name!r} still failing '
                 f'({entry["count"]} times): {entry["exc"]}')
+        _flush_stdout()
 
 
 def call_conditional(kind: str, name: str, conditional, ctx) -> bool:
@@ -146,17 +161,35 @@ def call_conditional(kind: str, name: str, conditional, ctx) -> bool:
 # ---------------------------------------------------------------------------
 
 _GLOBAL_LOAD_OPS = frozenset(('LOAD_GLOBAL', 'LOAD_NAME'))
+_GLOBAL_STORE_OPS = frozenset(('STORE_GLOBAL',))
 
 
-def _global_names_in_code(code: types.CodeType) -> 'set[str]':
-    """All names loaded as globals by this code object and any nested ones."""
+def _names_in_code(code: types.CodeType, ops: frozenset) -> 'set[str]':
+    """Names touched by the given opnames in this code object and nested ones."""
     names = set()
     for instr in dis.get_instructions(code):
-        if instr.opname in _GLOBAL_LOAD_OPS:
+        if instr.opname in ops:
             names.add(instr.argval)
     for const in code.co_consts:
         if isinstance(const, types.CodeType):
-            names |= _global_names_in_code(const)
+            names |= _names_in_code(const, ops)
+    return names
+
+
+def _runtime_defined_globals(namespace: dict) -> 'set[str]':
+    """
+    Globals the config defines only at runtime: any name some function in the
+    namespace assigns through a `global` declaration (STORE_GLOBAL). Such a
+    name is legitimately absent at load time, e.g. a per-keystroke cache like
+    `ctx_app_is_remote` set in a pre-check function and read by lambdas.
+    """
+    names = set()
+    for obj in list(namespace.values()):
+        if not isinstance(obj, types.FunctionType):
+            continue
+        if obj.__globals__ is not namespace:
+            continue
+        names |= _names_in_code(obj.__code__, _GLOBAL_STORE_OPS)
     return names
 
 
@@ -171,9 +204,10 @@ def find_missing_names(conditional) -> 'list[str]':
     if not isinstance(code, types.CodeType) or not isinstance(namespace, dict):
         return []
     builtin_names = set(dir(builtins))
+    runtime_names = _runtime_defined_globals(namespace)
     missing_lst = []
-    for name in sorted(_global_names_in_code(code)):
-        if name in namespace or name in builtin_names:
+    for name in sorted(_names_in_code(code, _GLOBAL_LOAD_OPS)):
+        if name in namespace or name in builtin_names or name in runtime_names:
             continue
         missing_lst.append(name)
     return missing_lst
@@ -205,6 +239,7 @@ def check_conditional_names(items: 'list[tuple[str, str, object]]') -> int:
     if flagged_cnt:
         warn(f'{LOG_PREFIX}: {flagged_cnt} conditional(s) reference undefined names '
                 f'and will never match. Fix the config to restore them.')
+        _flush_stdout()
     return flagged_cnt
 
 
