@@ -834,6 +834,8 @@ keyboards_Windows = [
 ]
 keyboards_Apple = [
     # Add specific Apple/Mac keyboard device names to this list
+    'Apple MTP keyboard',               # Seen on Fedora Asahi Linux, M2 MacBook Air
+    'Apple SPI Keyboard',               # Apple Silicon MacBook keyboard
     'HP TouchPad Wireless Keyboard',    # Missing some keys, but Apple type probably best default
     'Magic Keyboard with Numeric Keypad',
     'Magic Keyboard',
