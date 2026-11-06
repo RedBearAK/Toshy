@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20261105'
+__version__ = '20261106'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -4604,6 +4604,7 @@ keymap("General File Managers - Finder Mods", {
     C("RC-Right"):          iEF2(C("Alt-Right"), C("End"), True, True),      # Go Forward
     C("RC-Up"):             iEF2(C("Alt-Up"), True),            # Go Up dir
     C("RC-Down"):           iEF2(C("Enter"), True),             # Go Down dir (open folder/file) [universal]
+    C("RC-O"):              iEF2(C("Enter"), True),             # Open folder/file (same as Cmd+Down) [universal]
 
     # C("RC-Down"):               C("Alt-Down"),                  # Go Down dir (only works on folders) [not universal]
     # C("RC-Down"):               C("C-O"),                       # Go Down dir (open folder/file) [not universal]
