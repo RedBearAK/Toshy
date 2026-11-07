@@ -46,7 +46,7 @@ The `mru_layouts` table is handled separately (`_save_mru_layouts` plus its own
 query in `load_settings`) and does not follow the four-step pattern above.
 """
 
-__version__ = '20260803'
+__version__ = '20261107'
 
 import os
 import time

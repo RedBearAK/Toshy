@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260805'
+__version__ = '20261107'
 
 
 # Script to get and print out the versions of various Toshy components. 
@@ -79,6 +79,7 @@ show_all_modules    = '--all' in user_args or '-a' in user_args
 
 # ~/.config/toshy/toshy_tray.py
 
+# ~/.config/toshy/toshy_common/autostart_manager.py
 # ~/.config/toshy/toshy_common/env_context.py
 # ~/.config/toshy/toshy_common/machine_context.py
 # ~/.config/toshy/toshy_common/modifier_modes.py
@@ -139,6 +140,8 @@ terminal_menu_path      = os.path.join(toshy_dir_path,
 tray_indicator_path     = os.path.join(toshy_dir_path,
                             'toshy_tray.py')
 
+autostart_mgr_path      = os.path.join(toshy_dir_path,
+                            'toshy_common', 'autostart_manager.py')
 env_context_path        = os.path.join(toshy_dir_path,
                             'toshy_common', 'env_context.py')
 machine_context_path    = os.path.join(toshy_dir_path,
@@ -251,6 +254,7 @@ components = [
     (None, None, True),             # Spacing (detailed output only)
     ("Tray Indicator",              tray_indicator_path),
     (None, None),                   # Spacing
+    ("Autostart Manager",           autostart_mgr_path),
     ("Environment Context",         env_context_path),
     ("Machine Context",             machine_context_path),
     ("Modifier Modes",              modifier_modes_path),
