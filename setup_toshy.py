@@ -5139,7 +5139,7 @@ def autostart_tray_icon():
     # Check if the database file exists
     if os.path.isfile(prefs_db_file_path):
         try:
-            sql_query = "SELECT value FROM config_preferences WHERE name = 'autostart_tray_icon'"
+            sql_query = "SELECT value FROM config_preferences WHERE name = 'autoload_tray_icon'"
 
             with sqlite3.connect(prefs_db_file_path) as cnxn:
                 cursor = cnxn.cursor()
