@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__version__ = '20260805'
+__version__ = '20261107'
 
 # Indicator tray icon menu app for Toshy, using pygobject/gi
 TOSHY_PART      = 'tray'   # CUSTOMIZE TO SPECIFIC TOSHY COMPONENT! (gui, tray, config)
@@ -61,6 +61,7 @@ from toshy_common.settings_class import Settings
 from toshy_common.modifier_modes import CAPSLOCK_MODES, CAPSLOCK_MODE_LABELS
 from toshy_common.process_manager import ProcessManager
 from toshy_common.service_manager import ServiceManager
+from toshy_common import autostart_manager
 from toshy_common.monitoring import SettingsMonitor, ServiceMonitor
 
 # Make process manager global
@@ -318,27 +319,8 @@ if runtime.is_systemd:
     main_menu.append(session_monitor_status_item)
 
 
-def is_service_enabled(service_name):
-    """Check if a user service is enabled using systemctl."""
-
-    if shutil.which('systemctl') and runtime.is_systemd:
-        pass
-    else:
-        # If either 'systemctl' is missing or init is not 'systemd', just return False
-        return False
-
-    is_enabled_cmd_lst = ["systemctl", "--user", "is-enabled"]
-
-    try:
-        subprocess.run(is_enabled_cmd_lst + [service_name],
-                        check=True, stdout=DEVNULL, stderr=DEVNULL)
-        return True  # is-enabled succeeds
-    except subprocess.CalledProcessError:
-        return False  # is-enabled fails, service is disabled or not found
-
-
-toshy_svc_config_unit_enabled   = is_service_enabled("toshy-config.service")
-toshy_svc_sessmon_unit_enabled  = is_service_enabled("toshy-session-monitor.service")
+toshy_svc_config_unit_enabled   = autostart_manager.is_service_enabled("toshy-config.service", runtime)
+toshy_svc_sessmon_unit_enabled  = autostart_manager.is_service_enabled("toshy-session-monitor.service", runtime)
 
 
 def fn_toggle_toshy_svcs_autostart(widget):
@@ -780,48 +762,40 @@ def fn_save_autoload_tray_icon_setting(widget):
     cnfg.autoload_tray_icon    = autoload_tray_icon_bool
     cnfg.save_settings()
     load_autoload_tray_icon_setting()
+    # create or remove the symlink ~/.config/autostart/Toshy_Tray.desktop
+    autostart_manager.set_tray_icon_autostart(autoload_tray_icon_bool, runtime)
 
-    tray_dt_file_name           = 'Toshy_Tray.desktop'
-    home_apps_path              = os.path.join(runtime.home_dir, '.local', 'share', 'applications')
-    tray_dt_file_path           = os.path.join(home_apps_path, tray_dt_file_name)
 
-    home_autostart_path         = os.path.join(runtime.home_dir, '.config', 'autostart')
-    tray_link_file_path         = os.path.join(home_autostart_path, tray_dt_file_name)
+def load_autostart_config_setting():
+    """Non-systemd only: sync the "Autostart Toshy" item with the stored preference"""
+    cnfg.load_settings()
+    set_item_active_thread_safe(autostart_toshy_item, cnfg.autostart_config_nonsystemd)
 
-    if autoload_tray_icon_bool:
-        # do the enabling of tray icon autostart:
-        # create symlink file ~/.config/autostart/Toshy_Tray.desktop
-        #   with target file ~/.local/share/applications/Toshy_Tray.desktop
-        # alternative: os.symlink(source, dest, target_is_directory=False)
-        cmd_lst = ['ln', '-sf', tray_dt_file_path, tray_link_file_path]
-        try:
-            subprocess.run(cmd_lst, check=True) #, stdout=DEVNULL, stderr=DEVNULL)
-        except subprocess.CalledProcessError as proc_err:
-            error(f'Problem enabling tray icon autoload:\n\t{proc_err}')
-    else:
-        # do the disabling of tray icon autostart:
-        # remove the symlink file ~/.config/autostart/Toshy_Tray.desktop
-        # alternative: os.remove(path) or os.unlink(path)
-        cmd_lst = ['rm', '-f', tray_link_file_path]
-        try:
-            subprocess.run(cmd_lst, check=True) # , stdout=DEVNULL, stderr=DEVNULL)
-        except subprocess.CalledProcessError as proc_err:
-            error(f'Problem disabling tray icon autoload:\n\t{proc_err}')
+
+def fn_save_autostart_config_setting(widget):
+    """Non-systemd only: store the preference and create or remove the autostart entry"""
+    autostart_config_bool               = widget.get_active()
+    cnfg.autostart_config_nonsystemd    = autostart_config_bool
+    cnfg.save_settings()
+    load_autostart_config_setting()
+    # create or remove the symlink ~/.config/autostart/Toshy_Config_Autostart.desktop
+    autostart_manager.set_config_autostart(autostart_config_bool, runtime)
 
 
 autostart_submenu_item = Gtk.MenuItem(label="Autostart Options")
 autostart_submenu = Gtk.Menu()
 
+# "Autostart Toshy" means the systemd user services on systemd, and the
+# config-only process (via an XDG autostart entry) on any other init system.
+autostart_toshy_item = Gtk.CheckMenuItem(label="Autostart Toshy")
 if runtime.is_systemd:
-    autostart_toshy_svcs_item = Gtk.CheckMenuItem(label="Autostart Toshy Services")
-    autostart_toshy_svcs_item.set_active(   toshy_svc_sessmon_unit_enabled and 
-                                            toshy_svc_config_unit_enabled       )
-    autostart_toshy_svcs_item.connect("toggled", fn_toggle_toshy_svcs_autostart)
-    autostart_submenu.append(autostart_toshy_svcs_item)
+    autostart_toshy_item.set_active(    toshy_svc_sessmon_unit_enabled and 
+                                        toshy_svc_config_unit_enabled       )
+    autostart_toshy_item.connect("toggled", fn_toggle_toshy_svcs_autostart)
 else:
-    autostart_toshy_svcs_item = Gtk.MenuItem(label="(Non-systemd init)")
-    autostart_toshy_svcs_item.set_sensitive(False)  # Makes it dimmed/disabled
-    autostart_submenu.append(autostart_toshy_svcs_item)
+    autostart_toshy_item.set_active(cnfg.autostart_config_nonsystemd)
+    autostart_toshy_item.connect("toggled", fn_save_autostart_config_setting)
+autostart_submenu.append(autostart_toshy_item)
 
 autoload_tray_icon_item = Gtk.CheckMenuItem(label="Autoload Tray Icon")
 autoload_tray_icon_item.set_active(cnfg.autoload_tray_icon)
@@ -859,6 +833,8 @@ def main():
             GLib.idle_add(load_optspec_layout_submenu_settings)
             GLib.idle_add(load_kbtype_submenu_settings)
             GLib.idle_add(load_autoload_tray_icon_setting)
+            if not runtime.is_systemd:
+                GLib.idle_add(load_autostart_config_setting)
             GLib.idle_add(load_overlay_submenu_settings)
 
     def on_service_status_changed(config_status, session_monitor_status):
@@ -914,6 +890,9 @@ def main():
         load_kbtype_submenu_settings()
         # load the setting for the autostart tray icon item
         load_autoload_tray_icon_setting()
+        # load the setting for the "Autostart Toshy" item (non-systemd only)
+        if not runtime.is_systemd:
+            load_autostart_config_setting()
         # load the setting for the overlay bitmask submenu
         load_overlay_submenu_settings()
 

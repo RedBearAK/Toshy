@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20261104'                        # CLI option "--version" will print this out.
+__version__ = '20261107'                        # CLI option "--version" will print this out.
 
 import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'     # prevent this script from creating cache files
@@ -5125,6 +5125,64 @@ def autostart_systemd_kickstarter():
         safe_shutdown(1)
 
 
+def autostart_config_nonsystemd():
+    """Install (or remove) the desktop entry that starts the config process at login on
+    systems without systemd. The entry runs 'toshy-idempotent-autostart', which does
+    nothing when systemd is the init system or the keymapper is already running, so it
+    is installed on every system when the user preference allows it."""
+    print(f'\n\n§  Setting up config autostart for non-systemd systems...\n{cnfg.separator}')
+
+    # Path to the database file
+    toshy_cfg_dir_path          = os.path.join(home_dir, '.config', 'toshy')
+    prefs_db_file_name          = 'toshy_user_preferences.sqlite'
+    prefs_db_file_path          = os.path.join(toshy_cfg_dir_path, prefs_db_file_name)
+
+    autostart_preference        = True  # Default to autostarting the config process
+
+    # Check if the database file exists
+    if os.path.isfile(prefs_db_file_path):
+        try:
+            sql_query = ("SELECT value FROM config_preferences "
+                            "WHERE name = 'autostart_config_nonsystemd'")
+
+            with sqlite3.connect(prefs_db_file_path) as cnxn:
+                cursor = cnxn.cursor()
+                cursor.execute(sql_query)
+                row = cursor.fetchone()
+
+            if row is not None:
+                # Convert the string value to a boolean
+                autostart_preference = row[0].lower() == 'true'
+
+        except sqlite3.Error as db_err:
+            error(f"Could not read config autostart preference from database:\n\t{db_err}")
+            print("Defaulting to enabling config autostart for non-systemd systems.")
+
+    cfg_autostart_dt_file_name  = 'Toshy_Config_Autostart.desktop'
+    toshy_dt_files_path         = os.path.join(cnfg.toshy_dir_path, 'desktop')
+    cfg_autostart_dt_file       = os.path.join(toshy_dt_files_path, cfg_autostart_dt_file_name)
+    dest_link_file              = os.path.join(autostart_dir_path, cfg_autostart_dt_file_name)
+
+    if autostart_preference is True:
+        ensure_XDG_autostart_dir_exists()
+        cmd_lst                 = ['ln', '-sf', cfg_autostart_dt_file, dest_link_file]
+        try:
+            subprocess.run(cmd_lst, check=True)
+            print('Toshy config will start at login on systems without systemd.')
+        except subprocess.CalledProcessError as proc_err:
+            error(f'Problem while setting up config autostart:\n\t{proc_err}')
+            safe_shutdown(1)
+    else:
+        cmd_lst                 = ['rm', '-f', dest_link_file]
+        try:
+            subprocess.run(cmd_lst, check=True)
+            print("Toshy config autostart is disabled by user preference. Entry removed.")
+        except subprocess.CalledProcessError as proc_err:
+            error(f'Problem removing config autostart entry:\n\t{proc_err}')
+
+    show_task_completed_msg()
+
+
 def autostart_tray_icon():
     """Set up the tray icon to autostart at login"""
     print(f'\n\n§  Setting up tray icon to load automatically at login...\n{cnfg.separator}')
@@ -5139,7 +5197,7 @@ def autostart_tray_icon():
     # Check if the database file exists
     if os.path.isfile(prefs_db_file_path):
         try:
-            sql_query = "SELECT value FROM config_preferences WHERE name = 'autostart_tray_icon'"
+            sql_query = "SELECT value FROM config_preferences WHERE name = 'autoload_tray_icon'"
 
             with sqlite3.connect(prefs_db_file_path) as cnxn:
                 cursor = cnxn.cursor()
@@ -6031,6 +6089,15 @@ def uninstall_toshy():
     except subprocess.CalledProcessError as proc_err:
         error(f'Problem removing Toshy systemd services kickstart autostart:\n\t{proc_err}')
 
+    # try to remove the non-systemd config autostart file
+    cfg_autostart_dt_file   = os.path.join(autostart_dir_path, 'Toshy_Config_Autostart.desktop')
+    cfg_autostart_rm_cmd    = ['rm', '-f', cfg_autostart_dt_file]
+    try:
+        # do not pass as list (brackets) since it is already a list
+        subprocess.run(cfg_autostart_rm_cmd, check=True)
+    except subprocess.CalledProcessError as proc_err:
+        error(f'Problem removing Toshy config autostart entry:\n\t{proc_err}')
+
     # terminate the tray icon process
     stop_tray_cmd = ['pkill', '-u', cnfg.user_name, '-f', 'toshy_tray']
     try:
@@ -6179,6 +6246,8 @@ def run_install_sequence(cnfg: InstallerSettings):
         setup_systemd_services()
 
         autostart_systemd_kickstarter()
+
+        autostart_config_nonsystemd()
 
         autostart_tray_icon()
         apply_desktop_tweaks()
@@ -6367,6 +6436,8 @@ def run_user_files_sequence(cnfg: InstallerSettings):
     setup_systemd_services()
 
     autostart_systemd_kickstarter()
+
+    autostart_config_nonsystemd()
 
     autostart_tray_icon()
     apply_desktop_tweaks()
