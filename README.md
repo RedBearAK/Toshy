@@ -519,7 +519,7 @@ In the tray icon menu, you'll find a number of useful functions:
 
 ### Why there are separate items for "Services" and "Config-Only"
 
-On some distros there may be some reason the `systemd` services can't run, or you simply don't want them to be enabled. For instance, CentOS 7 supports `systemd` services in general, but had the capacity for "user" services completely disabled, and Toshy uses "user" services. Some distros also don't use `systemd` at all as the init system, so the services won't exist. For these cases, the "Config-Only" items provide a simple way to start just the keymapper config process, if you don't feel like setting up your own auto-start item that will run the `toshy-config-start` command. The lack of `systemd` and `loginctl` will mean that Toshy won't have the multi-user support that will otherwise be present. Not a big deal on a single-user system.  
+On some distros there may be some reason the `systemd` services can't run, or you simply don't want them to be enabled. For instance, CentOS 7 supports `systemd` services in general, but had the capacity for "user" services completely disabled, and Toshy uses "user" services. Some distros also don't use `systemd` at all as the init system, so the services won't exist. For these cases, the "Config-Only" items provide a simple way to start just the keymapper config process. On systems where `systemd` is not the init system, the config process is also started automatically at login by an autostart entry that the installer sets up, controlled by the `Autostart Toshy` item in the tray icon menu (and the matching checkbox in the preferences app). The lack of `systemd` and `loginctl` will mean that Toshy won't have the multi-user support that will otherwise be present. Not a big deal on a single-user system.  
 
 ### Preferences submenu
 
@@ -612,7 +612,7 @@ toshy-services-log      (shows journalctl output for Toshy services)
 toshy-services-status   (shows the current state of all Toshy services)
 ```
 
-To disable or re-enable the Toshy services (to prevent or restore autostart at login), use the commands below. It should still be possible to start/restart the services with the commands above if they are disabled. Using the "enable" command in turn will not automatically start the services immediately if they are not running (but the services will then autostart at the next login). If the services are enabled they can be stopped at any time with the command above, but the enabled services will start automatically at the next login. (NEW: This can finally also be dealt with in the tray icon menu, by toggling the `Autostart Toshy Services` item near the top of the menu.)  
+To disable or re-enable the Toshy services (to prevent or restore autostart at login), use the commands below. It should still be possible to start/restart the services with the commands above if they are disabled. Using the "enable" command in turn will not automatically start the services immediately if they are not running (but the services will then autostart at the next login). If the services are enabled they can be stopped at any time with the command above, but the enabled services will start automatically at the next login. (NEW: This can finally also be dealt with in the tray icon menu, by toggling the `Autostart Toshy` item in the "Autostart Options" submenu.)  
 
 ```
 toshy-services-disable  (services can still be started/stopped manually)
@@ -634,6 +634,12 @@ Restarting the Toshy services, either with one of the above commands or from the
 toshy-config-restart
 toshy-config-start
 toshy-config-stop
+```
+
+The `toshy-idempotent-autostart` command is what the login autostart entry runs on systems without `systemd`. It does nothing if `systemd` is the init system, or if the keymapper is already running, and otherwise runs `toshy-config-start`. It can be used in a custom autostart entry on an unusual system (for instance one that can boot with either init), since it never fights the `systemd` services.  
+
+```
+toshy-idempotent-autostart  (start config at login only when nothing else will)
 ```
 
 ```

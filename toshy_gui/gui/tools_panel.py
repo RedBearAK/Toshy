@@ -11,6 +11,7 @@ from toshy_common.logger import debug, error
 from toshy_common.notification_manager import NotificationManager
 from toshy_common.proc_launcher import launch_detached
 from toshy_common.service_manager import ServiceManager
+from toshy_common import autostart_manager
 from toshy_common.settings_class import Settings
 from toshy_common.runtime_utils import ToshyRuntime
 
@@ -212,8 +213,10 @@ class ToolsPanel(Gtk.Box):
             help_title = "Autostart Settings"
             help_text = (
                 "Control which Toshy components start automatically when you log in:\n\n"
-                "• Autostart Services: \n"
-                "    Start Toshy services in background at login\n\n"
+                "• Autostart Toshy: \n"
+                "    Start Toshy in the background at login. On systemd systems this\n"
+                "    enables the Toshy user services. On other init systems it adds\n"
+                "    an autostart entry that starts the config process (config-only mode).\n\n"
                 "• Autoload Tray Icon: \n"
                 "    Show Toshy indicator app in your system tray"
             )
@@ -231,21 +234,18 @@ class ToolsPanel(Gtk.Box):
         checkboxes_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         checkboxes_container.set_margin_start(20)  # Indent checkboxes
 
-        # Services autostart checkbox
-        self.autostart_services_checkbox = Gtk.CheckButton(label="Autostart Services")
-        initial_services = getattr(self.cnfg, 'autostart_services', True)
-        self.autostart_services_checkbox.set_active(initial_services)
+        # "Autostart Toshy" checkbox: systemd user services on systemd, otherwise the
+        # config autostart entry (same as the tray icon menu item)
+        self.autostart_services_checkbox = Gtk.CheckButton(label="Autostart Toshy")
+        self.autostart_services_checkbox.set_active(self.get_autostart_toshy_state())
         self.autostart_services_checkbox.connect('toggled', self.on_autostart_services_toggled)
 
-        # Disable checkbox if not using systemd
-        if not self.runtime.is_systemd:
-            self.autostart_services_checkbox.set_sensitive(False)
-            self.autostart_services_checkbox.set_active(False)  # Uncheck it too
-            self.autostart_services_checkbox.set_label("Autostart Services (no systemctl/systemd)")
-            self.autostart_services_checkbox.set_tooltip_text("Service autostart not available (systemd not detected)")
-            debug("Autostart services checkbox disabled - systemd not available")
+        if self.runtime.is_systemd:
+            self.autostart_services_checkbox.set_tooltip_text(
+                "Enable/disable Toshy services to start automatically at login")
         else:
-            self.autostart_services_checkbox.set_tooltip_text("Enable/disable Toshy services to start automatically at login")
+            self.autostart_services_checkbox.set_tooltip_text(
+                "Start the Toshy config process automatically at login (no systemd)")
 
         checkboxes_container.append(self.autostart_services_checkbox)        
         # Tray icon autostart checkbox  
@@ -389,13 +389,28 @@ class ToolsPanel(Gtk.Box):
             notification_msg = "Keyboard type set to Auto-Adapt (default)"
             self.ntfy.send_notification(notification_msg)
 
-    def on_autostart_services_toggled(self, checkbox):
-        """Handle autostart services checkbox toggle"""
-        new_value = checkbox.get_active()
-        debug(f"Autostart services changed to: {new_value}")
+    def get_autostart_toshy_state(self):
+        """Current "Autostart Toshy" state: enabled services on systemd, stored preference otherwise"""
+        if self.runtime.is_systemd:
+            return autostart_manager.are_services_enabled(self.runtime)
+        return getattr(self.cnfg, 'autostart_config_nonsystemd', True)
 
-        if not (shutil.which('systemctl') and self.runtime.is_systemd):
-            debug("systemctl not available or not using systemd")
+    def on_autostart_services_toggled(self, checkbox):
+        """Handle "Autostart Toshy" checkbox toggle"""
+        new_value = checkbox.get_active()
+        debug(f"Autostart Toshy changed to: {new_value}")
+
+        if not self.runtime.is_systemd:
+            # Non-systemd: store the preference and create or remove the autostart entry
+            setattr(self.cnfg, 'autostart_config_nonsystemd', new_value)
+            self.cnfg.save_settings()
+            autostart_manager.set_config_autostart(new_value, self.runtime)
+            status_text = "ENABLED" if new_value else "DISABLED"
+            self.ntfy.send_notification(f"Toshy config autostart {status_text}")
+            return
+
+        if not shutil.which('systemctl'):
+            debug("systemctl not available")
             return
 
         try:
@@ -411,9 +426,6 @@ class ToolsPanel(Gtk.Box):
 
         import time
         time.sleep(0.5)
-
-        setattr(self.cnfg, 'autostart_services', new_value)
-        self.cnfg.save_settings()
 
     def on_autoload_tray_toggled(self, checkbox):
         """Handle autoload tray icon checkbox toggle"""
@@ -433,29 +445,7 @@ class ToolsPanel(Gtk.Box):
 
     def update_tray_autostart(self, enable):
         """Create or remove tray icon autostart symlink"""
-        import subprocess
-        import os
-
-        tray_dt_file_name = 'Toshy_Tray.desktop'
-        home_apps_path = os.path.join(self.runtime.home_dir, '.local', 'share', 'applications')
-        tray_dt_file_path = os.path.join(home_apps_path, tray_dt_file_name)
-
-        home_autostart_path = os.path.join(self.runtime.home_dir, '.config', 'autostart')
-        tray_link_file_path = os.path.join(home_autostart_path, tray_dt_file_name)
-
-        try:
-            if enable:
-                # Create symlink
-                cmd_lst = ['ln', '-sf', tray_dt_file_path, tray_link_file_path]
-                subprocess.run(cmd_lst, check=True)
-                debug("Tray icon autostart enabled")
-            else:
-                # Remove symlink
-                cmd_lst = ['rm', '-f', tray_link_file_path]
-                subprocess.run(cmd_lst, check=True)
-                debug("Tray icon autostart disabled")
-        except subprocess.CalledProcessError as e:
-            debug(f"Error updating tray autostart: {e}")
+        autostart_manager.set_tray_icon_autostart(enable, self.runtime)
 
     def on_open_config_folder(self, button):
         """Handle open config folder button click"""
@@ -507,11 +497,16 @@ class ToolsPanel(Gtk.Box):
 
         # Update autostart checkboxes
         if hasattr(self, 'autostart_services_checkbox'):
-            if self.runtime.is_systemd:
-                services_value = getattr(self.cnfg, 'autostart_services', True)
-                if self.autostart_services_checkbox.get_active() != services_value:
-                    debug(f"Updating autostart services checkbox to {services_value}")
-                    self.autostart_services_checkbox.set_active(services_value)
+            services_value = self.get_autostart_toshy_state()
+            if self.autostart_services_checkbox.get_active() != services_value:
+                debug(f"Updating Autostart Toshy checkbox to {services_value}")
+                # Block the toggle handler: this is a display refresh, not a user action,
+                # and the handler would otherwise re-run systemctl (or re-save the
+                # preference) and send a notification for a change made elsewhere.
+                checkbox = self.autostart_services_checkbox
+                checkbox.handler_block_by_func(self.on_autostart_services_toggled)
+                checkbox.set_active(services_value)
+                checkbox.handler_unblock_by_func(self.on_autostart_services_toggled)
 
         if hasattr(self, 'autoload_tray_checkbox'):
             tray_value = getattr(self.cnfg, 'autoload_tray_icon', True)
