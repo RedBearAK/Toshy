@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Toshy Config Autostart
+GenericName=Toshy Config Autostart
+# Starts the Toshy config process at login on systems where systemd is not the init.
+# The command does nothing when systemd is the init system, or when the keymapper
+# is already running, so this entry is safe to leave installed on every system.
+# Full path inside 'sh -c' because the session PATH may not include ~/.local/bin.
+Exec=/bin/sh -c '"$HOME/.local/bin/toshy-idempotent-autostart"'
+Terminal=false
+NoDisplay=false
+# Icon must be copied to ~/.local/share/icons
+Icon=toshy_app_icon_rainbow
+Comment=Login autostart for the Toshy config process on systems without systemd
+Categories=Utility;
