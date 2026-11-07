@@ -500,7 +500,13 @@ class ToolsPanel(Gtk.Box):
             services_value = self.get_autostart_toshy_state()
             if self.autostart_services_checkbox.get_active() != services_value:
                 debug(f"Updating Autostart Toshy checkbox to {services_value}")
-                self.autostart_services_checkbox.set_active(services_value)
+                # Block the toggle handler: this is a display refresh, not a user action,
+                # and the handler would otherwise re-run systemctl (or re-save the
+                # preference) and send a notification for a change made elsewhere.
+                checkbox = self.autostart_services_checkbox
+                checkbox.handler_block_by_func(self.on_autostart_services_toggled)
+                checkbox.set_active(services_value)
+                checkbox.handler_unblock_by_func(self.on_autostart_services_toggled)
 
         if hasattr(self, 'autoload_tray_checkbox'):
             tray_value = getattr(self.cnfg, 'autoload_tray_icon', True)

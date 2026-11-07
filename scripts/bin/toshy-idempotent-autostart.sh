@@ -29,6 +29,13 @@ if [[ -r /proc/1/comm ]] && [[ "$(< /proc/1/comm)" == "systemd" ]]; then
     exit 0
 fi
 
+# Without pgrep we cannot tell whether the keymapper is running, so do not risk
+# handing off to a command that would stop and restart a running keymapper.
+if ! command -v pgrep >/dev/null 2>&1; then
+    echo "The 'pgrep' command was not found. Cannot check for a running keymapper. Doing nothing."
+    exit 1
+fi
+
 # Same process pattern that 'toshy-config-stop' uses to find the keymapper
 if pgrep -u "$USER" -f "/bin/xwaykeyz" >/dev/null; then
     echo "Toshy keymapper process is already running. Nothing to do."
