@@ -84,7 +84,7 @@ _TIMEOUTS = dict(TIMEOUT_DEFAULTS)
 
 # Conditional timeout overrides (modmap-style: default lives in _TIMEOUTS,
 # any number of conditional TimeoutRule instances accumulate here).
-_TIMEOUT_RULES = []
+_TIMEOUT_RULES: 'list[TimeoutRule]' = []
 
 
 LAYOUT_CORRECTION_DEFAULTS = {
