@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-__version__ = '20261104'
+__version__ = '20261106'
 ###############################################################################
 ############################   Welcome to Toshy!   ############################
 ###
@@ -653,8 +653,17 @@ vscodes_and_remotes_lod = [
     {lst: remotes_lod                    },
 ]
 
+# Brave has more than one app class string
+browsers_brave = [
+    "Brave-browser.*",          # Catches "brave-browser-beta", "brave-browser-nightly"
+    "com.brave.Browser.*",      # Flatpak app ID
+]
+browsers_brave          = [x.casefold() for x in browsers_brave]
+browsers_braveStr       = "|".join('^'+x+'$' for x in browsers_brave)
+
 browsers_chrome = [
-    "Brave-browser",
+    # unpack Brave list into this Chrome-based browser list
+    *browsers_brave,
     "Chromium",
     "Chromium-browser",
     "Falkon",
@@ -876,6 +885,11 @@ not_win_type_rgx    = re.compile("IBM|Chromebook|Apple", re.I)
 
 
 # Suggested location for customizing lists and variables for use with the "when" conditions.
+# List entries are regex patterns (case is ignored). A literal "*" or "+" in an app class
+# must be escaped, or replaced with ".*" to match the rest of the class.
+# After changing a list, rebuild its pattern string. For example:
+#     remotes.append("Some-Game.*")
+#     remoteStr = toRgxStr(remotes)
 ###################################################################################################
 ###  SLICE_MARK_START: user_custom_lists  ###  EDITS OUTSIDE THESE MARKS WILL BE LOST ON UPGRADE
 
@@ -1225,7 +1239,7 @@ hmp_is_remote                   = matchProps(clas=remoteStr)        # Only neede
 # hmp_not_remote                  = matchProps(not_clas=remoteStr)                # not used currently
 hmp_is_terminal                 = matchProps(clas=termStr)
 # hmp_not_term_or_remote          = matchProps(not_clas=terms_and_remotes_Str)    # not used currently
-hmp_not_vscode_or_remote        = matchProps(not_clas=vscodes_and_remotes_Str)
+# hmp_not_vscode_or_remote        = matchProps(not_clas=vscodes_and_remotes_Str)  # not used currently
 hmp_is_vscode                   = matchProps(clas=vscodeStr)
 hmp_numlk_off                   = matchProps(numlk=False)           # Used for forced numpad feat.
 hmp_is_browser                  = matchProps(clas=browsers_allStr)
@@ -4590,6 +4604,7 @@ keymap("General File Managers - Finder Mods", {
     C("RC-Right"):          iEF2(C("Alt-Right"), C("End"), True, True),      # Go Forward
     C("RC-Up"):             iEF2(C("Alt-Up"), True),            # Go Up dir
     C("RC-Down"):           iEF2(C("Enter"), True),             # Go Down dir (open folder/file) [universal]
+    C("RC-O"):              iEF2(C("Enter"), True),             # Open folder/file (same as Cmd+Down) [universal]
 
     # C("RC-Down"):               C("Alt-Down"),                  # Go Down dir (only works on folders) [not universal]
     # C("RC-Down"):               C("C-O"),                       # Go Down dir (open folder/file) [not universal]
@@ -4717,7 +4732,7 @@ keymap("Overrides for Falkon browser", {
     hmp_is_falkon_browser(ctx) )
 
 # Brave is a Chromium-based web browser
-hmp_is_brave_browser            = matchProps(clas="^brave-browser$")
+hmp_is_brave_browser            = matchProps(clas=browsers_braveStr)
 keymap("Brave Browser Overrides", {
     # This won't do anything unless Brave's "Exit" shortcut is set to use Ctrl+Q
     C("RC-q"):                  C("RC-q"),                      # Quit Brave browser with Cmd+Q
@@ -4910,7 +4925,8 @@ keymap("Wordwise - not vscode", {
     #
 }, when = lambda ctx:
     cnfg.screen_has_focus and
-    hmp_not_vscode_or_remote(ctx)
+    not ctx_app_is_remote and
+    not hmp_is_vscode(ctx)
 )
 
 # Keybindings for VS Code and variants
@@ -5579,8 +5595,8 @@ if DISTRO_ID == 'pop':
 if DISTRO_ID in ['ubuntu', 'fedora'] and DESKTOP_ENV == 'gnome':
     keymap("GenTerms overrides: Ubuntu/Fedora", {
         C("LC-RC-Q"):               C("Super-L"),                   # Lock screen (ubuntu/fedora)
-        C("LC-Right"):              [bind,C("Super-Page_Up")],      # SL - Change workspace (ubuntu/fedora)
-        C("LC-Left"):               [bind,C("Super-Page_Down")],    # SL - Change workspace (ubuntu/fedora)
+        C("LC-Right"):              [bind,C("Super-Page_Down")],    # SL - Change workspace (ubuntu/fedora)
+        C("LC-Left"):               [bind,C("Super-Page_Up")],      # SL - Change workspace (ubuntu/fedora)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
         ctx_ovl_terminal_ergo and
@@ -5831,8 +5847,8 @@ if DISTRO_ID in ['fedora', 'almalinux'] and DESKTOP_ENV == 'gnome':
     keymap("GenGUI overrides: Fedora GNOME", {
         C("Super-RC-Q"):            C("Super-L"),                   # Lock screen (fedora)
         C("RC-H"):                  C("Super-h"),                   # Default SL - Minimize app (gnome/budgie/popos/fedora) not-deepin
-        C("Super-Right"):          [bind,C("Super-Page_Up")],       # SL - Change workspace (ubuntu/fedora)
-        C("Super-Left"):           [bind,C("Super-Page_Down")],     # SL - Change workspace (ubuntu/fedora)
+        C("Super-Right"):          [bind,C("Super-Page_Down")],     # SL - Change workspace (ubuntu/fedora)
+        C("Super-Left"):           [bind,C("Super-Page_Up")],       # SL - Change workspace (ubuntu/fedora)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
         ctx_ovl_macos_globals and
@@ -5902,8 +5918,16 @@ if DISTRO_ID == 'pop':
 if DISTRO_ID == 'ubuntu':
     keymap("GenGUI overrides: Ubuntu", {
         C("Super-RC-Q"):            C("Super-L"),                   # Lock screen (ubuntu)
-        C("Super-Right"):          [bind,C("Super-Page_Up")],       # SL - Change workspace (ubuntu)
-        C("Super-Left"):           [bind,C("Super-Page_Down")],     # SL - Change workspace (ubuntu)
+    }, when = lambda ctx:
+        cnfg.screen_has_focus and
+        ctx_ovl_macos_globals and
+        not ctx_app_is_remote
+    )
+
+if DISTRO_ID == 'ubuntu' and DESKTOP_ENV == 'gnome':
+    keymap("GenGUI overrides: Ubuntu GNOME", {
+        C("Super-Right"):          [bind,C("Super-Page_Down")],     # SL - Change workspace (ubuntu)
+        C("Super-Left"):           [bind,C("Super-Page_Up")],       # SL - Change workspace (ubuntu)
     }, when = lambda ctx:
         cnfg.screen_has_focus and
         ctx_ovl_macos_globals and

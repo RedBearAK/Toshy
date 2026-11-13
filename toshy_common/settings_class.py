@@ -46,7 +46,7 @@ The `mru_layouts` table is handled separately (`_save_mru_layouts` plus its own
 query in `load_settings`) and does not follow the four-step pattern above.
 """
 
-__version__ = '20260803'
+__version__ = '20261107'
 
 import os
 import time
@@ -88,6 +88,8 @@ class Settings:
 
         # settings defaults
         self.autoload_tray_icon     = True                      # Default: True
+        # Start the config process at login on systems without systemd (XDG autostart entry)
+        self.autostart_config_nonsystemd = True                 # Default: True
         self.gui_dark_theme         = True                      # Default: True     # Older tkinter GUI
         self.gui_theme_mode         = 'auto'                    # Default: True     # Newer GTK-4 GUI
         self.override_kbtype        = 'Auto-Adapt'              # Default: 'Auto-Adapt'
@@ -286,6 +288,7 @@ class Settings:
         sql_query = "INSERT OR REPLACE INTO config_preferences (name, value) VALUES (?, ?)"
         settings = [
             ('autoload_tray_icon',          str(self.autoload_tray_icon)),
+            ('autostart_config_nonsystemd', str(self.autostart_config_nonsystemd)),
             ('gui_dark_theme',              str(self.gui_dark_theme)),
             ('gui_theme_mode',              str(self.gui_theme_mode)),
             ('override_kbtype',             str(self.override_kbtype)),
@@ -337,6 +340,7 @@ class Settings:
 
                 if True is False: pass  # dummy first `if` line so other rows line up (readability)
                 elif row[0] == 'autoload_tray_icon'     : self.autoload_tray_icon   = setting_value
+                elif row[0] == 'autostart_config_nonsystemd': self.autostart_config_nonsystemd = setting_value
                 elif row[0] == 'gui_dark_theme'         : self.gui_dark_theme       = setting_value
 
                 elif row[0] == 'gui_theme_mode'         : self.gui_theme_mode       = row[1]
@@ -497,6 +501,7 @@ class Settings:
         prefs_db_file_path      = '{self.prefs_db_file_path}'
         ------------------------------------------------------------------------------
         autoload_tray_icon      = {self.autoload_tray_icon}
+        autostart_config_nonsystemd = {self.autostart_config_nonsystemd}
         gui_dark_theme          = {self.gui_dark_theme}
         gui_theme_mode          = '{self.gui_theme_mode}'
         ------------------------------------------------------------------------------

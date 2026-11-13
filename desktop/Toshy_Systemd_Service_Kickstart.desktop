@@ -4,7 +4,9 @@ Name=Toshy Systemd Services Kickstart
 GenericName=Toshy Systemd Services Kickstart
 # Systemd has an issue with failing to stop/restart user services if user logs back in too fast.
 # Give systemd user services a kickstart on login if session monitor is found to be inactive.
-Exec=/bin/sh -c 'sleep 5 && (ps -p 1 -o comm= | grep -q systemd) && systemctl --user is-enabled toshy-session-monitor.service &> /dev/null && (systemctl --user is-active toshy-session-monitor.service &> /dev/null || toshy-services-restart)'
+# Full path to the restart command because the session PATH may not include ~/.local/bin.
+# POSIX redirections only: '/bin/sh' is dash on Debian-family systems, where '&>' breaks the chain.
+Exec=/bin/sh -c 'sleep 5 && (ps -p 1 -o comm= | grep -q systemd) && systemctl --user is-enabled toshy-session-monitor.service >/dev/null 2>&1 && (systemctl --user is-active toshy-session-monitor.service >/dev/null 2>&1 || "$HOME/.local/bin/toshy-services-restart")'
 Terminal=false
 NoDisplay=false
 # Icon must be copied to ~/.local/share/icons
