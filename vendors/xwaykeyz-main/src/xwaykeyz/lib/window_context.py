@@ -385,6 +385,7 @@ class Wl_Wlroots_WindowContext(WindowContextProviderInterface):
             ('wayland', 'qtile'),
             ('wayland', 'river'),
             ('wayland', 'sway'),
+            ('wayland', 'treeland'),
             ('wayland', 'wayfire'),
         ]
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = '20260730'
+__version__ = '20261114'
 
 import os
 import re
@@ -759,29 +759,42 @@ class EnvironmentInfo:
                 'miriway-shell',    # (actual process name for miriway)
             ],
 
-            # Deepin Desktop Environment
+            # Deepin Desktop Environment (as "dde")
             'dde': [
                 'deepin-kwin_wayland',  # This might never exist (too long? over 15 characters)
                 'deepin-kwin_x11',
                 'deepin-kwin',
+                'treeland',             # New in Deepin 25?
+            ],
+
+            # Deepin Desktop Environment (as "deepin", not confirmed but possible)
+            'deepin': [
+                'deepin-kwin_wayland',  # This might never exist (too long? over 15 characters)
+                'deepin-kwin_x11',
+                'deepin-kwin',
+                'treeland',             # New in Deepin 25?
             ],
 
             'awesome':          ['awesome'],
-            'budgie':           ['budgie-wm'],
+            'budgie':           ['budgie-wm', 'labwc'],
             'cinnamon':         ['cinnamon'],
             'cosmic':           ['cosmic-comp'],
-            'cutefish':         ['kwin_x11'],
+            'cutefish':         ['kwin', 'kwin_x11'],
             'dwm':              ['dwm'],
             'enlightenment':    ['enlightenment'],
-            'hyprland':         ['Hyprland'],
+            'hyprland':         ['Hyprland'],           # Capitalization important
             'i3':               ['i3'],
             'i3-gaps':          ['i3'],
             'icewm':            ['icewm'],
             'labwc':            ['labwc'],
             'lxde':             ['openbox'],
-            'mate':             ['marco'],
+            # TODO: Polo not supported by keymapper yet (as of 2026-11-14). Remove this comment when
+            # it is supported. Track issue https://github.com/KeremSoke/polo/issues/7
+            'mate':             ['marco', 'polo', 'wayfire'],
             'miracle-wm':       ['miracle-wm'],
+            'miriway':          ['miriway-shell', 'miriway'],
             'nebide':           ['wayfire'],
+            'niri':             ['niri'],
             'openbox':          ['openbox'],
             'pantheon':         ['gala'],
             'pop':              ['gnome-shell'],
@@ -793,7 +806,9 @@ class EnvironmentInfo:
             'unity':            ['compiz'],
             'wayfire':          ['wayfire'],
             'wmaker':           ['wmaker'],
-            'xfce':             ['xfwm4'],
+            # TODO: xfwl4 may not supported by keymapper yet (as of 2026-11-14). Remove this comment
+            # when it is supported. 
+            'xfce':             ['xfwm4', 'labwc', 'wayfire', 'xfwl4'],
 
         }
 
