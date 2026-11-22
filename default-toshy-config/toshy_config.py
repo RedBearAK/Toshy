@@ -898,6 +898,9 @@ not_win_type_rgx    = re.compile("IBM|Chromebook|Apple", re.I)
 ###  SLICE_MARK_START: user_custom_lists  ###  EDITS OUTSIDE THESE MARKS WILL BE LOST ON UPGRADE
 
 
+# capslock_ctrl_apps.append("^jetbrains-(?!.*toolbox).*$")  # IntelliJ, PyCharm, WebStorm, etc.
+# capslock_ctrl_appsStr = toRgxStr(capslock_ctrl_apps)
+
 
 ###  SLICE_MARK_END: user_custom_lists  ###  EDITS OUTSIDE THESE MARKS WILL BE LOST ON UPGRADE
 ###################################################################################################
