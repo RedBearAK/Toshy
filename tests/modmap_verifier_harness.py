@@ -154,6 +154,8 @@ def build_namespace():
         '_context_pre_check':       lambda ctx: False,
         'hmp_numlk_off':            lambda ctx: False,
         'hmp_not_kpad_devs':        lambda ctx: False,
+        'hmp_is_jetbrains':         lambda ctx: False,
+        'hmp_is_capslock_ctrl_app': lambda ctx: False,
         # Device-exclusion plumbing for the numpad modmaps (inert stubs; the
         # matchProps hoist is immediately re-stubbed by the ctx lambdas above
         # after exec, via post_exec_overrides below).

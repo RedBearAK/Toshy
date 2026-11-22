@@ -1,6 +1,6 @@
 """
-Modmap region integrity checks (C1-C3): no-op modes, multi-null hazard,
-exclusivity. Runnable standalone or via pytest (plain functions, no pytest
+Modmap region integrity checks (C1-C3, C7): no-op modes, multi-null hazard,
+exclusivity, capslock_ctrl_apps Ctrl-role behavior. Runnable standalone or via pytest (plain functions, no pytest
 style). See tests/modmap_verifier_harness.py and the design docs:
 docs/design/capslock_mode_matrix.md, docs/design/modmap_verifier_handoff.md
 
@@ -179,11 +179,50 @@ def test_caps_block_exclusivity():
     return not problems
 
 
+def test_capslock_ctrl_apps_get_terminal_ctrl_role():
+    """C7: Apps in capslock_ctrl_apps list get the terminal Ctrl role for the Caps
+    position in both role-swap modes: tap Esc / hold real Ctrl (or plain
+    Ctrl for the non-tap mode). The physical Left Ctrl remains in its
+    normal GUI role, so Cmd/Ctrl shortcuts work from the usual key."""
+    ns, cnfg = build_namespace()
+    problems = []
+
+    # Pretend every focused window is an app in the capslock_ctrl_apps list.
+    ns['hmp_is_capslock_ctrl_app'] = lambda ctx: True
+    try:
+        for kbd_type in ('Apple', 'Windows'):
+            for mode, expected_caps in (
+                ('caps_is_esc_and_lctrl_role_swap', 'ESC/LEFT_CTRL'),
+                ('caps_is_lctrl_role_swap',         'LEFT_CTRL'),
+            ):
+                result = resolve_cell(ns, cnfg, mode, kbd_type, 'GUI')
+                cell = (mode, kbd_type, 'CtrlApp')
+                if result['caps'] != expected_caps:
+                    problems.append(f'CAPS NOT CTRL: {cell} resolves '
+                                    f"Caps={result['caps']}, expected "
+                                    f'{expected_caps}')
+                # Physical Left Ctrl should retain its normal GUI role
+                if result['lctrl'] != 'LEFT_META':
+                    problems.append(f'LCTRL DISPLACED: {cell} resolves '
+                                    f"LCtrl={result['lctrl']}, expected "
+                                    f'LEFT_META (normal GUI role)')
+    finally:
+        ns['hmp_is_capslock_ctrl_app'] = lambda ctx: False
+
+    for problem in problems:
+        print(f'  FAIL: {problem}')
+    print(f'test_capslock_ctrl_apps_get_terminal_ctrl_role: '
+            f'{"PASS" if not problems else f"{len(problems)} problem(s)"}')
+    assert not problems
+    return not problems
+
+
 def main():
     checks = [
         test_no_silent_noop_modes,
         test_no_nulled_multi_modmaps,
         test_caps_block_exclusivity,
+        test_capslock_ctrl_apps_get_terminal_ctrl_role,
     ]
     passed = 0
     for check in checks:
